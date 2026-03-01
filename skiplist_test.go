@@ -397,35 +397,38 @@ func TestSplitList_FindMaybeSortedKeys(t *testing.T) {
 	// sorted
 	counVisit := 0
 	result := make([]uint32, 0)
-	sl.FindMaybeSortedKeys(func(key byte, val uint32) bool {
+	err := sl.FindMaybeSortedKeys(func(key byte, val uint32) bool {
 		result = append(result, val)
 		// ignore 0 and 7
 		counVisit++
 		return true
-	}, 0, 1, 5, 7)
+	}, NewFieldValues[byte]("0", "1", "5", "7"))
+	assert.NoError(t, err)
 	assert.Equal(t, []uint32{1, 5}, result)
 	assert.Equal(t, 2, counVisit)
 
 	// NOT sorted
 	counVisit = 0
 	result = make([]uint32, 0)
-	sl.FindMaybeSortedKeys(func(key byte, val uint32) bool {
+	err = sl.FindMaybeSortedKeys(func(key byte, val uint32) bool {
 		result = append(result, val)
 		// ignore 0 and 7
 		counVisit++
 		return true
-	}, 0, 5, 7, 1)
+	}, NewFieldValues[byte]("0", "5", "7", "1"))
+	assert.NoError(t, err)
 	assert.Equal(t, []uint32{5, 1}, result)
 	assert.Equal(t, 2, counVisit)
 
 	counVisit = 0
 	result = make([]uint32, 0)
-	sl.FindMaybeSortedKeys(func(key byte, val uint32) bool {
+	err = sl.FindMaybeSortedKeys(func(key byte, val uint32) bool {
 		result = append(result, val)
 		// ignore 0 and 7
 		counVisit++
 		return true
-	}, 1, 5, 3)
+	}, NewFieldValues[byte]("1", "5", "3"))
+	assert.NoError(t, err)
 	assert.Equal(t, []uint32{1, 5, 3}, result)
 	assert.Equal(t, 3, counVisit)
 }

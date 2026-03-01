@@ -197,15 +197,22 @@ func (sl *SkipList[K, V]) FindSortedKeys(visit VisitFn[K, V], keys ...K) {
 
 // FindMaybeSortedKeys  calls visit for all finding keys.
 // They keys slice MUST not be sorted, but the performance is better, if they are
-func (sl *SkipList[K, V]) FindMaybeSortedKeys(visit VisitFn[K, V], keys ...K) {
-	if len(keys) == 0 {
-		return
-	}
+func (sl *SkipList[K, V]) FindMaybeSortedKeys(visit VisitFn[K, V], keys *FieldValues[K]) error {
 
 	curr := sl.head
-	lastK := keys[0]
+	lastK, hasFirst, err := keys.First()
+	if err != nil {
+		return err
+	}
+	if !hasFirst {
+		return nil
+	}
 
-	for _, key := range keys {
+	for key, hasMore, err := keys.Next(); hasMore; key, hasMore, err = keys.Next() {
+		if err != nil {
+			return err
+		}
+
 		// reset the head, if an key is less than the previous
 		if key < lastK {
 			curr = sl.head
@@ -220,13 +227,15 @@ func (sl *SkipList[K, V]) FindMaybeSortedKeys(visit VisitFn[K, V], keys ...K) {
 		x := curr.next[0]
 		if x != nil && x.key == key {
 			if !visit(x.key, x.value) {
-				return
+				return nil
 			}
 		}
 
 		// set new last key
 		lastK = key
 	}
+
+	return nil
 }
 
 // Range traverse 'from' until 'to' over Skiplist and calling the visitor

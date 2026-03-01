@@ -133,7 +133,8 @@ func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, int, error) {
 }
 
 func (mi *idMapIndex[OBJ, ID]) Match(op Op, value any) (*BitSet[uint32], error) {
-	if _, ok := value.(ID); !ok {
+	id, ok := value.(ID)
+	if !ok {
 		return nil, ErrInvalidIndexValue[ID]{value}
 	}
 
@@ -141,7 +142,7 @@ func (mi *idMapIndex[OBJ, ID]) Match(op Op, value any) (*BitSet[uint32], error) 
 		return nil, ErrInvalidOperation{IDMapIndexName, op}
 	}
 
-	idx, err := mi.GetIndex(value.(ID))
+	idx, err := mi.GetIndex(id)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +277,8 @@ func (mi *MapIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 }
 
 func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
-	if _, ok := value.(V); !ok {
+	v, ok := value.(V)
+	if !ok {
 		return nil, ErrInvalidIndexValue[V]{value}
 	}
 
@@ -284,7 +286,7 @@ func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 		return nil, ErrInvalidOperation{MapIndexName, op}
 	}
 
-	bs, found := mi.data[value]
+	bs, found := mi.data[v]
 	if !found {
 		return NewBitSet[LI](), nil
 	}
@@ -333,40 +335,41 @@ func (si *SortedIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 }
 
 func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
-	if _, ok := value.(V); !ok {
+	v, ok := value.(V)
+	if !ok {
 		return nil, ErrInvalidIndexValue[V]{value}
 	}
 
 	switch op {
 	case OpEq:
-		if bs, found := si.skipList.Get(value.(V)); found {
+		if bs, found := si.skipList.Get(v); found {
 			return bs, nil
 		}
 		return NewBitSet[LI](), nil
 	case OpLt:
 		result := NewBitSet[LI]()
-		si.skipList.Less(value.(V), func(v V, bs *BitSet[LI]) bool {
+		si.skipList.Less(v, func(v V, bs *BitSet[LI]) bool {
 			result.Or(bs)
 			return true
 		})
 		return result, nil
 	case OpLe:
 		result := NewBitSet[LI]()
-		si.skipList.LessEqual(value.(V), func(_ V, bs *BitSet[LI]) bool {
+		si.skipList.LessEqual(v, func(_ V, bs *BitSet[LI]) bool {
 			result.Or(bs)
 			return true
 		})
 		return result, nil
 	case OpGt:
 		result := NewBitSet[LI]()
-		si.skipList.Greater(value.(V), func(v V, bs *BitSet[LI]) bool {
+		si.skipList.Greater(v, func(v V, bs *BitSet[LI]) bool {
 			result.Or(bs)
 			return true
 		})
 		return result, nil
 	case OpGe:
 		result := NewBitSet[LI]()
-		si.skipList.GreaterEqual(value.(V), func(_ V, bs *BitSet[LI]) bool {
+		si.skipList.GreaterEqual(v, func(_ V, bs *BitSet[LI]) bool {
 			result.Or(bs)
 			return true
 		})
@@ -377,7 +380,7 @@ func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) 
 		}
 
 		result := NewBitSet[LI]()
-		si.skipList.StringStartsWith(value.(V), func(_ V, bs *BitSet[LI]) bool {
+		si.skipList.StringStartsWith(v, func(_ V, bs *BitSet[LI]) bool {
 			result.Or(bs)
 			return true
 		})
