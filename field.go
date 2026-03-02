@@ -42,9 +42,6 @@ func intValueFromAny[T any](v int64) (T, error) {
 		}
 		return any(int(v)).(T), nil
 	case int64:
-		if v < math.MinInt64 || v > math.MaxInt64 {
-			return zero, OverflowError{toBigFor: "int64", value: v}
-		}
 		return any(int64(v)).(T), nil
 	case int32:
 		if v < math.MinInt32 || v > math.MaxInt32 {
@@ -62,12 +59,12 @@ func intValueFromAny[T any](v int64) (T, error) {
 		}
 		return any(int8(v)).(T), nil
 	case uint:
-		if v < 0 || v > math.MaxInt64 {
+		if v < 0 {
 			return zero, OverflowError{toBigFor: "uint", value: v}
 		}
 		return any(uint(v)).(T), nil
 	case uint64:
-		if v < 0 || v > math.MaxInt64 {
+		if v < 0 {
 			return zero, OverflowError{toBigFor: "uint64", value: v}
 		}
 		return any(uint64(v)).(T), nil
@@ -91,7 +88,7 @@ func intValueFromAny[T any](v int64) (T, error) {
 	return zero, ErrInvalidIndexValue[T]{v}
 }
 
-func parseBool(s string) (bool, error) {
+func ParseBool(s string) (bool, error) {
 	switch len(s) {
 	case 4:
 		if (s[0] == 't' || s[0] == 'T') &&
@@ -113,7 +110,7 @@ func parseBool(s string) (bool, error) {
 	return false, InvalidDataTypeError{expected: OpBool, got: s}
 }
 
-func parseNumber(s string) (float64, error) {
+func ParseNumber(s string) (float64, error) {
 	n := len(s)
 	if n == 0 {
 		return 0.0, InvalidDataTypeError{expected: OpNumber, got: s}
