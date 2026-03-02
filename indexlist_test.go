@@ -47,7 +47,13 @@ func TestIndexList_Base(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, qr.Count())
 
+	// with cast uint8
 	qr, err = il.Query(Eq("age", uint8(5)))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, qr.Count())
+
+	// without cast
+	qr, err = il.Query(Eq("age", 5))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, qr.Count())
 
@@ -58,11 +64,6 @@ func TestIndexList_Base(t *testing.T) {
 	qr, err = il.Query(Eq("isnew", true))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, qr.Count())
-	// wrong value type, expected: uint8, got int
-
-	qr, err = il.Query(Eq("age", 5))
-	assert.Error(t, err)
-	assert.Equal(t, QueryResult[car, struct{}]{}, qr)
 
 	// wrong field name, expected: age, got wrong
 	qr, err = il.Query(Eq("wrong", 5))
@@ -583,7 +584,7 @@ func TestIndexList_QueryStr(t *testing.T) {
 		{name: "Opel", age: 5},
 	}, qr.Values())
 
-	qr, err = il.QueryStr(`age = uint8(22)`)
+	qr, err = il.QueryStr(`age = 22`)
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
@@ -591,6 +592,14 @@ func TestIndexList_QueryStr(t *testing.T) {
 	}, qr.Values())
 
 	qr, err = il.QueryStr(`name = "Opel" or name = "Dacia"`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+		{name: "Opel", age: 5},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`name = "Opel" or name = "Dacia" or age > 20`)
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},

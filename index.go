@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"reflect"
-	"slices"
 	"unsafe"
 )
 
@@ -277,8 +276,8 @@ func (mi *MapIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 }
 
 func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
-	v, ok := value.(V)
-	if !ok {
+	v, err := ValueFromAny[V](value)
+	if err != nil {
 		return nil, ErrInvalidIndexValue[V]{value}
 	}
 
@@ -335,8 +334,8 @@ func (si *SortedIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 }
 
 func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
-	v, ok := value.(V)
-	if !ok {
+	v, err := ValueFromAny[V](value)
+	if err != nil {
 		return nil, ErrInvalidIndexValue[V]{value}
 	}
 
@@ -396,12 +395,13 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 		if len(values) != 2 {
 			return nil, ErrInvalidArgsLen{defined: "2", got: len(values)}
 		}
-		min, ok := values[0].(V)
-		if !ok {
+
+		min, err := ValueFromAny[V](values[0])
+		if err != nil {
 			return nil, ErrInvalidIndexValue[V]{values[0]}
 		}
-		max, ok := values[1].(V)
-		if !ok {
+		max, err := ValueFromAny[V](values[1])
+		if err != nil {
 			return nil, ErrInvalidIndexValue[V]{values[1]}
 		}
 
@@ -416,20 +416,38 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 			return NewBitSet[LI](), nil
 		}
 
-		keys := make([]V, len(values))
-		var ok bool
-		for i, val := range values {
-			if keys[i], ok = val.(V); !ok {
-				return nil, ErrInvalidIndexValue[V]{val}
-			}
+		key, err := ValueFromAny[V](values[0])
+		if err != nil {
+			return nil, err
 		}
-		slices.Sort(keys)
 
 		result := NewBitSet[LI]()
-		si.skipList.FindSortedKeys(func(_ V, bs *BitSet[LI]) bool {
-			result.Or(bs)
-			return true
-		}, keys...)
+		bs, found := si.skipList.Get(key)
+		if found {
+			result = bs.Copy()
+		}
+
+		for _, v := range values[1:] {
+			key, err = ValueFromAny[V](v)
+			if err != nil {
+				return nil, err
+			}
+
+			bs, found := si.skipList.Get(key)
+			if found {
+				result.Or(bs)
+			}
+		}
+
+		// result := NewBitSet[LI]()
+		// err := si.skipList.FindMaybeSortedKeys(func(_ V, bs *BitSet[LI]) bool {
+		// 	result.Or(bs)
+		// 	return true
+		// }, values...)
+		// if err != nil {
+		// 	return nil, err
+		// }
+
 		return result, nil
 
 	default:

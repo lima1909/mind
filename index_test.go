@@ -80,7 +80,7 @@ func TestIDIndex_Filter(t *testing.T) {
 	assert.ErrorIs(t, ErrValueNotFound{"opel"}, err)
 }
 
-func TestSortedIndex_Between(t *testing.T) {
+func TestSortedIndex_Between_String(t *testing.T) {
 	si := NewSortedIndex(FromValue[string]())
 	set(si, "a", 1)
 	set(si, "a", 2)
@@ -109,15 +109,28 @@ func TestSortedIndex_Between(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{}, bs.ToSlice())
 
+	// "1" is not in the index
+	bs, err = si.MatchMany(OpBetween, "b", "1")
+	assert.NoError(t, err)
+	assert.Equal(t, []uint32{}, bs.ToSlice())
+
 	// errors
 	_, err = si.MatchMany(OpBetween, "b")
 	assert.ErrorIs(t, ErrInvalidArgsLen{defined: "2", got: 1}, err)
-
-	_, err = si.MatchMany(OpBetween, "b", 1)
-	assert.ErrorIs(t, ErrInvalidIndexValue[string]{1}, err)
 }
 
-func TestSortedIndex_In(t *testing.T) {
+func TestSortedIndex_Between_Int(t *testing.T) {
+	si := NewSortedIndex(FromValue[uint8]())
+	set(si, 1, 1)
+	set(si, 2, 2)
+	set(si, 3, 3)
+
+	// errors
+	_, err := si.MatchMany(OpBetween, "b", "1")
+	assert.ErrorIs(t, ErrInvalidIndexValue[uint8]{"b"}, err)
+}
+
+func TestSortedIndex_In_String(t *testing.T) {
 	si := NewSortedIndex(FromValue[string]())
 	set(si, "a", 1)
 	set(si, "a", 2)
@@ -146,7 +159,19 @@ func TestSortedIndex_In(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{}, bs.ToSlice())
 
+	// empty, because "1" doesn't work
+	_, err = si.MatchMany(OpIn, "b", "1")
+	assert.NoError(t, err)
+	assert.Equal(t, []uint32{}, bs.ToSlice())
+}
+
+func TestSortedIndex_In_Int(t *testing.T) {
+	si := NewSortedIndex(FromValue[uint8]())
+	set(si, 1, 1)
+	set(si, 2, 2)
+	set(si, 3, 3)
+
 	// errors
-	_, err = si.MatchMany(OpIn, "b", 1)
-	assert.ErrorIs(t, ErrInvalidIndexValue[string]{1}, err)
+	_, err := si.MatchMany(OpIn, "b", 1)
+	assert.ErrorIs(t, ErrInvalidIndexValue[uint8]{"b"}, err)
 }

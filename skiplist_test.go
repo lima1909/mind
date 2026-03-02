@@ -402,7 +402,7 @@ func TestSplitList_FindMaybeSortedKeys(t *testing.T) {
 		// ignore 0 and 7
 		counVisit++
 		return true
-	}, NewFieldValues[byte]("0", "1", "5", "7"))
+	}, 0, 1, 5, 7)
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{1, 5}, result)
 	assert.Equal(t, 2, counVisit)
@@ -415,7 +415,7 @@ func TestSplitList_FindMaybeSortedKeys(t *testing.T) {
 		// ignore 0 and 7
 		counVisit++
 		return true
-	}, NewFieldValues[byte]("0", "5", "7", "1"))
+	}, 0, 5, 7, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{5, 1}, result)
 	assert.Equal(t, 2, counVisit)
@@ -427,7 +427,7 @@ func TestSplitList_FindMaybeSortedKeys(t *testing.T) {
 		// ignore 0 and 7
 		counVisit++
 		return true
-	}, NewFieldValues[byte]("1", "5", "3"))
+	}, 1, 5, 3)
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{1, 5, 3}, result)
 	assert.Equal(t, 3, counVisit)

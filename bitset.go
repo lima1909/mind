@@ -253,6 +253,10 @@ func (b *BitSet[V]) Or(other *BitSet[V]) {
 	od := other.data
 	ol := len(od)
 
+	if ol == 0 {
+		return
+	}
+
 	if len(b.data) < ol && cap(b.data) < ol {
 		b.grow(ol - 1)
 	}

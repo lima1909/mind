@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 )
 
@@ -189,10 +188,13 @@ func Parse(input string) (Query32, error) {
 		return nil, err
 	}
 	if p.cur.Op != OpEOF {
-		return nil, ErrUnexpectedToken{token: p.cur}
+		return nil, UnexpectedTokenError{token: p.cur}
 	}
 
+	// fmt.Println(ast)
 	optAst := optimize(ast)
+	// fmt.Println(optAst)
+
 	query := compile(optAst)
 
 	return query, nil
@@ -254,14 +256,14 @@ func (p *parser) parseCondition() (Expr, error) {
 			return nil, err
 		}
 		if p.cur.Op != OpRParen {
-			return nil, ErrUnexpectedToken{token: p.cur, expected: OpRParen}
+			return nil, UnexpectedTokenError{token: p.cur, expected: OpRParen}
 		}
 		p.next()
 		return expr, nil
 	}
 
 	if p.cur.Op != OpIdent {
-		return nil, ErrUnexpectedToken{token: p.cur, expected: OpIdent}
+		return nil, UnexpectedTokenError{token: p.cur, expected: OpIdent}
 	}
 	field := p.input[p.cur.Start:p.cur.End]
 	p.next()
@@ -282,27 +284,12 @@ func (p *parser) parseCondition() (Expr, error) {
 		}
 		return TermExpr{Field: field, Op: tokenOp, Value: val}, nil
 	case OpBetween:
-		if p.cur.Op != OpLParen {
-			return nil, ErrUnexpectedToken{token: p.cur, expected: OpLParen}
-		}
-		p.next()
-		min, err := p.parseValue()
+		values, err := p.parseValueList()
 		if err != nil {
 			return nil, err
 		}
-		if p.cur.Op != OpComma {
-			return nil, ErrUnexpectedToken{token: p.cur, expected: OpComma}
-		}
-		p.next()
-		max, err := p.parseValue()
-		if err != nil {
-			return nil, err
-		}
-		if p.cur.Op != OpRParen {
-			return nil, ErrUnexpectedToken{token: p.cur, expected: OpRParen}
-		}
-		p.next()
-		return TermManyExpr{Field: field, Op: OpBetween, Values: []any{min, max}}, nil
+		//TODO: check there are 2 values (from,to)
+		return TermManyExpr{Field: field, Op: OpBetween, Values: values}, nil
 	case OpIn:
 		values, err := p.parseValueList()
 		if err != nil {
@@ -312,18 +299,26 @@ func (p *parser) parseCondition() (Expr, error) {
 	// case tokIdent:
 	// maybe relations like startswith
 	default:
-		return nil, ErrUnexpectedToken{token: p.cur, expected: OpEq}
+		return nil, UnexpectedTokenError{token: p.cur, expected: OpEq}
 	}
 }
 
 func (p *parser) parseValueList() ([]any, error) {
 	if p.cur.Op != OpLParen {
-		return nil, ErrUnexpectedToken{token: p.cur, expected: OpLParen}
+		return nil, UnexpectedTokenError{token: p.cur, expected: OpLParen}
 	}
 	p.next()
 
-	var values []any
+	expectedOpValue := OpEOF
+	values := make([]any, 0, 10)
 	for {
+		// all list values should have the same type
+		if expectedOpValue == OpEOF {
+			expectedOpValue = p.cur.Op
+		} else if expectedOpValue != p.cur.Op {
+			return nil, UnexpectedTokenError{token: p.cur, expected: expectedOpValue}
+		}
+
 		val, err := p.parseValue()
 		if err != nil {
 			return nil, err
@@ -336,10 +331,11 @@ func (p *parser) parseValueList() ([]any, error) {
 		}
 
 		if p.cur.Op != OpComma {
-			return nil, ErrUnexpectedToken{token: p.cur, expected: OpComma}
+			return nil, UnexpectedTokenError{token: p.cur, expected: OpComma}
 		}
 		p.next()
 	}
+
 	return values, nil
 }
 
@@ -360,27 +356,8 @@ func (p *parser) parseValue() (any, error) {
 			return nil, err
 		}
 		val = boolean
-	case OpIdent: // Type casting logic: uint8(10)
-		typeName := p.input[p.cur.Start:p.cur.End]
-		p.next()
-		if p.cur.Op != OpLParen {
-			return nil, ErrUnexpectedToken{token: p.cur, expected: OpLParen}
-		}
-		p.next()
-		num, err := p.parseNumber()
-		if err != nil {
-			return nil, err
-		}
-		val, err = castValue(typeName, num)
-		if err != nil {
-			return nil, err
-		}
-		p.next()
-		if p.cur.Op != OpRParen {
-			return nil, ErrUnexpectedToken{token: p.cur, expected: OpRParen}
-		}
 	default:
-		return nil, ErrUnexpectedToken{token: p.cur, expected: OpString}
+		return nil, UnexpectedTokenError{token: p.cur, expected: OpString}
 	}
 	p.next()
 	return val, nil
@@ -429,90 +406,12 @@ func (p *parser) parseNumber() (any, error) {
 	return v, nil
 }
 
-func castValue(typeName string, val any) (any, error) {
-	switch typeName {
-	case "int":
-		if v, ok := val.(int64); ok {
-			if v < math.MinInt && v > math.MaxInt {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return int(v), nil
-		}
-	case "int8":
-		if v, ok := val.(int64); ok {
-			if v < math.MinInt8 && v > math.MaxInt8 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return int8(v), nil
-		}
-	case "int16":
-		if v, ok := val.(int64); ok {
-			if v < math.MinInt16 && v > math.MaxInt16 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return int16(v), nil
-		}
-	case "int32":
-		if v, ok := val.(int64); ok {
-			if v < math.MinInt32 && v > math.MaxInt32 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return int32(v), nil
-		}
-
-	case "uint":
-		if v, ok := val.(int64); ok {
-			if v < 0 || v > math.MaxUint32 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return uint(v), nil
-		}
-	case "uint8":
-		if v, ok := val.(int64); ok {
-			if v < 0 || v > math.MaxUint8 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return uint8(v), nil
-		}
-	case "uint16":
-		if v, ok := val.(int64); ok {
-			if v < 0 || v > math.MaxUint16 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return uint16(v), nil
-		}
-	case "uint32":
-		if v, ok := val.(int64); ok {
-			if v < 0 || v > math.MaxUint32 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return uint32(v), nil
-		}
-
-	case "float32":
-		if v, ok := val.(int64); ok {
-			if float64(v) < math.SmallestNonzeroFloat32 && float64(v) > math.MaxFloat32 {
-				return nil, ErrCast{"to big for " + typeName}
-			}
-			return float32(v), nil
-		}
-		return float32(val.(float64)), nil
-	case "float64":
-		if v, ok := val.(int64); ok {
-			return float64(v), nil
-		}
-		return val.(float64), nil
-	}
-
-	return nil, fmt.Errorf("unsupported type hint: %s", typeName)
-}
-
-type ErrUnexpectedToken struct {
+type UnexpectedTokenError struct {
 	token    token
 	expected Op
 }
 
-func (e ErrUnexpectedToken) Error() string {
+func (e UnexpectedTokenError) Error() string {
 	if e.expected == OpUndefined {
 		return fmt.Sprintf(
 			"unexpected token: %q [%d:%d]",
@@ -522,9 +421,9 @@ func (e ErrUnexpectedToken) Error() string {
 		)
 	}
 	return fmt.Sprintf(
-		"unexpected token: %q, expected: %q [%d:%d]",
-		e.token.Op,
+		"expected token: %q, got: %q [%d:%d]",
 		e.expected,
+		e.token.Op,
 		e.token.Start,
 		e.token.End,
 	)

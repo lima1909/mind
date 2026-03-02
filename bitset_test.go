@@ -85,6 +85,13 @@ func TestBitSet_And(t *testing.T) {
 }
 
 func TestBitSet_Or(t *testing.T) {
+	b0 := NewBitSet[uint32]()
+	b2 := NewBitSetFrom[uint32](110)
+	b0.Or(b2)
+	assert.Equal(t, []uint32{110}, b0.ToSlice())
+}
+
+func TestBitSet_Or1(t *testing.T) {
 	b1 := NewBitSetFrom[uint32](1, 2, 110, 2345)
 	b2 := NewBitSetFrom[uint32](110)
 	result := b1.Copy()
