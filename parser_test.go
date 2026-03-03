@@ -74,11 +74,11 @@ func TestParser_Base(t *testing.T) {
 		{query: `not (ok = true or price = 0.0)`, expected: []uint32{1}},
 
 		//  true or (false and true) => true
-		{query: `role = "admin" OR ok = true AND price = 1.2`, expected: []uint32{1}},
+		{query: `role = "admin" OR ok = tRue AND price = 1.2`, expected: []uint32{1}},
 		// true or (false and false) => true
-		{query: `role = "admin" OR ok = true AND price = 0.0`, expected: []uint32{1}},
+		{query: `role = "admin" OR ok = trUe AND price = 0.0`, expected: []uint32{1}},
 		// true or (true and true) => true
-		{query: `role = "admin" OR (ok = true AND price = 1.2)`, expected: []uint32{1}},
+		{query: `role = "admin" OR (ok = truE AND price = 1.2)`, expected: []uint32{1}},
 		// false or (true and true) => true
 		{query: `role = "user" OR (ok = false AND price = 1.2)`, expected: []uint32{1}},
 
@@ -229,21 +229,21 @@ func TestParser_Error(t *testing.T) {
 		{
 			query:       `role = 3   and 5 `,
 			expected_op: OpIdent,
-			err_op:      OpNumber,
+			err_op:      OpNumberInt,
 		},
 		{
 			query:       `not 3 `,
 			expected_op: OpIdent,
-			err_op:      OpNumber,
+			err_op:      OpNumberInt,
 		},
 		{
 			query:       `role between("1", 2) `,
 			expected_op: OpString,
-			err_op:      OpNumber,
+			err_op:      OpNumberInt,
 		},
 		{
 			query:       `role In(1, "2") `,
-			expected_op: OpNumber,
+			expected_op: OpNumberInt,
 			err_op:      OpString,
 		},
 	}

@@ -6,52 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-//	func TestField_ValueFromString_(t *testing.T) {
-//		// String
-//		sPtr, err := ValueFromString[*string]("foo")
-//		assert.NoError(t, err)
-//		foo := "foo"
-//		assert.Equal(t, &foo, sPtr)
-//
-//		// Boolean
-//		b, err := ValueFromString[bool]("True")
-//		assert.NoError(t, err)
-//		assert.Equal(t, true, b)
-//		b, err = ValueFromString[bool]("False")
-//		assert.NoError(t, err)
-//		assert.Equal(t, false, b)
-//		bPtr, err := ValueFromString[*bool]("false")
-//		assert.NoError(t, err)
-//		assert.Equal(t, new(bool), bPtr)
-//
-//		// Number
-//		i, err := ValueFromString[int]("-42")
-//		assert.NoError(t, err)
-//		assert.Equal(t, -42, i)
-//
-//		u, err := ValueFromString[uint]("42")
-//		assert.NoError(t, err)
-//		assert.Equal(t, uint(42), u)
-//
-//		u8, err := ValueFromString[uint8]("42")
-//		assert.NoError(t, err)
-//		assert.Equal(t, uint8(42), u8)
-//
-//		f32, err := ValueFromString[float32]("-4.2")
-//		assert.NoError(t, err)
-//		assert.Equal(t, float32(-4.2), f32)
-//
-//		f64, err := ValueFromString[float64]("-4.2")
-//		assert.NoError(t, err)
-//		assert.Equal(t, -4.2, f64)
-//	}
-//
-//	func TestField_ValueFromString_Error_(t *testing.T) {
-//		// to big error
-//		_, err := ValueFromString[uint8]("420")
-//		assert.Error(t, err)
-//	}
-
 func TestField_ValueFromAny_Int64(t *testing.T) {
 	// int64 -> int
 	value, err := ValueFromAny[int](int64(-123456))

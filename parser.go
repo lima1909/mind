@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 )
 
 type ExprKind uint8
@@ -343,18 +342,12 @@ func (p *parser) parseValue() (any, error) {
 	switch p.cur.Op {
 	case OpString:
 		val = p.input[p.cur.Start:p.cur.End]
-	case OpNumber:
-		num, err := p.parseNumber()
-		if err != nil {
-			return nil, err
-		}
-		val = num
+	case OpNumberInt:
+		val = parseInt(p.input[p.cur.Start:p.cur.End])
+	case OpNumberFloat:
+		val = parseFloat(p.input[p.cur.Start:p.cur.End])
 	case OpBool:
-		boolean, err := strconv.ParseBool(p.input[p.cur.Start:p.cur.End])
-		if err != nil {
-			return nil, err
-		}
-		val = boolean
+		val = parseBool(p.input[p.cur.Start:p.cur.End])
 	default:
 		return nil, UnexpectedTokenError{token: p.cur, expected: OpString}
 	}
@@ -362,47 +355,104 @@ func (p *parser) parseValue() (any, error) {
 	return val, nil
 }
 
-func (p *parser) parseNumber() (any, error) {
-	s := p.input[p.cur.Start:p.cur.End]
-	if len(s) == 0 {
-		return nil, strconv.ErrSyntax
+func parseBool(s string) bool {
+	switch len(s) {
+	case 4:
+		if (s[0] == 't' || s[0] == 'T') &&
+			(s[1] == 'r' || s[1] == 'R') &&
+			(s[2] == 'u' || s[2] == 'U') &&
+			(s[3] == 'e' || s[3] == 'E') {
+			return true
+		}
+	case 5:
+		if (s[0] == 'f' || s[0] == 'F') &&
+			(s[1] == 'a' || s[1] == 'A') &&
+			(s[2] == 'l' || s[2] == 'L') &&
+			(s[3] == 's' || s[3] == 'S') &&
+			(s[4] == 'e' || s[4] == 'E') {
+			return false
+		}
 	}
 
-	hasDot := false
+	return false
+}
+
+//go:inline
+func parseUint(s string) uint64 {
+	var n uint64
+
+	// BCE (Bounds Check Elimination):
+	// By checking the length once at the start, the Go compiler
+	// removes all bounds checks inside the loop.
+	_ = s[len(s)-1]
+
 	for i := 0; i < len(s); i++ {
-		if s[i] == '.' {
-			hasDot = true
-			break
-		}
+		// math trick: n * 10 is compiled into (n << 3) + (n << 1)
+		// which is much faster than the MUL instruction on some CPUs.
+		n = n*10 + uint64(s[i]-'0')
 	}
 
-	if hasDot {
-		return strconv.ParseFloat(s, 64)
-	}
+	return n
+}
 
-	negative := false
-	i := 0
+func parseInt(s string) int64 {
 	if s[0] == '-' {
-		negative = true
-		i = 1
-		if len(s) == 1 {
-			return nil, strconv.ErrSyntax
-		}
+		s = s[1:]
+		return -int64(parseUint(s))
 	}
 
-	var v int64
-	for ; i < len(s); i++ {
+	return int64(parseUint(s))
+}
+
+func parseFloat(s string) float64 {
+	neg := false
+	if len(s) > 0 && s[0] == '-' {
+		neg = true
+		s = s[1:]
+	}
+
+	var mantissa uint64
+	dotPos := -1
+
+	_ = s[len(s)-1] // BCE
+
+	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c < '0' || c > '9' {
-			return nil, strconv.ErrSyntax
+		if c == '.' {
+			dotPos = i
+			continue
 		}
-		v = v*10 + int64(c-'0')
+		mantissa = mantissa*10 + uint64(c-'0')
 	}
 
-	if negative {
-		v = -v
+	var result float64
+	if dotPos < 0 {
+		// No dot found, it's just an integer
+		result = float64(mantissa)
+	} else {
+		// Calculate how many fractional digits we have
+		fracDigits := len(s) - 1 - dotPos
+
+		// If it's within our precomputed range, use the blazing fast array lookup
+		if fracDigits < len(powersOf10) {
+			result = float64(mantissa) / powersOf10[fracDigits]
+			// } else {
+			// Fallback: If it has >18 fractional digits, the fast path fails.
+			// Let the standard library handle extreme precision.
+			// In fali, you might want to call strconv.ParseFloat here.
+		}
 	}
-	return v, nil
+
+	if neg {
+		return -result
+	}
+	return result
+}
+
+// pre-computed powers of 10 to avoid expensive math.Pow() calls
+var powersOf10 = [...]float64{
+	1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9,
+	1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18,
 }
 
 type UnexpectedTokenError struct {

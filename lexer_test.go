@@ -16,11 +16,11 @@ func TestLexer_OneOpen(t *testing.T) {
 		{query: `true`, expected: OpBool},
 		{query: `tRue`, expected: OpBool},
 		{query: `fALse`, expected: OpBool},
-		{query: `4.2`, expected: OpNumber},
-		{query: `7`, expected: OpNumber},
-		{query: `0.9`, expected: OpNumber},
-		{query: `-9`, expected: OpNumber},
-		{query: `-0.9`, expected: OpNumber},
+		{query: `7`, expected: OpNumberInt},
+		{query: `-9`, expected: OpNumberInt},
+		{query: `4.2`, expected: OpNumberFloat},
+		{query: `0.9`, expected: OpNumberFloat},
+		{query: `-0.9`, expected: OpNumberFloat},
 		{query: `"false"`, expected: OpString},
 		{query: `Or`, expected: OpOr},
 		{query: `aND`, expected: OpAnd},
@@ -36,6 +36,7 @@ func TestLexer_OneOpen(t *testing.T) {
 		{query: ` , `, expected: OpComma},
 		{query: `betWeen`, expected: OpBetween},
 		{query: `In`, expected: OpIn},
+		{query: ` - `, expected: OpUndefined},
 
 		{query: `startswith`, expected: OpIdent},
 	}
@@ -68,17 +69,17 @@ func TestLexer_ManyOpen(t *testing.T) {
 		{query: `num = -5`, expected: []Op{
 			OpIdent,
 			OpEq,
-			OpNumber,
+			OpNumberInt,
 		}},
 		{query: `num = -5.3`, expected: []Op{
 			OpIdent,
 			OpEq,
-			OpNumber,
+			OpNumberFloat,
 		}},
 		{query: `float32(-5)`, expected: []Op{
 			OpIdent,
 			OpLParen,
-			OpNumber,
+			OpNumberInt,
 			OpRParen,
 		}},
 		{query: `not(ok = true)`, expected: []Op{
@@ -101,7 +102,7 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpAnd,
 			OpIdent,
 			OpEq,
-			OpNumber,
+			OpNumberInt,
 		}},
 		{query: `name="Inge" or age=3`, expected: []Op{
 			OpIdent,
@@ -110,7 +111,7 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpOr,
 			OpIdent,
 			OpEq,
-			OpNumber,
+			OpNumberInt,
 		}},
 
 		{query: `name startswith "Ma"`, expected: []Op{
@@ -161,7 +162,7 @@ func TestLexer_Invalid(t *testing.T) {
 		expected []Op
 	}{
 		{query: `3.3.1`, expected: []Op{
-			OpNumber,
+			OpNumberFloat,
 			OpEOF,
 		}},
 	}

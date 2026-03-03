@@ -20,7 +20,8 @@ const (
 	OpIdent
 	OpComma
 	OpString
-	OpNumber
+	OpNumberInt
+	OpNumberFloat
 	OpBool
 
 	// Logical
@@ -53,8 +54,10 @@ func (o Op) String() string {
 		return "IDENT"
 	case OpString:
 		return "STRING"
-	case OpNumber:
-		return "NUMBER"
+	case OpNumberInt:
+		return "NUMBER-INT"
+	case OpNumberFloat:
+		return "NUMBER-FLOAT"
 	case OpBool:
 		return "BOOL"
 	case OpComma:
@@ -260,29 +263,48 @@ func (l *lexer) readKeyword() token {
 }
 
 func (l *lexer) readNumber() token {
+	input := l.input
+	inputLen := len(input)
 	start := l.pos
+	p := l.pos
+
 	hasDot := false
 
-	if l.pos < len(l.input) && l.input[l.pos] == '-' {
-		l.pos++
+	if p < inputLen && input[p] == '-' {
+		p++
 	}
 
-	for l.pos < len(l.input) {
-		ch := l.input[l.pos]
+	digitsFound := false
+
+	for p < inputLen {
+		ch := input[p]
 
 		if ch >= '0' && ch <= '9' {
-			l.pos++
+			digitsFound = true
+			p++
 		} else if ch == '.' && !hasDot {
-			// First time seeing a dot, mark it and continue
 			hasDot = true
-			l.pos++
+			p++
 		} else {
-			// If it's a second dot, a letter, or a space, we are done!
 			break
 		}
 	}
+	l.pos = p
 
-	return token{Op: OpNumber, Start: start, End: l.pos}
+	// if no digits were found (e.g., input was just "-" or "."),
+	if !digitsFound {
+		return token{Op: OpUndefined, Start: start, End: l.pos}
+	}
+
+	var op Op
+	switch {
+	case hasDot:
+		op = OpNumberFloat
+	default:
+		op = OpNumberInt
+	}
+
+	return token{Op: op, Start: start, End: l.pos}
 }
 
 func (l *lexer) readString(quote byte) token {
