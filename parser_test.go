@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -246,6 +247,11 @@ func TestParser_Error(t *testing.T) {
 			expected_op: OpNumberInt,
 			err_op:      OpString,
 		},
+		{
+			query:       `role = - `,
+			expected_op: OpString, // the first expected value
+			err_op:      OpUndefined,
+		},
 	}
 
 	for _, tt := range tests {
@@ -254,7 +260,11 @@ func TestParser_Error(t *testing.T) {
 			var parseErr UnexpectedTokenError
 			assert.True(t, errors.As(err, &parseErr))
 			assert.Equal(t, tt.err_op, parseErr.token.Op)
-			assert.Equal(t, tt.expected_op, parseErr.expected)
+			assert.Equal(
+				t,
+				tt.expected_op, parseErr.expected,
+				fmt.Sprintf("%q != %q", tt.expected_op, parseErr.expected),
+			)
 		})
 	}
 }
