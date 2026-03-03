@@ -416,29 +416,26 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 			return NewBitSet[LI](), nil
 		}
 
-		key, err := ValueFromAny[V](values[0])
-		if err != nil {
-			return nil, err
-		}
-
-		result := NewBitSet[LI]()
-		bs, found := si.skipList.Get(key)
-		if found {
-			result = bs.Copy()
-		}
-
-		for _, v := range values[1:] {
-			key, err = ValueFromAny[V](v)
+		var result *BitSet[LI]
+		for _, v := range values {
+			key, err := ValueFromAny[V](v)
 			if err != nil {
 				return nil, err
 			}
 
 			bs, found := si.skipList.Get(key)
 			if found {
-				result.Or(bs)
+				if result == nil {
+					result = bs.Copy()
+				} else {
+					result.Or(bs)
+				}
 			}
 		}
 
+		if result == nil {
+			return NewBitSet[LI](), nil
+		}
 		// result := NewBitSet[LI]()
 		// err := si.skipList.FindMaybeSortedKeys(func(_ V, bs *BitSet[LI]) bool {
 		// 	result.Or(bs)

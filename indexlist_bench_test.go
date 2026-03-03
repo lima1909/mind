@@ -100,7 +100,7 @@ func BenchmarkQueryStr(b *testing.B) {
 			for b.Loop() {
 				count = max(count, bench.bmark())
 			}
-			fmt.Printf("---%s: %d \n", bench.name, count)
+			// fmt.Printf("---%s: %d \n", bench.name, count)
 
 		})
 	}

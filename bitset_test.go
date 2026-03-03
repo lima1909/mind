@@ -326,5 +326,5 @@ func TestBitSet_Clear(t *testing.T) {
 	assert.False(t, b.Contains(1))
 	assert.Equal(t, 0, b.Count())
 	assert.Equal(t, 0, len(b.data))
-	assert.Equal(t, 2, cap(b.data))
+	assert.Equal(t, 1024, cap(b.data))
 }

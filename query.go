@@ -45,7 +45,7 @@ func matchMany[LI Value](fieldName string, op Op, values ...any) Query[LI] {
 		}
 
 		bs, err := filter.MatchMany(op, values...)
-		return bs, false, err
+		return bs, true, err
 	}
 }
 

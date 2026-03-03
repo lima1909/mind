@@ -87,7 +87,9 @@ func TestParser_Base(t *testing.T) {
 
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price in(3.0, 1.2)`, expected: []uint32{0, 1}},
+		{query: `role in("developer", "admin")`, expected: []uint32{0, 1}},
 		{query: `role in("admin")`, expected: []uint32{1}},
+		{query: `role in("developer")`, expected: []uint32{0}},
 		{query: `role in("nix")`, expected: []uint32{}},
 	}
 

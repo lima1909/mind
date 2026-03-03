@@ -170,7 +170,6 @@ func compile(e Expr) Query32 {
 		case ExprOr:
 			return Or(left, right)
 		case ExprAndNot:
-			// This calls the new high-performance AndNot we discussed!
 			return AndNot(left, right)
 		}
 	case TermManyExpr:

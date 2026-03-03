@@ -12,9 +12,11 @@ type BitSet[V Value] struct {
 	data []uint64
 }
 
+const defaultSize = (1 << 16) / 64
+
 // NewBitSet creates a new BitSet
 func NewBitSet[V Value]() *BitSet[V] {
-	return &BitSet[V]{data: make([]uint64, 0)}
+	return &BitSet[V]{data: make([]uint64, 0, defaultSize)}
 }
 
 // NewBitSetWithCapacity creates a new BitSet with starting capacity
@@ -88,7 +90,7 @@ func (b *BitSet[V]) Contains(value V) bool {
 
 // Range iterates over set bits between 'from' and 'to' (inclusive).
 // It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
-func (b *BitSet[V]) Range(from, to V, visit func(v uint32) bool) {
+func (b *BitSet[V]) Range(from, to V, visit func(v V) bool) {
 	if from > to || len(b.data) == 0 {
 		return
 	}
@@ -119,7 +121,7 @@ func (b *BitSet[V]) Range(from, to V, visit func(v uint32) bool) {
 
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
-			val := uint32(i<<6) + uint32(t)
+			val := V(i<<6) + V(t)
 
 			if !visit(val) {
 				return
@@ -233,10 +235,7 @@ func (b *BitSet[V]) And(other *BitSet[V]) {
 	l := min(len(b.data), len(other.data))
 
 	// zero out the tail to prevent "Zombie Bits"
-	for i := l; i < len(b.data); i++ {
-		b.data[i] = 0
-	}
-
+	clear(b.data[l:])
 	b.data = b.data[:l]
 
 	// BCE: Bounds Check Elimination
@@ -252,26 +251,32 @@ func (b *BitSet[V]) And(other *BitSet[V]) {
 func (b *BitSet[V]) Or(other *BitSet[V]) {
 	od := other.data
 	ol := len(od)
+	bl := len(b.data)
 
 	if ol == 0 {
 		return
 	}
 
-	if len(b.data) < ol && cap(b.data) < ol {
-		b.grow(ol - 1)
+	overlap := min(bl, ol)
+
+	// Ensure b.data has enough length for the result
+	if bl < ol {
+		if cap(b.data) >= ol {
+			b.data = b.data[:ol]
+		} else {
+			b.grow(ol - 1)
+		}
+		// Copy non-overlapping tail: 0 | x = x
+		copy(b.data[overlap:ol], od[overlap:ol])
 	}
 
-	// BCE (Bounds Check Elimination)
-	// are safe to access up to index 'ol-1'.
-	dst := b.data[:ol]
-	src := od
+	// OR the overlapping words
+	dst := b.data[:overlap]
+	src := od[:overlap]
 
-	for i := range ol {
+	for i := range overlap {
 		dst[i] |= src[i]
 	}
-
-	// if len(b.data) was originally > ol, the rest of b.data
-	// stays exactly as it was, which is correct for an OR operation.
 }
 
 // XOr is the logical XOR of two BitSet
@@ -287,7 +292,7 @@ func (b *BitSet[V]) Xor(other *BitSet[V]) {
 	// If 'other' is longer, we simply append its tail to 'b'.
 	// Why? Because: 0 (current tail of b) XOR Value (tail of other) = Value.
 	if ol > bl {
-		b.data = append(b.data, other.data[len(b.data):]...)
+		b.data = append(b.data, other.data[bl:]...)
 	}
 
 	// if 'b' is longer, its tail remains untouched.
@@ -327,11 +332,11 @@ func (b *BitSet[V]) AndNot(other *BitSet[V]) {
 
 // Shrink trims the bitset to ensure that len(b.data) always points to the last truly useful word.
 //
-// Operation	Can Grow?	Can Shrink?
-// OR	        Yes	        No
-// XOR	        Yes     	Yes
-// AND	        No      	Yes
-// AND NOT      No	        Yes
+// Operation    Can Grow?    Can Shrink?
+// OR            Yes         No
+// XOR           Yes         Yes
+// AND           No          Yes
+// AND NOT       No          Yes
 func (b *BitSet[V]) Shrink() {
 	bd := b.data
 
