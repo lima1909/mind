@@ -91,7 +91,7 @@ func In(fieldName string, vals ...any) Query32 { return in[uint32](fieldName, va
 func in[LI Value](fieldName string, vals ...any) Query[LI] {
 	return func(l FilterByName[LI], _ *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
 		if len(vals) == 0 {
-			return NewBitSet[LI](), true, nil
+			return NewEmptyBitSet[LI](), true, nil
 		}
 
 		filter, err := l(fieldName)

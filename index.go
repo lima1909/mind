@@ -259,7 +259,7 @@ func (mi *MapIndex[OBJ, V, LI]) Set(obj *OBJ, lidx LI) {
 	value := mi.fieldGetFn(obj)
 	bs, found := mi.data[value]
 	if !found {
-		bs = NewBitSet[LI]()
+		bs = NewEmptyBitSet[LI]()
 	}
 	bs.Set(lidx)
 	mi.data[value] = bs
@@ -287,7 +287,7 @@ func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 
 	bs, found := mi.data[v]
 	if !found {
-		return NewBitSet[LI](), nil
+		return NewEmptyBitSet[LI](), nil
 	}
 
 	return bs, nil
@@ -317,7 +317,7 @@ func (si *SortedIndex[OBJ, V, LI]) Set(obj *OBJ, lidx LI) {
 	value := si.fieldGetFn(obj)
 	bs, found := si.skipList.Get(value)
 	if !found {
-		bs = NewBitSet[LI]()
+		bs = NewEmptyBitSet[LI]()
 	}
 	bs.Set(lidx)
 	si.skipList.Put(value, bs)
@@ -344,7 +344,7 @@ func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) 
 		if bs, found := si.skipList.Get(v); found {
 			return bs, nil
 		}
-		return NewBitSet[LI](), nil
+		return NewEmptyBitSet[LI](), nil
 	case OpLt:
 		result := NewBitSet[LI]()
 		si.skipList.Less(v, func(v V, bs *BitSet[LI]) bool {
@@ -413,40 +413,36 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 		return result, nil
 	case OpIn:
 		if len(values) == 0 {
-			return NewBitSet[LI](), nil
+			return NewEmptyBitSet[LI](), nil
 		}
 
-		var result *BitSet[LI]
+		matched := make([]*BitSet[LI], 0, len(values))
+		var maxLen int
+
 		for _, v := range values {
 			key, err := ValueFromAny[V](v)
 			if err != nil {
 				return nil, err
 			}
 
-			bs, found := si.skipList.Get(key)
-			if found {
-				if result == nil {
-					result = bs.Copy()
-				} else {
-					result.Or(bs)
+			if bs, found := si.skipList.Get(key); found {
+				matched = append(matched, bs)
+				if len(bs.data) > maxLen {
+					maxLen = len(bs.data)
 				}
 			}
 		}
 
-		if result == nil {
-			return NewBitSet[LI](), nil
+		if len(matched) == 0 {
+			return NewEmptyBitSet[LI](), nil
 		}
-		// result := NewBitSet[LI]()
-		// err := si.skipList.FindMaybeSortedKeys(func(_ V, bs *BitSet[LI]) bool {
-		// 	result.Or(bs)
-		// 	return true
-		// }, values...)
-		// if err != nil {
-		// 	return nil, err
-		// }
+
+		result := NewBitSetWithCapacity[LI](maxLen)
+		for _, bs := range matched {
+			result.Or(bs)
+		}
 
 		return result, nil
-
 	default:
 		return nil, InvalidOperationError{SortedIndexName, op}
 	}

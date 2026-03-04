@@ -19,6 +19,11 @@ func NewBitSet[V Value]() *BitSet[V] {
 	return &BitSet[V]{data: make([]uint64, 0, defaultSize)}
 }
 
+// NewEmptyBitSet creates a new BitSet with len and cap = 0
+func NewEmptyBitSet[V Value]() *BitSet[V] {
+	return &BitSet[V]{data: make([]uint64, 0)}
+}
+
 // NewBitSetWithCapacity creates a new BitSet with starting capacity
 func NewBitSetWithCapacity[V Value](bits int) *BitSet[V] {
 	words := (bits + 63) >> 6
