@@ -28,7 +28,7 @@ func newIndexMap[OBJ any, ID comparable](idIndex idIndex[OBJ, ID]) indexMap[OBJ,
 func (i indexMap[OBJ, ID]) FilterByName(fieldName string) (Filter32, error) {
 	if fieldName == IDIndexFieldName {
 		if i.idIndex == nil {
-			return nil, ErrNoIdIndexDefined{}
+			return nil, NoIdIndexDefinedError{}
 		}
 		return i.idIndex, nil
 	}
@@ -37,7 +37,7 @@ func (i indexMap[OBJ, ID]) FilterByName(fieldName string) (Filter32, error) {
 		return idx, nil
 	}
 
-	return nil, ErrInvalidIndexdName{fieldName}
+	return nil, InvalidNameError{fieldName}
 }
 
 func (i indexMap[OBJ, ID]) Set(obj *OBJ, idx int) {
@@ -66,7 +66,7 @@ func (i indexMap[OBJ, ID]) UnSet(obj *OBJ, idx int) {
 
 func (i indexMap[OBJ, ID]) getIndexByID(id ID) (int, error) {
 	if i.idIndex == nil {
-		return 0, ErrNoIdIndexDefined{}
+		return 0, NoIdIndexDefinedError{}
 	}
 
 	return i.idIndex.GetIndex(id)
@@ -75,7 +75,7 @@ func (i indexMap[OBJ, ID]) getIndexByID(id ID) (int, error) {
 func (i indexMap[OBJ, ID]) getIDByItem(item *OBJ) (ID, int, error) {
 	if i.idIndex == nil {
 		var id ID
-		return id, 0, ErrNoIdIndexDefined{}
+		return id, 0, NoIdIndexDefinedError{}
 	}
 
 	return i.idIndex.GetID(item)
@@ -118,7 +118,7 @@ func (mi *idMapIndex[OBJ, ID]) GetIndex(id ID) (int, error) {
 		return lidx, nil
 	}
 
-	return 0, ErrValueNotFound{id}
+	return 0, ValueNotFoundError{id}
 }
 
 func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, int, error) {
@@ -128,17 +128,17 @@ func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, int, error) {
 	}
 
 	var null ID
-	return null, 0, ErrValueNotFound{id}
+	return null, 0, ValueNotFoundError{id}
 }
 
 func (mi *idMapIndex[OBJ, ID]) Match(op Op, value any) (*BitSet[uint32], error) {
 	id, ok := value.(ID)
 	if !ok {
-		return nil, ErrInvalidIndexValue[ID]{value}
+		return nil, InvalidValueTypeError[ID]{value}
 	}
 
 	if op != OpEq {
-		return nil, ErrInvalidOperation{IDMapIndexName, op}
+		return nil, InvalidOperationError{IDMapIndexName, op}
 	}
 
 	idx, err := mi.GetIndex(id)
@@ -152,7 +152,7 @@ func (mi *idMapIndex[OBJ, ID]) Match(op Op, value any) (*BitSet[uint32], error) 
 
 // MatchMany is not supported by idMapIndex, so that always returns an error
 func (mi *idMapIndex[OBJ, ID]) MatchMany(op Op, values ...any) (*BitSet[uint32], error) {
-	return nil, ErrInvalidOperation{IDMapIndexName, op}
+	return nil, InvalidOperationError{IDMapIndexName, op}
 }
 
 // ------------------------------------------
@@ -278,11 +278,11 @@ func (mi *MapIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
-		return nil, ErrInvalidIndexValue[V]{value}
+		return nil, InvalidValueTypeError[V]{value}
 	}
 
 	if op != OpEq {
-		return nil, ErrInvalidOperation{MapIndexName, op}
+		return nil, InvalidOperationError{MapIndexName, op}
 	}
 
 	bs, found := mi.data[v]
@@ -295,7 +295,7 @@ func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 
 // MatchMany is not supported by MapIndex, so that always returns an error
 func (mi *MapIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], error) {
-	return nil, ErrInvalidOperation{MapIndexName, op}
+	return nil, InvalidOperationError{MapIndexName, op}
 }
 
 const SortedIndexName = "SortedIndex"
@@ -336,7 +336,7 @@ func (si *SortedIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
-		return nil, ErrInvalidIndexValue[V]{value}
+		return nil, InvalidValueTypeError[V]{value}
 	}
 
 	switch op {
@@ -375,7 +375,7 @@ func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) 
 		return result, nil
 	case OpStartsWith:
 		if _, ok := value.(string); !ok {
-			return nil, ErrInvalidIndexValue[string]{value}
+			return nil, InvalidValueTypeError[string]{value}
 		}
 
 		result := NewBitSet[LI]()
@@ -385,7 +385,7 @@ func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) 
 		})
 		return result, nil
 	default:
-		return nil, ErrInvalidOperation{SortedIndexName, op}
+		return nil, InvalidOperationError{SortedIndexName, op}
 	}
 }
 
@@ -393,16 +393,16 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 	switch op {
 	case OpBetween:
 		if len(values) != 2 {
-			return nil, ErrInvalidArgsLen{defined: "2", got: len(values)}
+			return nil, InvalidArgsLenError{defined: "2", got: len(values)}
 		}
 
 		min, err := ValueFromAny[V](values[0])
 		if err != nil {
-			return nil, ErrInvalidIndexValue[V]{values[0]}
+			return nil, InvalidValueTypeError[V]{values[0]}
 		}
 		max, err := ValueFromAny[V](values[1])
 		if err != nil {
-			return nil, ErrInvalidIndexValue[V]{values[1]}
+			return nil, InvalidValueTypeError[V]{values[1]}
 		}
 
 		result := NewBitSet[LI]()
@@ -448,6 +448,6 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 		return result, nil
 
 	default:
-		return nil, ErrInvalidOperation{SortedIndexName, op}
+		return nil, InvalidOperationError{SortedIndexName, op}
 	}
 }

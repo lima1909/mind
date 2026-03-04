@@ -5,44 +5,44 @@ import (
 	"reflect"
 )
 
-type ErrInvalidIndexdName struct{ fieldName string }
+type InvalidNameError struct{ fieldName string }
 
-func (e ErrInvalidIndexdName) Error() string {
+func (e InvalidNameError) Error() string {
 	return fmt.Sprintf("could not found index for field name: %s", e.fieldName)
 }
 
-type ErrInvalidIndexValue[V any] struct{ value any }
+type InvalidValueTypeError[V any] struct{ value any }
 
-func (e ErrInvalidIndexValue[V]) Error() string {
+func (e InvalidValueTypeError[V]) Error() string {
 	return fmt.Sprintf("invalid index value type: %T, expected type: %v", e.value, reflect.TypeFor[V]())
 }
 
-type ErrInvalidOperation struct {
+type InvalidOperationError struct {
 	indexName string
 	op        Op
 }
 
-func (e ErrInvalidOperation) Error() string {
+func (e InvalidOperationError) Error() string {
 	return fmt.Sprintf("index: %q doesn't support the operation: %s", e.indexName, e.op)
 }
 
-type ErrValueNotFound struct{ value any }
+type ValueNotFoundError struct{ value any }
 
-func (e ErrValueNotFound) Error() string {
+func (e ValueNotFoundError) Error() string {
 	return fmt.Sprintf("index value not found: %v", e.value)
 }
 
-type ErrNoIdIndexDefined struct{}
+type NoIdIndexDefinedError struct{}
 
-func (e ErrNoIdIndexDefined) Error() string {
+func (e NoIdIndexDefinedError) Error() string {
 	return fmt.Sprintln("no ID index defined")
 }
 
-type ErrInvalidArgsLen struct {
+type InvalidArgsLenError struct {
 	defined string
 	got     int
 }
 
-func (e ErrInvalidArgsLen) Error() string {
+func (e InvalidArgsLenError) Error() string {
 	return fmt.Sprintf("expected: %s values, got: %d", e.defined, e.got)
 }

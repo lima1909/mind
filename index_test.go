@@ -71,13 +71,13 @@ func TestIDIndex_Filter(t *testing.T) {
 	assert.Equal(t, []uint32{0}, bs.ToSlice())
 
 	_, err = mi.Match(OpEq, 4)
-	assert.ErrorIs(t, ErrInvalidIndexValue[string]{4}, err)
+	assert.ErrorIs(t, InvalidValueTypeError[string]{4}, err)
 
 	_, err = mi.Match(OpLt, "vw")
-	assert.ErrorIs(t, ErrInvalidOperation{IDMapIndexName, OpLt}, err)
+	assert.ErrorIs(t, InvalidOperationError{IDMapIndexName, OpLt}, err)
 
 	_, err = mi.Match(OpEq, "opel")
-	assert.ErrorIs(t, ErrValueNotFound{"opel"}, err)
+	assert.ErrorIs(t, ValueNotFoundError{"opel"}, err)
 }
 
 func TestSortedIndex_Between_String(t *testing.T) {
@@ -116,7 +116,7 @@ func TestSortedIndex_Between_String(t *testing.T) {
 
 	// errors
 	_, err = si.MatchMany(OpBetween, "b")
-	assert.ErrorIs(t, ErrInvalidArgsLen{defined: "2", got: 1}, err)
+	assert.ErrorIs(t, InvalidArgsLenError{defined: "2", got: 1}, err)
 }
 
 func TestSortedIndex_Between_Int(t *testing.T) {
@@ -127,7 +127,7 @@ func TestSortedIndex_Between_Int(t *testing.T) {
 
 	// errors
 	_, err := si.MatchMany(OpBetween, "b", "1")
-	assert.ErrorIs(t, ErrInvalidIndexValue[uint8]{"b"}, err)
+	assert.ErrorIs(t, InvalidValueTypeError[uint8]{"b"}, err)
 }
 
 func TestSortedIndex_In_String(t *testing.T) {
@@ -173,5 +173,5 @@ func TestSortedIndex_In_Int(t *testing.T) {
 
 	// errors
 	_, err := si.MatchMany(OpIn, "b", 1)
-	assert.ErrorIs(t, ErrInvalidIndexValue[uint8]{"b"}, err)
+	assert.ErrorIs(t, InvalidValueTypeError[uint8]{"b"}, err)
 }

@@ -28,7 +28,7 @@ func ValueFromAny[T any](value any) (T, error) {
 
 	}
 
-	return zero, ErrInvalidIndexValue[T]{value}
+	return zero, InvalidValueTypeError[T]{value}
 }
 
 func intValueFromAny[T any](v int64) (T, error) {
@@ -84,7 +84,7 @@ func intValueFromAny[T any](v int64) (T, error) {
 		return any(uint8(v)).(T), nil
 	}
 
-	return zero, ErrInvalidIndexValue[T]{v}
+	return zero, InvalidValueTypeError[T]{v}
 }
 
 type OverflowError struct {

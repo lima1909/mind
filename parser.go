@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
 
 type ExprKind uint8
@@ -119,8 +120,8 @@ func optimize(e Expr) Expr {
 			switch c.Op {
 			// I'm not sure, that this is faster
 			// RULE: NOT (A = B)  -->  A != B
-			// 	case OpEq:
-			// 		return TermExpr{Field: c.Field, Op: OpNeq, Value: c.Value}
+			//  case OpEq:
+			//      return TermExpr{Field: c.Field, Op: OpNeq, Value: c.Value}
 			// RULE: NOT (A != B)  -->  A = B
 			case OpNeq:
 				return TermExpr{Field: c.Field, Op: OpEq, Value: c.Value}
@@ -186,7 +187,7 @@ func Parse(input string) (Query32, error) {
 		return nil, err
 	}
 	if p.cur.Op != OpEOF {
-		return nil, UnexpectedTokenError{token: p.cur}
+		return nil, p.unexpectedWithMsg("unexpected end of the input")
 	}
 
 	// fmt.Println(ast)
@@ -254,14 +255,14 @@ func (p *parser) parseCondition() (Expr, error) {
 			return nil, err
 		}
 		if p.cur.Op != OpRParen {
-			return nil, UnexpectedTokenError{token: p.cur, expected: OpRParen}
+			return nil, p.unexpected(OpRParen)
 		}
 		p.next()
 		return expr, nil
 	}
 
 	if p.cur.Op != OpIdent {
-		return nil, UnexpectedTokenError{token: p.cur, expected: OpIdent}
+		return nil, p.unexpected(OpIdent)
 	}
 	field := p.input[p.cur.Start:p.cur.End]
 	p.next()
@@ -297,24 +298,25 @@ func (p *parser) parseCondition() (Expr, error) {
 	// case tokIdent:
 	// maybe relations like startswith
 	default:
-		return nil, UnexpectedTokenError{token: p.cur, expected: OpEq}
+		return nil, p.unexpectedWithMsg("missing relation like: =, !=, <, ...")
 	}
 }
 
 func (p *parser) parseValueList() ([]any, error) {
 	if p.cur.Op != OpLParen {
-		return nil, UnexpectedTokenError{token: p.cur, expected: OpLParen}
+		return nil, p.unexpected(OpLParen)
 	}
 	p.next()
 
 	expectedOpValue := OpEOF
 	values := make([]any, 0, 10)
+
 	for {
 		// all list values should have the same type
 		if expectedOpValue == OpEOF {
 			expectedOpValue = p.cur.Op
 		} else if expectedOpValue != p.cur.Op {
-			return nil, UnexpectedTokenError{token: p.cur, expected: expectedOpValue}
+			return nil, p.unexpected(expectedOpValue)
 		}
 
 		val, err := p.parseValue()
@@ -329,7 +331,7 @@ func (p *parser) parseValueList() ([]any, error) {
 		}
 
 		if p.cur.Op != OpComma {
-			return nil, UnexpectedTokenError{token: p.cur, expected: OpComma}
+			return nil, p.unexpected(OpComma)
 		}
 		p.next()
 	}
@@ -349,7 +351,7 @@ func (p *parser) parseValue() (any, error) {
 	case OpBool:
 		val = parseBool(p.input[p.cur.Start:p.cur.End])
 	default:
-		return nil, UnexpectedTokenError{token: p.cur, expected: OpString}
+		return nil, p.unexpectedWithMsg("missing value like: string, number, bool")
 	}
 	p.next()
 	return val, nil
@@ -455,29 +457,55 @@ var powersOf10 = [...]float64{
 	1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18,
 }
 
+// --- parse error ---
+func (p *parser) unexpected(expected Op) error {
+	return UnexpectedTokenError{input: p.input, token: p.cur, expected: expected}
+}
+
+func (p *parser) unexpectedWithMsg(msg string) error {
+	return UnexpectedTokenError{input: p.input, token: p.cur, msg: msg, expected: OpUndefined}
+}
+
 type UnexpectedTokenError struct {
+	input    string
+	msg      string
 	token    token
 	expected Op
 }
 
 func (e UnexpectedTokenError) Error() string {
-	if e.expected == OpUndefined {
-		return fmt.Sprintf(
-			"unexpected token: %q [%d:%d]",
-			e.token.Op,
-			e.token.Start,
-			e.token.End,
-		)
+	var msg string
+	if e.msg != "" {
+		msg = fmt.Sprintf("%s at position %d", e.msg, e.token.Start)
+	} else if e.expected == OpUndefined {
+		msg = fmt.Sprintf("unexpected token %q at position %d", e.token.Op, e.token.Start)
+	} else {
+		msg = fmt.Sprintf("expected %q, got %q at position %d", e.expected, e.token.Op, e.token.Start)
 	}
-	return fmt.Sprintf(
-		"expected token: %q, got: %q [%d:%d]",
-		e.expected,
-		e.token.Op,
-		e.token.Start,
-		e.token.End,
+
+	if e.input == "" {
+		return msg
+	}
+
+	// Build a visual pointer: show the input and a caret line under the error position.
+	start := e.token.Start
+	end := e.token.End
+	if start > len(e.input) {
+		start = len(e.input)
+	}
+	if end > len(e.input) {
+		end = len(e.input)
+	}
+
+	caretLen := end - start
+	if caretLen < 1 {
+		caretLen = 1
+	}
+
+	return fmt.Sprintf("%s\n  %s\n  %s%s",
+		msg,
+		e.input,
+		strings.Repeat(" ", start),
+		strings.Repeat("^", caretLen),
 	)
 }
-
-type ErrCast struct{ msg string }
-
-func (e ErrCast) Error() string { return fmt.Sprintf("cast err: %s", e.msg) }

@@ -113,7 +113,7 @@ func TestIndexList_RemoveIndex(t *testing.T) {
 	il.RemoveIndex("age")
 	assert.Equal(t, 0, len(il.indexMap.index))
 	_, err = il.Query(Eq("age", uint8(22)))
-	assert.ErrorIs(t, ErrInvalidIndexdName{"age"}, err)
+	assert.ErrorIs(t, InvalidNameError{"age"}, err)
 	// the index is removed, but not the data
 	assert.Equal(t, 1, il.Count())
 }
@@ -131,7 +131,7 @@ func TestIndexList_RemoveIndexWithId(t *testing.T) {
 	il.RemoveIndex("id")
 	assert.Nil(t, il.indexMap.idIndex)
 	_, err = il.Get("Opel")
-	assert.ErrorIs(t, ErrNoIdIndexDefined{}, err)
+	assert.ErrorIs(t, NoIdIndexDefinedError{}, err)
 	// the index is removed, but not the data
 	assert.Equal(t, 1, il.Count())
 }
@@ -474,15 +474,15 @@ func TestIndexList_WithID(t *testing.T) {
 
 	// check not found after remove
 	_, err = il.Get("Dacia")
-	assert.ErrorIs(t, err, ErrValueNotFound{"Dacia"})
+	assert.ErrorIs(t, err, ValueNotFoundError{"Dacia"})
 	_, err = il.Remove("Dacia")
-	assert.ErrorIs(t, err, ErrValueNotFound{"Dacia"})
+	assert.ErrorIs(t, err, ValueNotFoundError{"Dacia"})
 }
 
 func TestIndexList_NoID_QueryIDs(t *testing.T) {
 	il := NewIndexList[car]()
 	_, err := il.Query(ID("Opel"))
-	assert.ErrorIs(t, err, ErrNoIdIndexDefined{})
+	assert.ErrorIs(t, err, NoIdIndexDefinedError{})
 
 }
 

@@ -15,7 +15,7 @@ func fieldIndexMapFn[T any](mi Index32[T]) FilterByName32 {
 			return mi, nil
 		}
 
-		return nil, ErrInvalidIndexdName{fieldName}
+		return nil, InvalidNameError{fieldName}
 	}
 }
 
@@ -85,7 +85,7 @@ func TestMapIndex_Get(t *testing.T) {
 
 	// invalid relation
 	_, err = mi.Match(OpGt, 1)
-	assert.ErrorIs(t, ErrInvalidOperation{MapIndexName, OpGt}, err)
+	assert.ErrorIs(t, InvalidOperationError{MapIndexName, OpGt}, err)
 }
 
 func TestMapIndex_Query(t *testing.T) {
@@ -114,7 +114,7 @@ func TestMapIndex_Query(t *testing.T) {
 
 	// invalid field
 	result, _, err = Eq("bad", 1)(fi, nil)
-	assert.ErrorIs(t, ErrInvalidIndexdName{"bad"}, err)
+	assert.ErrorIs(t, InvalidNameError{"bad"}, err)
 	assert.Nil(t, result)
 
 	// OR

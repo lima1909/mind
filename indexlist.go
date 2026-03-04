@@ -109,7 +109,7 @@ func (l *IndexList[T, ID]) Update(item T) error {
 	// overwrite the data in the main list
 	oldItem, ok := l.list.Set(idx, item)
 	if !ok {
-		return ErrValueNotFound{id}
+		return ValueNotFoundError{id}
 	}
 
 	// re-index

@@ -199,12 +199,12 @@ func TestParser_Error(t *testing.T) {
 		},
 		{
 			query:       `role`,
-			expected_op: OpEq,
+			expected_op: OpUndefined,
 			err_op:      OpEOF,
 		},
 		{
 			query:       `role ~`,
-			expected_op: OpEq,
+			expected_op: OpUndefined,
 			err_op:      OpEOF,
 		},
 		{
@@ -214,7 +214,7 @@ func TestParser_Error(t *testing.T) {
 		},
 		{
 			query:       `role = `,
-			expected_op: OpString,
+			expected_op: OpUndefined,
 			err_op:      OpEOF,
 		},
 		{
@@ -249,8 +249,8 @@ func TestParser_Error(t *testing.T) {
 		},
 		{
 			query:       `role = - `,
-			expected_op: OpString, // the first expected value
-			err_op:      OpUndefined,
+			expected_op: OpUndefined, // the first expected value
+			err_op:      OpUndefined, // unexpected end
 		},
 	}
 
