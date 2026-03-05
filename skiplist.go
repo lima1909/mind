@@ -170,26 +170,51 @@ func (sl *SkipList[K, V]) Traverse(visit VisitFn[K, V]) bool {
 	return true
 }
 
-// FindSortedKeys calls visit for all finding keys.
+// FindFromSortedKeys calls visit for all finding keys.
 // Important: they keys slice MUST be sorted!
-func (sl *SkipList[K, V]) FindSortedKeys(visit VisitFn[K, V], keys ...K) {
+func (sl *SkipList[K, V]) FindFromSortedKeys(visit VisitFn[K, V], keys ...K) {
 	if len(keys) == 0 {
 		return
 	}
 
-	curr := sl.head
+	// track the last-visited node at every level so the express lanes
+	var cursor [maxLevel]*node[K, V]
+	for i := range sl.level {
+		cursor[i] = sl.head
+	}
 
 	for _, key := range keys {
+		// descend from the highest level, resuming from each level's cursor
 		for i := int(sl.level) - 1; i >= 0; i-- {
-			for next := curr.next[i]; next != nil && next.key < key; next = curr.next[i] {
-				curr = next
+			x := cursor[i]
+			for x.next[i] != nil && x.next[i].key < key {
+				x = x.next[i]
+			}
+			cursor[i] = x
+
+			// Propagate down: if level i reached a node ahead of cursor[i-1],
+			// pull cursor[i-1] forward so lower levels don't do a linear walk.
+			if i > 0 && x != sl.head {
+				c := cursor[i-1]
+				if c == sl.head || c.key < x.key {
+					cursor[i-1] = x
+				}
 			}
 		}
 
-		x := curr.next[0]
-		if x != nil && x.key == key {
-			if !visit(x.key, x.value) {
+		// check the candidate node at level 0
+		candidate := cursor[0].next[0]
+		if candidate == nil {
+			return
+		}
+
+		if candidate.key == key {
+			if !visit(candidate.key, candidate.value) {
 				return
+			}
+			// advance all cursors at levels this node participates in
+			for i := byte(0); i < candidate.level; i++ {
+				cursor[i] = candidate
 			}
 		}
 	}

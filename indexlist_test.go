@@ -79,6 +79,7 @@ func TestIndexList_CreateIndex_Err(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not allowed")
 
+	// ID is a reserved index name
 	err = il.CreateIndex("id", NewMapIndex((*car).Age))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "ID is a reserved")
@@ -569,6 +570,8 @@ func TestIndexList_QueryStr(t *testing.T) {
 	il := NewIndexListWithID((*car).Name)
 	err := il.CreateIndex("name", NewSortedIndex((*car).Name))
 	assert.NoError(t, err)
+	err = il.CreateIndex("name2", NewMapIndex((*car).Name))
+	assert.NoError(t, err)
 	err = il.CreateIndex("age", NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
@@ -600,6 +603,23 @@ func TestIndexList_QueryStr(t *testing.T) {
 	}, qr.Values())
 
 	qr, err = il.QueryStr(`name = "Opel" or name = "Dacia" or age > 20`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+		{name: "Opel", age: 5},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`name IN("Opel", "Dacia") or age > 20`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+		{name: "Opel", age: 5},
+	}, qr.Values())
+
+	// same test for MapIndex
+	qr, err = il.QueryStr(`name2 IN("Opel", "Dacia") or age > 20`)
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},

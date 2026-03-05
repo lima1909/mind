@@ -99,25 +99,34 @@ func in[LI Value](fieldName string, vals ...any) Query[LI] {
 			return nil, false, err
 		}
 
-		bs, err := filter.Match(OpEq, vals[0])
-		if err != nil {
-			return nil, false, err
-		}
+		matched := make([]*BitSet[LI], 0, len(vals))
+		var maxLen int
 
-		if len(vals) == 1 {
-			return bs, false, nil
-		}
-
-		bs = bs.Copy()
-		for _, val := range vals[1:] {
-			bsGet, err := filter.Match(OpEq, val)
+		for _, v := range vals {
+			bs, err := filter.Match(OpEq, v)
 			if err != nil {
 				return nil, false, err
 			}
-			bs.Or(bsGet)
+
+			matched = append(matched, bs)
+			if len(bs.data) > maxLen {
+				maxLen = len(bs.data)
+			}
 		}
 
-		return bs, true, nil
+		switch len(matched) {
+		case 0:
+			return NewEmptyBitSet[LI](), true, nil
+		case 1:
+			return matched[0], false, nil
+		}
+
+		result := NewBitSetWithCapacity[LI](maxLen)
+		for _, bs := range matched {
+			result.Or(bs)
+		}
+
+		return result, true, nil
 	}
 }
 

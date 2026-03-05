@@ -295,7 +295,42 @@ func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 
 // MatchMany is not supported by MapIndex, so that always returns an error
 func (mi *MapIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], error) {
-	return nil, InvalidOperationError{MapIndexName, op}
+	switch op {
+	case OpIn:
+		if len(values) == 0 {
+			return NewEmptyBitSet[LI](), nil
+		}
+
+		matched := make([]*BitSet[LI], 0, len(values))
+		var maxLen int
+
+		for _, v := range values {
+			key, err := ValueFromAny[V](v)
+			if err != nil {
+				return nil, err
+			}
+
+			if bs, found := mi.data[key]; found {
+				matched = append(matched, bs)
+				if len(bs.data) > maxLen {
+					maxLen = len(bs.data)
+				}
+			}
+		}
+
+		if len(matched) == 0 {
+			return NewEmptyBitSet[LI](), nil
+		}
+
+		result := NewBitSetWithCapacity[LI](maxLen)
+		for _, bs := range matched {
+			result.Or(bs)
+		}
+
+		return result, nil
+	default:
+		return nil, InvalidOperationError{MapIndexName, op}
+	}
 }
 
 const SortedIndexName = "SortedIndex"

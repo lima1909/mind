@@ -100,10 +100,32 @@ func BenchmarkSkiplist_FindSortedKey(b *testing.B) {
 
 	for b.Loop() {
 		count := 0
-		sl.FindSortedKeys(func(key, val uint32) bool {
+		sl.FindFromSortedKeys(func(key, val uint32) bool {
 			count++
 			return true
 		}, 1, 10_000, 100_000, 1000_000)
 		assert.Equal(b, 4, count)
+	}
+}
+
+func BenchmarkSkiplist_FindSortedKey99(b *testing.B) {
+	sl := NewSkipList[uint32, uint32]()
+	for i := 1; i <= count; i++ {
+		sl.Put(uint32(i), uint32(i))
+	}
+	b.ResetTimer()
+
+	for b.Loop() {
+		_, found := sl.Get(1)
+		assert.True(b, found)
+
+		_, found = sl.Get(10_000)
+		assert.True(b, found)
+
+		_, found = sl.Get(100_000)
+		assert.True(b, found)
+
+		_, found = sl.Get(1000_000)
+		assert.True(b, found)
 	}
 }

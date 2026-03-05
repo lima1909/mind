@@ -365,7 +365,7 @@ func TestSplitList_FindSortedKeys(t *testing.T) {
 	// sorted
 	counVisit := 0
 	result := make([]uint32, 0)
-	sl.FindSortedKeys(func(key byte, val uint32) bool {
+	sl.FindFromSortedKeys(func(key byte, val uint32) bool {
 		result = append(result, val)
 		// ignore 0 and 7
 		counVisit++
@@ -377,7 +377,7 @@ func TestSplitList_FindSortedKeys(t *testing.T) {
 	// NOT sorted
 	counVisit = 0
 	result = make([]uint32, 0)
-	sl.FindSortedKeys(func(key byte, val uint32) bool {
+	sl.FindFromSortedKeys(func(key byte, val uint32) bool {
 		result = append(result, val)
 		// ignore 0 and 7
 		counVisit++

@@ -34,6 +34,7 @@ func BenchmarkQueryStr(b *testing.B) {
 
 	il := NewIndexList[person]()
 	err := il.CreateIndex("name", NewSortedIndex(FromName[person, string]("Name")))
+	// err := il.CreateIndex("name", NewMapIndex(FromName[person, string]("Name")))
 	assert.NoError(b, err)
 	err = il.CreateIndex("age", NewSortedIndex(FromName[person, int]("Age")))
 	assert.NoError(b, err)
