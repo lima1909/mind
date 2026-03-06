@@ -32,7 +32,7 @@ func BenchmarkQueryStr(b *testing.B) {
 
 	list := make([]person, 0, ds)
 
-	il := NewIndexList[person]()
+	il := NewList[person]()
 	err := il.CreateIndex("name", NewSortedIndex(FromName[person, string]("Name")))
 	// err := il.CreateIndex("name", NewMapIndex(FromName[person, string]("Name")))
 	assert.NoError(b, err)
@@ -64,7 +64,7 @@ func BenchmarkQueryStr(b *testing.B) {
 		bmark func() int
 	}{
 		{
-			name: "IndexList",
+			name: "List",
 			bmark: func() int {
 				qr, _ := il.QueryStr(
 					`name = "Jule" or name = "Magan" or age > 80`,
@@ -73,7 +73,7 @@ func BenchmarkQueryStr(b *testing.B) {
 			},
 		},
 		{
-			name: "IndexList-In",
+			name: "List-In",
 			bmark: func() int {
 				qr, _ := il.QueryStr(
 					`name IN("Jule", "Magan") or age > 80`,

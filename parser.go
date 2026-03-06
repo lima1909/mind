@@ -438,10 +438,6 @@ func parseFloat(s string) float64 {
 		// If it's within our precomputed range, use the blazing fast array lookup
 		if fracDigits < len(powersOf10) {
 			result = float64(mantissa) / powersOf10[fracDigits]
-			// } else {
-			// Fallback: If it has >18 fractional digits, the fast path fails.
-			// Let the standard library handle extreme precision.
-			// In fali, you might want to call strconv.ParseFloat here.
 		}
 	}
 

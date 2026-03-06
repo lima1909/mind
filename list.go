@@ -7,25 +7,25 @@ import (
 	"sync"
 )
 
-// IndexList is a list (slice), which is extended by Indices for fast finding Items in the list.
-type IndexList[T any, ID comparable] struct {
+// List is a list (slice), which is extended by Indices for fast finding Items in the list.
+type List[T any, ID comparable] struct {
 	list     FreeList[T]
 	indexMap indexMap[T, ID]
 
 	lock sync.RWMutex
 }
 
-// NewIndexList create a new IndexList
-func NewIndexList[T any]() *IndexList[T, struct{}] {
-	return &IndexList[T, struct{}]{
+// NewList create a new List
+func NewList[T any]() *List[T, struct{}] {
+	return &List[T, struct{}]{
 		list:     NewFreeList[T](),
 		indexMap: newIndexMap[T, struct{}](nil),
 	}
 }
 
-// NewIndexList create a new IndexList with an ID-Index
-func NewIndexListWithID[T any, ID comparable](fieldIDGetFn func(*T) ID) *IndexList[T, ID] {
-	return &IndexList[T, ID]{
+// NewList create a new List with an ID-Index
+func NewListWithID[T any, ID comparable](fieldIDGetFn func(*T) ID) *List[T, ID] {
+	return &List[T, ID]{
 		list:     NewFreeList[T](),
 		indexMap: newIndexMap(newIDMapIndex(fieldIDGetFn)),
 	}
@@ -37,7 +37,7 @@ func NewIndexListWithID[T any, ID comparable](fieldIDGetFn func(*T) ID) *IndexLi
 //   - Index: a impl of the Index interface
 //
 // Hint: empty field-name or the field-name ID are not allowed!
-func (l *IndexList[T, ID]) CreateIndex(fieldName string, index Index32[T]) error {
+func (l *List[T, ID]) CreateIndex(fieldName string, index Index32[T]) error {
 	if fieldName == "" {
 		return fmt.Errorf("empty fieldName is not allowed")
 	}
@@ -62,7 +62,7 @@ func (l *IndexList[T, ID]) CreateIndex(fieldName string, index Index32[T]) error
 
 // RemoveIndex removed a the Index with the given field-name (what the name of the Index is)
 // With the field-name: ID you can remove the ID-Index
-func (l *IndexList[T, ID]) RemoveIndex(fieldName string) {
+func (l *List[T, ID]) RemoveIndex(fieldName string) {
 	if fieldName == "" {
 		return
 	}
@@ -86,7 +86,7 @@ func (l *IndexList[T, ID]) RemoveIndex(fieldName string) {
 
 // Insert add the given Item to the list,
 // There is NO check, for existing this Item in the list, it will ALWAYS inserting!
-func (l *IndexList[T, ID]) Insert(item T) int {
+func (l *List[T, ID]) Insert(item T) int {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -97,7 +97,7 @@ func (l *IndexList[T, ID]) Insert(item T) int {
 }
 
 // Update replaces an item and consistently updates all registered indexes.
-func (l *IndexList[T, ID]) Update(item T) error {
+func (l *List[T, ID]) Update(item T) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -123,12 +123,12 @@ func (l *IndexList[T, ID]) Update(item T) error {
 }
 
 // Remove an item by the given ID.
-// This works ONLY, if an ID is defined (with calling: NewIndexListWithID)
+// This works ONLY, if an ID is defined (with calling: NewListWithID)
 // errors:
 // - wrong datatype
 // - ID not found
 // - no ID defined
-func (l *IndexList[T, ID]) Remove(id ID) (bool, error) {
+func (l *List[T, ID]) Remove(id ID) (bool, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -142,12 +142,12 @@ func (l *IndexList[T, ID]) Remove(id ID) (bool, error) {
 }
 
 // Get returns an item by the given ID.
-// This works ONLY, if an ID is defined (with calling: NewIndexListWithID)
+// This works ONLY, if an ID is defined (with calling: NewListWithID)
 // errors:
 // - wrong datatype
 // - ID not found
 // - no ID defined
-func (l *IndexList[T, ID]) Get(id ID) (T, error) {
+func (l *List[T, ID]) Get(id ID) (T, error) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
@@ -163,7 +163,7 @@ func (l *IndexList[T, ID]) Get(id ID) (T, error) {
 }
 
 // ContainsID check, is this ID found in the list.
-func (l *IndexList[T, ID]) Contains(id ID) bool {
+func (l *List[T, ID]) Contains(id ID) bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
@@ -171,7 +171,7 @@ func (l *IndexList[T, ID]) Contains(id ID) bool {
 	return err == nil
 }
 
-func (l *IndexList[T, ID]) QueryStr(queryStr string) (QueryResult[T, ID], error) {
+func (l *List[T, ID]) QueryStr(queryStr string) (QueryResult[T, ID], error) {
 	query, err := Parse(queryStr)
 	if err != nil {
 		return QueryResult[T, ID]{}, err
@@ -181,7 +181,7 @@ func (l *IndexList[T, ID]) QueryStr(queryStr string) (QueryResult[T, ID], error)
 }
 
 // Query execute the given Query.
-func (l *IndexList[T, ID]) Query(query Query32) (QueryResult[T, ID], error) {
+func (l *List[T, ID]) Query(query Query32) (QueryResult[T, ID], error) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
@@ -198,7 +198,7 @@ func (l *IndexList[T, ID]) Query(query Query32) (QueryResult[T, ID], error) {
 }
 
 // Count the Items, which in this list exist
-func (l *IndexList[T, ID]) Count() int {
+func (l *List[T, ID]) Count() int {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
@@ -206,7 +206,7 @@ func (l *IndexList[T, ID]) Count() int {
 }
 
 //go:inline
-func (l *IndexList[T, ID]) removeNoLock(index int) (t T, removed bool) {
+func (l *List[T, ID]) removeNoLock(index int) (t T, removed bool) {
 	item, found := l.list.Get(index)
 	if !found {
 		return item, found
@@ -220,7 +220,7 @@ func (l *IndexList[T, ID]) removeNoLock(index int) (t T, removed bool) {
 
 type QueryResult[T any, ID comparable] struct {
 	bitSet *BitSet[uint32]
-	list   *IndexList[T, ID]
+	list   *List[T, ID]
 }
 
 func (q *QueryResult[T, ID]) Count() int    { return q.bitSet.Count() }

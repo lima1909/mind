@@ -1,4 +1,4 @@
-module github.com/lima1909/fali
+module github.com/lima1909/mind
 
 go 1.25.5
 

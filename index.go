@@ -159,7 +159,7 @@ func (mi *idMapIndex[OBJ, ID]) MatchMany(op Op, values ...any) (*BitSet[uint32],
 // here starts the Index with the Index impls
 // ------------------------------------------
 
-// Index32 the IndexList only supports uint32 List-Indices
+// Index32 the List only supports uint32 List-Indices
 type Index32[T any] = Index[T, uint32]
 
 // Index is interface for handling the mapping of an Value: V to an List-Index: LI
@@ -170,7 +170,7 @@ type Index[OBJ any, LI Value] interface {
 	Filter[LI]
 }
 
-// Filter32 the IndexList only supports uint32 List-Indices
+// Filter32 the List only supports uint32 List-Indices
 type Filter32 = Filter[uint32]
 
 // Filter returns the BitSet or an error by a given Relation and Value
