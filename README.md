@@ -29,32 +29,52 @@ The fast access can be achieved by using different methods, like;
 - it is more memory required. In addition to the user data, data for the _hash_, _index_ are also stored.
 - the write operation are slower, because for every wirte operation is an another one (for storing the index data) necessary
 
-#### Example
+
+#### [Example](https://github.com/lima1909/mind/blob/main/example/main.go)
 
 ```go
+package main
+
+import (
+	"fmt"
+
+	"github.com/lima1909/mind"
+)
+
 type Car struct {
-	name  string
-	age   uint8
+	name string
+	age  uint8
 }
+
 func (c *Car) Name() string { return c.name }
 func (c *Car) Age() uint8   { return c.age }
 
-l := NewList[Car]()
+func main() {
 
-err := l.CreateIndex("name", NewMapIndex((*Car).Name))
-err  = l.CreateIndex("age", NewSortedIndex((*Car).Age))
+	l := mind.NewList[Car]()
 
-l.Insert(Car{name: "Dacia", age: 2})
-l.Insert(Car{name: "Opel", age: 12})
-l.Insert(Car{name: "Mercedes", age: 5})
-l.Insert(Car{name: "Dacia", age: 22})
+	err := l.CreateIndex("name", mind.NewMapIndex((*Car).Name))
+	if err != nil {
+		panic(err)
+	}
+	err = l.CreateIndex("age", mind.NewSortedIndex((*Car).Age))
+	if err != nil {
+		panic(err)
+	}
 
+	l.Insert(Car{name: "Dacia", age: 2})
+	l.Insert(Car{name: "Opel", age: 12})
+	l.Insert(Car{name: "Mercedes", age: 5})
+	l.Insert(Car{name: "Dacia", age: 22})
 
-qr, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`)
+	qr, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`)
+	if err != nil {
+		panic(err)
+	}
 
-assert.Equal(t, []Car{
-		{name: "Dacia", age: 2},
-		{name: "Opel", age: 12},
-		{name: "Dacia", age: 22},
-}, qr.Values())
+	fmt.Println(qr.Values())
+
+	// Output:
+	// [{Dacia 2} {Opel 12} {Dacia 22}]
+}
 ```

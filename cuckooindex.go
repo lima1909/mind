@@ -1,4 +1,4 @@
-package main
+package mind
 
 // It is designed for high-speed, constant-time O(1) lookups.
 // It can only answer "Definitely no" or "Probably yes" (like: Bloom filters),

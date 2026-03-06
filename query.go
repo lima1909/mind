@@ -1,4 +1,4 @@
-package main
+package mind
 
 // Query32 supports only uint32 List-Indices
 type Query32 = Query[uint32]
