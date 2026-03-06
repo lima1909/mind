@@ -2,13 +2,15 @@
 
 # Mind 
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/lima1909/mind/ci.yaml?style=for-the-badge)](https://github.com/lima1909/mind/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/lima1909/mind/ci.yml?style=for-the-badge)](https://github.com/lima1909/mind/actions)
 ![License](https://img.shields.io/github/license/lima1909/mind?style=for-the-badge)
 [![Stars](https://img.shields.io/github/stars/lima1909/mind?style=for-the-badge)](https://github.com/lima1909/mind/stargazers)
 
 </div>
 
-`Mind (Multi Index List)` means quickly finding list items using indexes to improve query/filter operations for lists.
+`Mind (Multi Index List)` finding list items faster by using indexes.
+
+This allows queries / filters to be improved, as is also the case with databases.
 
 <div>
 ⚠️ <strong>Mind is in a very early stage of development and can change!</strong>
