@@ -627,3 +627,81 @@ func TestList_QueryStr(t *testing.T) {
 		{name: "Opel", age: 5},
 	}, qr.Values())
 }
+
+func TestList_ListFilter(t *testing.T) {
+	il := NewList[car]()
+	err := il.CreateIndex("name", NewSortedIndex((*car).Name))
+	assert.NoError(t, err)
+	err = il.CreateIndex("age", NewFullScan((*car).Age))
+	assert.NoError(t, err)
+
+	il.Insert(car{name: "Opel", age: 22})
+	il.Insert(car{name: "Mercedes", age: 5})
+	il.Insert(car{name: "Dacia", age: 22})
+	il.Insert(car{name: "Opel", age: 6})
+
+	qr, err := il.QueryStr(`age = 22`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`age > 21`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`age >= 22`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`age < 6`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{{name: "Mercedes", age: 5}}, qr.Values())
+
+	qr, err = il.QueryStr(`age <= 6`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Mercedes", age: 5},
+		{name: "Opel", age: 6},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`age between(6, 22)`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+		{name: "Opel", age: 6},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`age IN(6, 22)`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+		{name: "Opel", age: 6},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`name = "Opel" or name = "Dacia" or age > 20`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+		{name: "Opel", age: 6},
+	}, qr.Values())
+
+	qr, err = il.QueryStr(`name IN("Opel", "Dacia") or age > 20`)
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+		{name: "Opel", age: 6},
+	}, qr.Values())
+
+}

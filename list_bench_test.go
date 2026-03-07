@@ -39,6 +39,11 @@ func BenchmarkQueryStr(b *testing.B) {
 	err = il.CreateIndex("age", NewSortedIndex(FromName[person, int]("Age")))
 	assert.NoError(b, err)
 
+	err = il.CreateIndex("name2", NewFullScan(FromName[person, string]("Name")))
+	assert.NoError(b, err)
+	err = il.CreateIndex("age2", NewFullScan(FromName[person, int]("Age")))
+	assert.NoError(b, err)
+
 	n := 0
 	for i := 1; i <= ds; i++ {
 		if n%6779 == 0 {
@@ -77,6 +82,15 @@ func BenchmarkQueryStr(b *testing.B) {
 			bmark: func() int {
 				qr, _ := il.QueryStr(
 					`name IN("Jule", "Magan") or age > 80`,
+				)
+				return qr.Count()
+			},
+		},
+		{
+			name: "FullScan",
+			bmark: func() int {
+				qr, _ := il.QueryStr(
+					`name2 IN("Jule", "Magan") or age2 > 80`,
 				)
 				return qr.Count()
 			},

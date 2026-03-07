@@ -157,3 +157,33 @@ func (l *FreeList[T]) CompactLinear(onMove func(oldIndex, newIndex int)) {
 	l.slots = slots[:keep]
 	l.freeHead = -1
 }
+
+func (l *FreeList[T]) filter(predicat func(item *T) bool, yield func(idx int) bool) {
+	for i, item := range l.slots {
+		if item.occupied {
+			it := &l.slots[i]
+			val := &it.value
+
+			if predicat(val) && !yield(i) {
+				return
+			}
+		}
+	}
+}
+
+func (l *FreeList[T]) filterBS(predicat func(item *T) bool) *BitSet[uint32] {
+	bs := NewBitSet[uint32]()
+
+	for i, item := range l.slots {
+		if item.occupied {
+			it := &l.slots[i]
+			val := &it.value
+
+			if predicat(val) {
+				bs.Set(uint32(i))
+			}
+		}
+	}
+
+	return bs
+}

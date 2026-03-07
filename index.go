@@ -482,3 +482,111 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 		return nil, InvalidOperationError{SortedIndexName, op}
 	}
 }
+
+const FullScanName = "FullScan"
+
+type ListFilterFn[OBJ any, LI Value] interface {
+	SetListFilterFn(func(predicat func(item *OBJ) bool) *BitSet[LI])
+}
+
+// FullScan, reads every item and execute the given predicate
+// Is very slow, but don't need memory for saving the index-data.
+// (is more an experiment)
+type FullScan[OBJ any, V cmp.Ordered, LI Value] struct {
+	fieldGetFn FromField[OBJ, V]
+	// will be injected from the List
+	filter func(predicat func(item *OBJ) bool) *BitSet[LI]
+}
+
+func NewFullScan[OBJ any, V cmp.Ordered](fieldGetFn FromField[OBJ, V]) Index32[OBJ] {
+	return &FullScan[OBJ, V, uint32]{fieldGetFn: fieldGetFn}
+}
+
+func (ft *FullScan[OBJ, V, LI]) SetListFilterFn(filter func(predicat func(item *OBJ) bool) *BitSet[LI]) {
+	ft.filter = filter
+}
+
+func (ft *FullScan[OBJ, V, LI]) Set(obj *OBJ, lidx LI)   {}
+func (ft *FullScan[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {}
+
+func (ft *FullScan[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
+	v, err := ValueFromAny[V](value)
+	if err != nil {
+		return nil, InvalidValueTypeError[V]{value}
+	}
+
+	switch op {
+	case OpEq:
+		return ft.filter(func(item *OBJ) bool {
+			return ft.fieldGetFn(item) == v
+		}), nil
+	case OpLt:
+		return ft.filter(func(item *OBJ) bool {
+			return ft.fieldGetFn(item) < v
+		}), nil
+	case OpLe:
+		return ft.filter(func(item *OBJ) bool {
+			return ft.fieldGetFn(item) <= v
+		}), nil
+	case OpGt:
+		return ft.filter(func(item *OBJ) bool {
+			return ft.fieldGetFn(item) > v
+		}), nil
+	case OpGe:
+		return ft.filter(func(item *OBJ) bool {
+			return ft.fieldGetFn(item) >= v
+		}), nil
+	default:
+		return nil, InvalidOperationError{FullScanName, op}
+	}
+}
+
+func (ft *FullScan[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], error) {
+
+	switch op {
+	case OpBetween:
+		if len(values) != 2 {
+			return nil, InvalidArgsLenError{defined: "2", got: len(values)}
+		}
+
+		min, err := ValueFromAny[V](values[0])
+		if err != nil {
+			return nil, InvalidValueTypeError[V]{values[0]}
+		}
+		max, err := ValueFromAny[V](values[1])
+		if err != nil {
+			return nil, InvalidValueTypeError[V]{values[1]}
+		}
+
+		return ft.filter(func(item *OBJ) bool {
+			v := ft.fieldGetFn(item)
+			return v >= min && v <= max
+		}), nil
+	case OpIn:
+		if len(values) == 0 {
+			return NewEmptyBitSet[LI](), nil
+		}
+
+		// check the values type corresponds to the field value
+		for _, v := range values {
+			if _, err := ValueFromAny[V](v); err != nil {
+				return nil, err
+			}
+		}
+
+		return ft.filter(func(item *OBJ) bool {
+			fieldValue := ft.fieldGetFn(item)
+
+			for _, v := range values {
+				argValue, _ := ValueFromAny[V](v)
+				if argValue == fieldValue {
+					return true
+				}
+			}
+
+			return false
+		}), nil
+	default:
+		return nil, InvalidOperationError{FullScanName, op}
+	}
+}

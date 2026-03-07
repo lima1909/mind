@@ -29,6 +29,11 @@ jobs:
         run: |
           go test -v -race -shuffle=on ./...
 
+      - name: Run Examples 
+        run: |
+          go run example/list/main.go
+          go run example/idlist/main.go
+
       - name: Run golangci-lint manually
         run: |
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

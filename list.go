@@ -56,6 +56,11 @@ func (l *List[T, ID]) CreateIndex(fieldName string, index Index32[T]) error {
 		index.Set(&item, uint32(idx))
 	}
 
+	// inject the list for filtering
+	if noIndex, ok := index.(ListFilterFn[T, uint32]); ok {
+		noIndex.SetListFilterFn(l.list.filterBS)
+	}
+
 	l.indexMap.index[fieldName] = index
 	return nil
 }
