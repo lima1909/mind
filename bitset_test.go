@@ -1,6 +1,7 @@
 package mind
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -309,6 +310,50 @@ func TestBitSet_Range(t *testing.T) {
 					t.Errorf("at result %d: expected %+v, got %+v", i, tt.expected[i], results[i])
 				}
 			}
+		})
+	}
+}
+
+func TestBitSet_IndexOff(t *testing.T) {
+
+	bs := NewBitSetFrom[uint32](1, 2, 8, 42, 1028)
+
+	tests := []struct {
+		index    uint32
+		found    bool
+		expected uint32
+	}{
+		{
+			// first
+			index:    0,
+			found:    true,
+			expected: 1,
+		},
+		{
+			// middle
+			index:    2,
+			found:    true,
+			expected: 8,
+		},
+		{
+			// end
+			index:    4,
+			found:    true,
+			expected: 1028,
+		},
+		{
+			// to big, not found
+			index:    1000,
+			found:    false,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("index_%d", tt.index), func(t *testing.T) {
+			val, found := bs.ValueOnIndex(tt.index)
+			assert.Equal(t, tt.found, found)
+			assert.Equal(t, tt.expected, val)
 		})
 	}
 }

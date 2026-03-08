@@ -40,6 +40,7 @@ func (i indexMap[OBJ, ID]) FilterByName(fieldName string) (Filter32, error) {
 	return nil, InvalidNameError{fieldName}
 }
 
+// Set add to all known indexes synchron the new value (including ID-index)
 func (i indexMap[OBJ, ID]) Set(obj *OBJ, idx int) {
 	if i.idIndex != nil {
 		i.idIndex.Set(obj, idx)
@@ -52,6 +53,7 @@ func (i indexMap[OBJ, ID]) Set(obj *OBJ, idx int) {
 	}
 }
 
+// UnSet remove all known indexes synchron the new value (including ID-index)
 func (i indexMap[OBJ, ID]) UnSet(obj *OBJ, idx int) {
 	if i.idIndex != nil {
 		i.idIndex.UnSet(obj, idx)
@@ -59,8 +61,29 @@ func (i indexMap[OBJ, ID]) UnSet(obj *OBJ, idx int) {
 
 	uidx := uint32(idx)
 	i.allIDs.UnSet(uidx)
+
 	for _, fieldIndex := range i.index {
 		fieldIndex.UnSet(obj, uidx)
+	}
+}
+
+// ReIndex update all known indexes synchron the new value (including ID-index)
+func (i indexMap[OBJ, ID]) ReIndex(oldObj, newObj *OBJ, idx int) {
+	if i.idIndex != nil {
+		i.idIndex.UnSet(oldObj, idx)
+		i.idIndex.Set(newObj, idx)
+	}
+
+	uidx := uint32(idx)
+	i.allIDs.UnSet(uidx)
+	i.allIDs.Set(uidx)
+
+	for _, index := range i.index {
+		// only update, if the value has changed
+		if index.HasChanged(oldObj, newObj) {
+			index.UnSet(oldObj, uidx)
+			index.Set(newObj, uidx)
+		}
 	}
 }
 
@@ -167,6 +190,7 @@ type Index32[T any] = Index[T, uint32]
 type Index[OBJ any, LI Value] interface {
 	Set(*OBJ, LI)
 	UnSet(*OBJ, LI)
+	HasChanged(oldItem, newItem *OBJ) bool
 	Filter[LI]
 }
 
@@ -275,6 +299,11 @@ func (mi *MapIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 	}
 }
 
+func (mi *MapIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
+	// couldn't compare V, so always true
+	return true
+}
+
 func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
@@ -366,6 +395,10 @@ func (si *SortedIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 			si.skipList.Delete(value)
 		}
 	}
+}
+
+func (si *SortedIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
+	return si.fieldGetFn(oldItem) != si.fieldGetFn(newItem)
 }
 
 func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
@@ -508,6 +541,10 @@ func (ft *FullScan[OBJ, V, LI]) SetListFilterFn(filter func(predicat func(item *
 
 func (ft *FullScan[OBJ, V, LI]) Set(obj *OBJ, lidx LI)   {}
 func (ft *FullScan[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {}
+func (ft *FullScan[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
+	// always false, because no update necessary
+	return false
+}
 
 func (ft *FullScan[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 	v, err := ValueFromAny[V](value)

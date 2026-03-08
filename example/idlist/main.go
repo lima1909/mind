@@ -40,11 +40,8 @@ func main() {
 	// Output:
 	// true
 
-	result, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)))
-	// for _, c := range result,V {
-	// 	fmt.Println(c)
-	// }
-	fmt.Println(result.Values())
+	values, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10))).Values()
+	fmt.Println(values)
 	// Output:
 	// [{1 Dacia 2} {2 Opel 12} {3 Mercedes 5}]
 }

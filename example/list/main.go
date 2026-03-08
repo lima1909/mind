@@ -32,12 +32,12 @@ func main() {
 	l.Insert(Car{name: "Mercedes", age: 5})
 	l.Insert(Car{name: "Dacia", age: 22})
 
-	qr, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`)
+	values, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`).Values()
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(qr.Values())
+	fmt.Println(values)
 
 	// Output:
 	// [{Dacia 2} {Opel 12} {Dacia 22}]

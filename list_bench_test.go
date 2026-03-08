@@ -69,39 +69,42 @@ func BenchmarkQueryStr(b *testing.B) {
 		bmark func() int
 	}{
 		{
-			name: "List",
+			name: "List-Or",
 			bmark: func() int {
-				qr, _ := il.QueryStr(
+				count, _ := il.QueryStr(
 					`name = "Jule" or name = "Magan" or age > 80`,
-				)
-				return qr.Count()
+				).Count()
+				return count
 			},
 		},
 		{
 			name: "List-In",
 			bmark: func() int {
-				qr, _ := il.QueryStr(
+				count, _ := il.QueryStr(
 					`name IN("Jule", "Magan") or age > 80`,
-				)
-				return qr.Count()
+				).Count()
+				return count
 			},
 		},
 		{
 			name: "FullScan",
 			bmark: func() int {
-				qr, _ := il.QueryStr(
+				count, _ := il.QueryStr(
 					`name2 IN("Jule", "Magan") or age2 > 80`,
-				)
-				return qr.Count()
+				).Count()
+				return count
 			},
 		},
 		{
-			name: "List",
+			name: "List-NoIdx",
 			bmark: func() int {
 				count := 0
 				for _, p := range list {
 					if p.Name == "Jule" || p.Name == "Magan" || p.Age > 80 {
 						count++
+					}
+					if count > 5000 {
+						break
 					}
 				}
 				return count

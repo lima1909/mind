@@ -93,6 +93,46 @@ func (b *BitSet[V]) Contains(value V) bool {
 	return (b.data[index] & (1 << (value & 63))) != 0
 }
 
+// ValueOnIndex returns the Value of the dx-th matched item.
+// For exmaple: BitSet Values: [1, 2, 8, 42, 1028]
+// 0 -> 1
+// 1 -> 2
+// 2 -> 8
+// 3 -> 42
+// 4 -> 1028
+// 5 -> not found
+func (b *BitSet[V]) ValueOnIndex(idx uint32) (uint32, bool) {
+	for i, word := range b.data {
+		if word == 0 {
+			continue
+		}
+
+		// counts how many '1's are in this 64-bit word in a single CPU cycle.
+		pop := uint32(bits.OnesCount64(word))
+		// if the matches we need are further ahead, skip this ENTIRE block!
+		if idx >= pop {
+			idx -= pop
+			continue
+		}
+
+		// the exact bit we want is inside this specific 64-bit word.
+		// We use Brian Kernighan's Algorithm to clear the lowest set bit 'k' times.
+		for j := uint32(0); j < idx; j++ {
+			word &= word - 1 // Magic: Erases the lowest '1' bit
+		}
+
+		// Now, the bit we are looking for is the lowest remaining '1'.
+		// TrailingZeros64 tells us exactly which bit position it is (0 to 63).
+		bitPos := uint32(bits.TrailingZeros64(word))
+
+		// calculate the absolute index in the List
+		absoluteIndex := uint32(i*64) + bitPos
+		return absoluteIndex, true
+	}
+
+	return 0, false
+}
+
 // Range iterates over set bits between 'from' and 'to' (inclusive).
 // It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
 func (b *BitSet[V]) Range(from, to V, visit func(v V) bool) {

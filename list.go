@@ -2,12 +2,14 @@ package mind
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 )
 
-// List is a list (slice), which is extended by Indices for fast finding Items in the list.
+// List is a fast in-memory store, which is extended by Indices for fast finding Items.
+//
+// WARNING: If T is a pointer type, modifying the items returned by Get() or Query()
+// will corrupt the database indexes. Always use Update() to modify data.
 type List[T any, ID comparable] struct {
 	list     FreeList[T]
 	indexMap indexMap[T, ID]
@@ -80,12 +82,6 @@ func (l *List[T, ID]) RemoveIndex(fieldName string) {
 		return
 	}
 
-	if index, exist := l.indexMap.index[fieldName]; exist {
-		for idx, item := range l.list.Iter() {
-			index.Set(&item, uint32(idx))
-		}
-	}
-
 	delete(l.indexMap.index, fieldName)
 }
 
@@ -117,13 +113,8 @@ func (l *List[T, ID]) Update(item T) error {
 		return ValueNotFoundError{id}
 	}
 
-	// re-index
-	for _, index := range l.indexMap.index {
-		// TODO: do it better: check is it neccesary/dirty
-		index.UnSet(&oldItem, uint32(idx))
-		index.Set(&item, uint32(idx))
-	}
-
+	// update all indexes: re-index
+	l.indexMap.ReIndex(&oldItem, &item, idx)
 	return nil
 }
 
@@ -142,8 +133,20 @@ func (l *List[T, ID]) Remove(id ID) (bool, error) {
 		return false, err
 	}
 
-	_, removed := l.removeNoLock(idx)
-	return removed, nil
+	return l.removeByIdxNoLock(idx), nil
+}
+
+//go:inline
+func (l *List[T, ID]) removeByIdxNoLock(index int) (removed bool) {
+	item, found := l.list.Get(index)
+	if !found {
+		return found
+	}
+
+	removed = l.list.Remove(index)
+	l.indexMap.UnSet(&item, index)
+
+	return removed
 }
 
 // Get returns an item by the given ID.
@@ -176,32 +179,6 @@ func (l *List[T, ID]) Contains(id ID) bool {
 	return err == nil
 }
 
-func (l *List[T, ID]) QueryStr(queryStr string) (QueryResult[T, ID], error) {
-	query, err := Parse(queryStr)
-	if err != nil {
-		return QueryResult[T, ID]{}, err
-	}
-
-	return l.Query(query)
-}
-
-// Query execute the given Query.
-func (l *List[T, ID]) Query(query Query32) (QueryResult[T, ID], error) {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-
-	bs, canMutate, err := query(l.indexMap.FilterByName, l.indexMap.allIDs)
-	if err != nil {
-		return QueryResult[T, ID]{}, err
-	}
-
-	if !canMutate {
-		bs = bs.Copy()
-	}
-
-	return QueryResult[T, ID]{bitSet: bs, list: l}, nil
-}
-
 // Count the Items, which in this list exist
 func (l *List[T, ID]) Count() int {
 	l.lock.RLock()
@@ -210,95 +187,118 @@ func (l *List[T, ID]) Count() int {
 	return l.list.Count()
 }
 
-//go:inline
-func (l *List[T, ID]) removeNoLock(index int) (t T, removed bool) {
-	item, found := l.list.Get(index)
-	if !found {
-		return item, found
-	}
+// QueryStr execute the given Query-string.
+func (l *List[T, ID]) QueryStr(queryStr string) *QueryResult[T, ID] {
+	query, err := Parse(queryStr)
+	return &QueryResult[T, ID]{list: l, query: query, err: err}
+}
 
-	removed = l.list.Remove(index)
-	l.indexMap.UnSet(&item, index)
-
-	return item, removed
+// Query execute the given Query.
+func (l *List[T, ID]) Query(query Query32) *QueryResult[T, ID] {
+	return &QueryResult[T, ID]{list: l, query: query}
 }
 
 type QueryResult[T any, ID comparable] struct {
-	bitSet *BitSet[uint32]
-	list   *List[T, ID]
+	list  *List[T, ID]
+	query Query32
+	err   error
 }
 
-func (q *QueryResult[T, ID]) Count() int    { return q.bitSet.Count() }
-func (q *QueryResult[T, ID]) IsEmpty() bool { return q.bitSet.IsEmpty() }
+// Count of the Query result
+func (qr *QueryResult[T, ID]) Count() (int, error) {
+	if qr.err != nil {
+		return 0, qr.err
+	}
 
-func (q *QueryResult[T, ID]) Values() []T {
-	list := make([]T, 0, q.bitSet.Count())
+	qr.list.lock.RLock()
+	defer qr.list.lock.RUnlock()
 
-	q.list.lock.RLock()
-	defer q.list.lock.RUnlock()
+	bs, _, err := qr.query(qr.list.indexMap.FilterByName, qr.list.indexMap.allIDs)
+	if err != nil {
+		return 0, err
+	}
 
-	q.bitSet.Values(func(r uint32) bool {
-		// get from the FreeList without lock
-		o, _ := q.list.list.Get(int(r))
-		list = append(list, o)
-
-		return true
-	})
-
-	return list
+	return bs.Count(), nil
 }
 
-func (q *QueryResult[T, ID]) Sort(less func(*T, *T) bool) []T {
-	list := q.Values()
-	sort.Slice(list, func(i, j int) bool { return less(&list[i], &list[j]) })
-	return list
+// Values the result values of the Query
+func (qr *QueryResult[T, ID]) Values() ([]T, error) {
+	result, _, err := qr.exec(Paginate{})
+	return result, err
 }
 
-func (q *QueryResult[T, ID]) RemoveAll() {
-	q.list.lock.Lock()
-	defer q.list.lock.Unlock()
-
-	q.bitSet.Values(func(r uint32) bool {
-		q.list.removeNoLock(int(r))
-		return true
-	})
-
-	q.bitSet.Clear()
+// Paginate the result values of the Query, but in Pagination
+func (qr *QueryResult[T, ID]) Paginate(offset, limit uint32) ([]T, PageInfo, error) {
+	return qr.exec(Paginate{Offset: offset, Limit: limit})
 }
 
 type PageInfo struct {
 	Offset uint32
 	Limit  uint32
-	Count  int
-	Total  int
+	Count  uint32
+	Total  uint32
 }
 
-func (q *QueryResult[T, ID]) Pagination(offset, limit uint32) ([]T, PageInfo) {
-	pi := PageInfo{Offset: offset, Limit: limit, Total: q.list.Count()}
+type Paginate struct {
+	Offset uint32
+	Limit  uint32
+}
 
-	if offset > uint32(pi.Total) {
-		return []T{}, pi
+// QueryPage executes the query with optional pagination.
+// If opts is nil, it returns all matching results.
+func (qr *QueryResult[T, ID]) exec(p Paginate) ([]T, PageInfo, error) {
+	if qr.err != nil {
+		return nil, PageInfo{}, qr.err
 	}
 
-	capacity := limit
-	if offset+limit > uint32(pi.Total) {
-		capacity = uint32(pi.Total) - offset
+	qr.list.lock.RLock()
+	defer qr.list.lock.RUnlock()
+
+	bs, _, err := qr.query(qr.list.indexMap.FilterByName, qr.list.indexMap.allIDs)
+	if err != nil {
+		return nil, PageInfo{}, err
 	}
-	list := make([]T, 0, capacity)
 
-	q.list.lock.RLock()
-	defer q.list.lock.RUnlock()
+	total := uint32(bs.Count())
+	offset := p.Offset
+	limit := total // default to "all"
+	// if limit is provided and not zero, use it; otherwise stay at "total"
+	if p.Limit > 0 {
+		limit = p.Limit
+	}
+	pi := PageInfo{Offset: offset, Limit: limit, Total: total}
 
-	q.bitSet.Range(offset, offset+limit, func(idx uint32) bool {
-		if idx == offset+limit {
-			return false
+	// bound check
+	if offset >= total {
+		return []T{}, pi, nil
+	}
+
+	// adjust limit if it exceeds the remaining items
+	if offset+limit > total {
+		limit = total - offset
+	}
+	pi.Count = limit
+
+	startIndex := uint32(0)
+	if offset > 0 {
+		idx, found := bs.ValueOnIndex(offset)
+		if !found {
+			return []T{}, pi, nil
 		}
+		startIndex = idx
+	}
 
-		val, _ := q.list.list.Get(int(idx))
-		list = append(list, val)
-		return true
+	// the theoretical maximum bit index for the "to" parameter
+	result := make([]T, 0, limit)
+
+	maxBitIndex := uint32(len(bs.data)*64 - 1)
+	bs.Range(startIndex, maxBitIndex, func(idx uint32) bool {
+		item, _ := qr.list.list.Get(int(idx))
+		result = append(result, item)
+
+		// run only until reach the limit
+		return uint32(len(result)) < limit
 	})
 
-	pi.Count = len(list)
-	return list, pi
+	return result, pi, nil
 }
