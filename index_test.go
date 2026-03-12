@@ -175,3 +175,33 @@ func TestSortedIndex_In_Int(t *testing.T) {
 	_, err := si.MatchMany(OpIn, "b", 1)
 	assert.ErrorIs(t, InvalidValueTypeError[uint8]{"b"}, err)
 }
+
+func TestIdAutoInc(t *testing.T) {
+	obj := struct{}{}
+
+	auto := newIDAutoIncIndex[struct{}]()
+	auto.Set(&obj, 1)
+	auto.Set(&obj, 2)
+	auto.Set(&obj, 5)
+
+	idx, err := auto.GetIndex(1)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, idx)
+
+	idx, err = auto.GetIndex(2)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, idx)
+
+	idx, err = auto.GetIndex(3)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, idx)
+
+	// unset
+	auto.UnSet(&obj, 2)
+	_, err = auto.GetIndex(2)
+	assert.ErrorIs(t, ValueNotFoundError{uint64(2)}, err)
+
+	bs, err := auto.Match(OpEq, uint64(3))
+	assert.NoError(t, err)
+	assert.Equal(t, []uint32{5}, bs.ToSlice())
+}

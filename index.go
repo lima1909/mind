@@ -2,6 +2,7 @@ package mind
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"reflect"
 	"unsafe"
@@ -110,6 +111,69 @@ type idIndex[OBJ any, ID comparable] interface {
 	GetIndex(ID) (int, error)
 	GetID(*OBJ) (ID, int, error)
 	Filter32
+}
+
+const IDAutoIncName = "IDAutoIncIndex"
+
+type idAutoIncIndex[OBJ any] struct {
+	idCounter uint64
+	count2idx map[uint64]int
+	idx2count map[int]uint64
+}
+
+func newIDAutoIncIndex[OBJ any]() idIndex[OBJ, uint64] {
+	return &idAutoIncIndex[OBJ]{
+		count2idx: make(map[uint64]int),
+		idx2count: make(map[int]uint64),
+	}
+}
+
+func (id *idAutoIncIndex[OBJ]) Set(_ *OBJ, lidx int) {
+	id.idCounter++
+	id.count2idx[id.idCounter] = lidx
+	id.idx2count[lidx] = id.idCounter
+}
+
+func (id *idAutoIncIndex[OBJ]) UnSet(_ *OBJ, lidx int) {
+	counter := id.idx2count[lidx]
+	id.count2idx[counter] = -1
+	id.idx2count[lidx] = 0
+}
+
+func (id *idAutoIncIndex[OBJ]) GetIndex(i uint64) (int, error) {
+	if lidx, found := id.count2idx[i]; found && lidx >= 0 {
+		return lidx, nil
+	}
+
+	return 0, ValueNotFoundError{i}
+}
+
+func (id *idAutoIncIndex[OBJ]) GetID(*OBJ) (uint64, int, error) {
+	return 0, -1, errors.New("GedID is not supported for this Index")
+}
+
+func (id *idAutoIncIndex[OBJ]) Match(op Op, value any) (*BitSet[uint32], error) {
+	i, ok := value.(uint64)
+	if !ok {
+		return nil, InvalidValueTypeError[uint32]{value}
+	}
+
+	if op != OpEq {
+		return nil, InvalidOperationError{IDAutoIncName, op}
+	}
+
+	idx, err := id.GetIndex(i)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewBitSetFrom(uint32(idx)), nil
+
+}
+
+// MatchMany is not supported by idAutoIncIndex, so that always returns an error
+func (id *idAutoIncIndex[OBJ]) MatchMany(op Op, values ...any) (*BitSet[uint32], error) {
+	return nil, InvalidOperationError{IDAutoIncName, op}
 }
 
 const IDMapIndexName = "IDMapIndex"
