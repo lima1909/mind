@@ -38,7 +38,6 @@ func main() {
 	}
 
 	fmt.Println(values)
-
 	// Output:
 	// [{Dacia 2} {Opel 12} {Dacia 22}]
 }

@@ -373,3 +373,96 @@ func TestBitSet_Clear(t *testing.T) {
 	assert.Equal(t, 0, len(b.data))
 	assert.Equal(t, 1024, cap(b.data))
 }
+
+func TestBitSet_CountStateTransitions(t *testing.T) {
+	b := NewBitSet[uint32]()
+	assert.Equal(t, 0, b.Count(), "New BitSet should have count 0")
+	assert.True(t, b.IsEmpty(), "New BitSet should be empty")
+
+	b.Set(10)
+	b.Set(20)
+	assert.Equal(t, 2, b.Count(), "Count should be 2 after two unique sets")
+
+	b.Set(10)
+	assert.Equal(t, 2, b.Count(), "Setting an existing bit should NOT increment count")
+
+	other := NewBitSet[uint32]()
+	other.Set(20)
+	other.Set(30)
+
+	b.Or(other)
+	assert.Equal(t, -1, b.count)
+	assert.False(t, b.IsEmpty(), "IsEmpty should work even when count is dirty")
+	assert.Equal(t, 3, b.Count(), "Count() should recalculate and return 3 (10, 20, 30)")
+
+	b.Set(40)
+	assert.Equal(t, 4, b.Count(), "Count should increment correctly from the newly cached value")
+}
+
+func TestBitSet_BoundaryAndWordTransitions(t *testing.T) {
+	b := NewBitSet[uint32]()
+
+	indices := []uint32{0, 63, 64, 127, 128}
+	for i, idx := range indices {
+		b.Set(idx)
+		assert.Equal(t, i+1, b.Count(), "Failed at index %d", idx)
+	}
+
+	b.UnSet(64)
+	assert.Equal(t, 4, b.Count())
+	assert.False(t, b.Contains(64))
+
+	b.UnSet(999)
+	assert.Equal(t, 4, b.Count(), "Unsetting non-existent bit should not change count")
+}
+
+func TestBitSet_BulkOpsCount(t *testing.T) {
+	tests := []struct {
+		name     string
+		initial  []uint32
+		other    []uint32
+		op       func(a, b *BitSet[uint32])
+		expected int
+	}{
+		{
+			name:     "And-Intersection",
+			initial:  []uint32{1, 2, 3},
+			other:    []uint32{2, 3, 4},
+			op:       func(a, b *BitSet[uint32]) { a.And(b) },
+			expected: 2, // {2, 3}
+		},
+		{
+			name:     "AndNot-Difference",
+			initial:  []uint32{1, 2, 3, 4},
+			other:    []uint32{2, 4},
+			op:       func(a, b *BitSet[uint32]) { a.AndNot(b) },
+			expected: 2, // {1, 3}
+		},
+		{
+			name:     "Xor-SymmetricDifference",
+			initial:  []uint32{1, 2},
+			other:    []uint32{2, 3},
+			op:       func(a, b *BitSet[uint32]) { a.Xor(b) },
+			expected: 2, // {1, 3}
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := NewBitSetFrom(tt.initial...)
+			b := NewBitSetFrom(tt.other...)
+			tt.op(a, b)
+			assert.Equal(t, tt.expected, a.Count())
+		})
+	}
+}
+
+func TestBitSet_ClearAndEmpty(t *testing.T) {
+	b := NewBitSetFrom[uint32](1, 10, 100)
+	assert.Equal(t, 3, b.Count())
+
+	b.Clear()
+	assert.Equal(t, 0, b.Count())
+	assert.True(t, b.IsEmpty())
+	assert.Equal(t, 0, len(b.data))
+}

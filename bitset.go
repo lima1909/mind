@@ -9,7 +9,8 @@ type Value interface {
 }
 
 type BitSet[V Value] struct {
-	data []uint64
+	data  []uint64
+	count int // cached popcount; -1 means dirty (needs recount)
 }
 
 const defaultSize = (1 << 16) / 64
@@ -69,14 +70,25 @@ func (b *BitSet[V]) Set(value V) {
 		b.grow(index)
 	}
 
-	b.data[index] |= bit
+	old := b.data[index]
+	b.data[index] = old | bit
+	// if the bit was not already set, increment count
+	if old&bit == 0 && b.count >= 0 {
+		b.count++
+	}
 }
 
 // UnSet removes the key from the BitSet. Clear the bit value to 0.
 func (b *BitSet[V]) UnSet(value V) bool {
 	index := int(value) >> 6
 	if index < len(b.data) {
-		b.data[index] &^= (1 << (value & 63))
+		bit := uint64(1) << (value & 63)
+		old := b.data[index]
+		b.data[index] = old &^ bit
+		// if the bit was set, decrement count
+		if old&bit != 0 && b.count >= 0 {
+			b.count--
+		}
 		return true
 	}
 
@@ -230,17 +242,37 @@ func (b *BitSet[V]) MaxSetIndex() int {
 	return -1
 }
 
-// Counts how many values are in the BitSet, bits are set.
+// Count returns how many bits are set in the BitSet.
+// Uses a cached value when available (O(1)), recounts only after bulk operations.
 func (b *BitSet[V]) Count() int {
-	count := 0
-	for _, w := range b.data {
-		count += bits.OnesCount64(w)
+	if b.count >= 0 {
+		return b.count
 	}
-	return count
+
+	n := 0
+	for _, w := range b.data {
+		n += bits.OnesCount64(w)
+	}
+	b.count = n
+	return n
 }
 
-// IsEmpty there are no bits set, means Count() == 0
-func (b *BitSet[V]) IsEmpty() bool { return b.Count() == 0 }
+// IsEmpty there are no bits set
+func (b *BitSet[V]) IsEmpty() bool {
+	if b.count == 0 {
+		return true
+	}
+	if b.count > 0 {
+		return false
+	}
+	// count is dirty, check words directly
+	for _, w := range b.data {
+		if w != 0 {
+			return false
+		}
+	}
+	return true
+}
 
 // Len returns the len of the bit slice
 func (b *BitSet[V]) Len() int { return len(b.data) }
@@ -249,13 +281,16 @@ func (b *BitSet[V]) Len() int { return len(b.data) }
 func (b *BitSet[V]) usedBytes() int { return 24 + (len(b.data) * 8) }
 
 // Clear removes all bits
-func (b *BitSet[V]) Clear() { b.data = b.data[:0] }
+func (b *BitSet[V]) Clear() {
+	b.data = b.data[:0]
+	b.count = 0
+}
 
 // Copy copy the complete BitSet.
 func (b *BitSet[V]) Copy() *BitSet[V] {
 	target := make([]uint64, len(b.data))
 	copy(target, b.data)
-	return &BitSet[V]{data: target}
+	return &BitSet[V]{data: target, count: b.count}
 }
 
 // CopyInto copies the current BitSet into the provided buffer.
@@ -271,7 +306,7 @@ func (b *BitSet[V]) CopyInto(buf []uint64) *BitSet[V] {
 	target := buf[:needed]
 	copy(target, b.data)
 
-	return &BitSet[V]{data: target}
+	return &BitSet[V]{data: target, count: b.count}
 }
 
 // And is the logical AND of two BitSet
@@ -290,6 +325,7 @@ func (b *BitSet[V]) And(other *BitSet[V]) {
 	for i := range l {
 		a[i] &= o[i]
 	}
+	b.count = -1 // invalidate cached count
 }
 
 // Or is the logical OR of two BitSet
@@ -322,6 +358,7 @@ func (b *BitSet[V]) Or(other *BitSet[V]) {
 	for i := range overlap {
 		dst[i] |= src[i]
 	}
+	b.count = -1 // invalidate cached count
 }
 
 // XOr is the logical XOR of two BitSet
@@ -351,6 +388,7 @@ func (b *BitSet[V]) Xor(other *BitSet[V]) {
 	for i := range overlap {
 		bd[i] ^= od[i]
 	}
+	b.count = -1 // invalidate cached count
 }
 
 // AndNot removes all elements from the current set that exist in another set.
@@ -373,6 +411,7 @@ func (b *BitSet[V]) AndNot(other *BitSet[V]) {
 	for i := range l {
 		bd[i] &^= od[i]
 	}
+	b.count = -1 // invalidate cached count
 }
 
 // Shrink trims the bitset to ensure that len(b.data) always points to the last truly useful word.
@@ -392,6 +431,9 @@ func (b *BitSet[V]) Shrink() {
 	}
 
 	b.data = bd[:i+1]
+	if i < 0 {
+		b.count = 0
+	}
 }
 
 // Values iterate over the complete BitSet and call the yield function, for every value

@@ -2,6 +2,7 @@
 
 # Mind 
 
+[![GoDoc](https://pkg.go.dev/badge/github.com/lima1909/mind.svg)](https://pkg.go.dev/github.com/lima1909/mind)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/lima1909/mind/ci.yml?style=for-the-badge)](https://github.com/lima1909/mind/actions)
 ![License](https://img.shields.io/github/license/lima1909/mind?style=for-the-badge)
 [![Stars](https://img.shields.io/github/stars/lima1909/mind?style=for-the-badge)](https://github.com/lima1909/mind/stargazers)
@@ -80,7 +81,6 @@ func main() {
 	}
 
 	fmt.Println(qr.Values())
-
 	// Output:
 	// [{Dacia 2} {Opel 12} {Dacia 22}]
 }
@@ -132,9 +132,6 @@ func main() {
 	// true
 
 	result, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)))
-	// for _, c := range result,V {
-	// 	fmt.Println(c)
-	// }
 	fmt.Println(result.Values())
 	// Output:
 	// [{1 Dacia 2} {2 Opel 12} {3 Mercedes 5}]
