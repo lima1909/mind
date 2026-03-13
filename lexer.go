@@ -2,47 +2,63 @@ package mind
 
 import "fmt"
 
-type Op uint16
+type Op int
 
 const (
-	opCategoryMaskOp = 0xFF00
+	// Mask the high 16 bits for the category
+	opCategoryMaskOp Op = 0xFFFF0000
 
-	// Categories (High Bits)
-	opStructural = 0x0400
-	opLogical    = 0x0200
-	opRelational = 0x0100
+	// Categories moved to the high 16 bits
+	opRelational Op = 0x00010000
+	opLogical    Op = 0x00020000
+	opDatatype   Op = 0x00030000
+	opStructural Op = 0x00040000
+)
 
-	// Structural & Literals
+// Structural & Literals
+const (
 	OpUndefined Op = opStructural | iota
 	OpEOF
 	OpLParen
 	OpRParen
 	OpIdent
 	OpComma
-	OpString
+)
+
+// Datatypes
+const (
+	OpString Op = opDatatype | iota
 	OpNumberInt
 	OpNumberFloat
 	OpBool
+)
 
-	// Logical
+// Logical
+const (
 	OpAnd Op = opLogical | iota
 	OpOr
 	OpNot
+)
 
-	// Relation
-	OpEq         Op = opRelational | (1 << 0)
-	OpNeq           = opRelational | (1 << 1)
-	OpLt            = opRelational | (1 << 2)
-	OpLe            = opRelational | (1 << 3)
-	OpGt            = opRelational | (1 << 4)
-	OpGe            = opRelational | (1 << 5)
-	OpBetween       = opRelational | (1 << 6)
-	OpIn            = opRelational | (1 << 7)
-	OpStartsWith    = opRelational | (1 << 8)
+// Relation (Payloads can now safely use bits 0 through 15)
+const (
+	OpEq      Op = opRelational | (1 << 0)
+	OpNeq        = opRelational | (1 << 1)
+	OpLt         = opRelational | (1 << 2)
+	OpLe         = opRelational | (1 << 3)
+	OpGt         = opRelational | (1 << 4)
+	OpGe         = opRelational | (1 << 5)
+	OpIn         = opRelational | (1 << 6)
+	OpBetween    = opRelational | (1 << 7)
 )
 
 func (o Op) IsRelational() bool { return o&opCategoryMaskOp == opRelational }
 func (o Op) IsLogical() bool    { return o&opCategoryMaskOp == opLogical }
+func (o Op) IsDatatype() bool   { return o&opCategoryMaskOp == opDatatype }
+func (o Op) IsStructural() bool { return o&opCategoryMaskOp == opStructural }
+
+// Code returns just the payload (the ID or the bit-flags)
+func (o Op) Code() uint16 { return uint16(o & 0xFFFF) }
 
 func (o Op) String() string {
 	switch o {
@@ -74,12 +90,10 @@ func (o Op) String() string {
 		return ">"
 	case OpGe:
 		return ">="
-	case OpBetween:
-		return "BETWEEN"
 	case OpIn:
 		return "IN"
-	case OpStartsWith:
-		return "STARTSWITH"
+	case OpBetween:
+		return "BETWEEN"
 	case OpAnd:
 		return "AND"
 	case OpOr:
@@ -124,14 +138,6 @@ func (l *lexer) nextToken() token {
 	ch := l.input[l.pos]
 
 	switch {
-	case ch == '(':
-		start := l.pos
-		l.pos++
-		return token{Op: OpLParen, Start: start, End: l.pos}
-	case ch == ')':
-		start := l.pos
-		l.pos++
-		return token{Op: OpRParen, Start: start, End: l.pos}
 	case ch == '=':
 		start := l.pos
 		l.pos++
@@ -162,16 +168,24 @@ func (l *lexer) nextToken() token {
 		}
 		l.pos++
 		return token{Op: OpGt, Start: start, End: l.pos}
+	case (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_':
+		return l.readKeyword()
+	case ch == '"', ch == '\'':
+		return l.readString(ch)
+	case (ch >= '0' && ch <= '9') || ch == '-':
+		return l.readNumber()
+	case ch == '(':
+		start := l.pos
+		l.pos++
+		return token{Op: OpLParen, Start: start, End: l.pos}
+	case ch == ')':
+		start := l.pos
+		l.pos++
+		return token{Op: OpRParen, Start: start, End: l.pos}
 	case ch == ',':
 		start := l.pos
 		l.pos++
 		return token{Op: OpComma, Start: start, End: l.pos}
-	case ch == '"', ch == '\'':
-		return l.readString(ch)
-	case (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_':
-		return l.readKeyword()
-	case (ch >= '0' && ch <= '9') || ch == '-':
-		return l.readNumber()
 	}
 
 	l.pos++

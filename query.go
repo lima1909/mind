@@ -24,7 +24,7 @@ func all[LI Value]() Query[LI] {
 }
 
 //go:inline
-func match[LI Value](fieldName string, op Op, value any) Query[LI] {
+func match[LI Value](fieldName string, op FilterOp, value any) Query[LI] {
 	return func(l FilterByName[LI], _ *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
@@ -37,7 +37,7 @@ func match[LI Value](fieldName string, op Op, value any) Query[LI] {
 }
 
 //go:inline
-func matchMany[LI Value](fieldName string, op Op, values ...any) Query[LI] {
+func matchMany[LI Value](fieldName string, op FilterOp, values ...any) Query[LI] {
 	return func(l FilterByName[LI], _ *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
@@ -50,22 +50,22 @@ func matchMany[LI Value](fieldName string, op Op, values ...any) Query[LI] {
 }
 
 // ID id = val
-func ID(val any) Query32 { return match[uint32](IDIndexFieldName, OpEq, val) }
+func ID(val any) Query32 { return match[uint32](IDIndexFieldName, FOpEq, val) }
 
 // Eq fieldName = val
-func Eq(fieldName string, val any) Query32 { return match[uint32](fieldName, OpEq, val) }
+func Eq(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpEq, val) }
 
 // Lt Less fieldName < val
-func Lt(fieldName string, val any) Query32 { return match[uint32](fieldName, OpLt, val) }
+func Lt(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpLt, val) }
 
 // Le Less Equal fieldName <= val
-func Le(fieldName string, val any) Query32 { return match[uint32](fieldName, OpLe, val) }
+func Le(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpLe, val) }
 
 // Gt Greater fieldName > val
-func Gt(fieldName string, val any) Query32 { return match[uint32](fieldName, OpGt, val) }
+func Gt(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpGt, val) }
 
 // Ge Greater Equal fieldName >= val
-func Ge(fieldName string, val any) Query32 { return match[uint32](fieldName, OpGe, val) }
+func Ge(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpGe, val) }
 
 // IsNil is a Query which checks for a given type the nil value
 func IsNil[V any](fieldName string) Query32 { return isNil[V, uint32](fieldName) }
@@ -78,7 +78,7 @@ func isNil[V any, LI Value](fieldName string) Query[LI] {
 			return nil, false, err
 		}
 
-		bs, err := filter.Match(OpEq, (*V)(nil))
+		bs, err := filter.Match(FOpEq, (*V)(nil))
 		return bs, false, err
 	}
 }
@@ -103,7 +103,7 @@ func in[LI Value](fieldName string, vals ...any) Query[LI] {
 		var maxLen int
 
 		for _, v := range vals {
-			bs, err := filter.Match(OpEq, v)
+			bs, err := filter.Match(FOpEq, v)
 			if err != nil {
 				return nil, false, err
 			}
@@ -141,7 +141,7 @@ func notEq[LI Value](fieldName string, val any) Query[LI] {
 			return nil, false, err
 		}
 
-		exclude, err := filter.Match(OpEq, val)
+		exclude, err := filter.Match(FOpEq, val)
 		if err != nil {
 			return nil, false, err
 		}
@@ -175,7 +175,7 @@ func Not[LI Value](q Query[LI]) Query[LI] {
 
 // Eq fieldName = val
 func WithPrefix(fieldName string, val string) Query32 {
-	return match[uint32](fieldName, OpStartsWith, val)
+	return match[uint32](fieldName, FOpStartsWith, val)
 }
 
 // And combines 2 or more queries with an logical And

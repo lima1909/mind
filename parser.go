@@ -18,12 +18,12 @@ const (
 type Expr interface{ kind() ExprKind }
 
 type BinaryExpr struct {
-	Op    ExprKind // exprOr, exprAnd, exprAndNot
+	Ekind ExprKind // exprOr, exprAnd, exprAndNot
 	Left  Expr
 	Right Expr
 }
 
-func (e BinaryExpr) kind() ExprKind { return e.Op }
+func (e BinaryExpr) kind() ExprKind { return e.Ekind }
 
 type NotExpr struct{ Child Expr }
 
@@ -31,7 +31,7 @@ func (e NotExpr) kind() ExprKind { return ExprNot }
 
 type TermExpr struct {
 	Field string
-	Op    Op
+	Op    FilterOp
 	Value any
 }
 
@@ -39,7 +39,7 @@ func (e TermExpr) kind() ExprKind { return ExprTerm }
 
 type TermManyExpr struct {
 	Field            string
-	Op               Op
+	Op               FilterOp
 	Values           []any
 	MinIncl, MaxIncl bool
 }
@@ -63,14 +63,14 @@ func optimize(e Expr) Expr {
 		left := optimize(n.Left)
 		right := optimize(n.Right)
 
-		if n.Op == ExprAnd {
+		if n.Ekind == ExprAnd {
 			// RULE: And(A, Not(B)) -> AndNot(A, B)
 			if notNode, ok := right.(NotExpr); ok {
-				return BinaryExpr{Op: ExprAndNot, Left: left, Right: notNode.Child}
+				return BinaryExpr{Ekind: ExprAndNot, Left: left, Right: notNode.Child}
 			}
 			// RULE: And(A, Not(B)) -> AndNot(A, B)
 			if notNode, ok := left.(NotExpr); ok {
-				return BinaryExpr{Op: ExprAndNot, Left: right, Right: notNode.Child}
+				return BinaryExpr{Ekind: ExprAndNot, Left: right, Right: notNode.Child}
 			}
 
 			// RULE: And(A > X, B < Y) -> BETWEEN(A, B)
@@ -81,24 +81,24 @@ func optimize(e Expr) Expr {
 						var minInc, maxInc bool
 
 						// Identify Lower Bound
-						if lt.Op == OpGt || lt.Op == OpGe {
-							min, minInc = lt.Value, (lt.Op == OpGe)
-						} else if rt.Op == OpGt || rt.Op == OpGe {
-							min, minInc = rt.Value, (rt.Op == OpGe)
+						if lt.Op.Op == OpGt || lt.Op.Op == OpGe {
+							min, minInc = lt.Value, (lt.Op.Op == OpGe)
+						} else if rt.Op.Op == OpGt || rt.Op.Op == OpGe {
+							min, minInc = rt.Value, (rt.Op.Op == OpGe)
 						}
 
 						// Identify Upper Bound
-						if lt.Op == OpLt || lt.Op == OpLe {
-							max, maxInc = lt.Value, (lt.Op == OpLe)
-						} else if rt.Op == OpLt || rt.Op == OpLe {
-							max, maxInc = rt.Value, (rt.Op == OpLe)
+						if lt.Op.Op == OpLt || lt.Op.Op == OpLe {
+							max, maxInc = lt.Value, (lt.Op.Op == OpLe)
+						} else if rt.Op.Op == OpLt || rt.Op.Op == OpLe {
+							max, maxInc = rt.Value, (rt.Op.Op == OpLe)
 						}
 
 						// If we found both a min and a max, we have a BETWEEN
 						if min != nil && max != nil {
 							return TermManyExpr{
 								Field:   lt.Field,
-								Op:      OpBetween,
+								Op:      FOpBetween,
 								Values:  []any{min, max},
 								MinIncl: minInc, MaxIncl: maxInc,
 							}
@@ -108,7 +108,7 @@ func optimize(e Expr) Expr {
 				}
 			}
 		}
-		return BinaryExpr{Op: n.Op, Left: left, Right: right}
+		return BinaryExpr{Ekind: n.Ekind, Left: left, Right: right}
 
 	case NotExpr:
 		child := optimize(n.Child)
@@ -117,26 +117,26 @@ func optimize(e Expr) Expr {
 		case NotExpr:
 			return optimize(c.Child)
 		case TermExpr:
-			switch c.Op {
+			switch c.Op.Op {
 			// I'm not sure, that this is faster
 			// RULE: NOT (A = B)  -->  A != B
 			//  case OpEq:
 			//      return TermExpr{Field: c.Field, Op: OpNeq, Value: c.Value}
 			// RULE: NOT (A != B)  -->  A = B
 			case OpNeq:
-				return TermExpr{Field: c.Field, Op: OpEq, Value: c.Value}
+				return TermExpr{Field: c.Field, Op: FOpEq, Value: c.Value}
 			// RULE: NOT (A > B) --> A <= B
 			case OpGt:
-				return TermExpr{Field: c.Field, Op: OpLe, Value: c.Value}
+				return TermExpr{Field: c.Field, Op: FOpLe, Value: c.Value}
 			// RULE: NOT (A >= B) --> A < B
 			case OpGe:
-				return TermExpr{Field: c.Field, Op: OpLt, Value: c.Value}
+				return TermExpr{Field: c.Field, Op: FOpLt, Value: c.Value}
 			// RULE: NOT (A < B) --> A >= B
 			case OpLt:
-				return TermExpr{Field: c.Field, Op: OpGe, Value: c.Value}
+				return TermExpr{Field: c.Field, Op: FOpGe, Value: c.Value}
 			// RULE: NOT (A <= B) --> A > B
 			case OpLe:
-				return TermExpr{Field: c.Field, Op: OpGt, Value: c.Value}
+				return TermExpr{Field: c.Field, Op: FOpGt, Value: c.Value}
 
 			default:
 				//  no otimizations
@@ -164,7 +164,7 @@ func compile(e Expr) Query32 {
 		left := compile(n.Left)
 		right := compile(n.Right)
 
-		switch n.Op {
+		switch n.Ekind {
 		case ExprAnd:
 			return And(left, right)
 		case ExprOr:
@@ -190,13 +190,9 @@ func Parse(input string) (Query32, error) {
 		return nil, p.unexpectedWithMsg("unexpected end of the input")
 	}
 
-	// fmt.Println(ast)
-	optAst := optimize(ast)
-	// fmt.Println(optAst)
+	ast = optimize(ast)
+	return compile(ast), nil
 
-	query := compile(optAst)
-
-	return query, nil
 }
 
 //go:inline
@@ -215,7 +211,7 @@ func (p *parser) parseOr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = BinaryExpr{Op: ExprOr, Left: left, Right: right}
+		left = BinaryExpr{Ekind: ExprOr, Left: left, Right: right}
 	}
 	return left, nil
 }
@@ -232,7 +228,7 @@ func (p *parser) parseAnd() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = BinaryExpr{Op: ExprAnd, Left: left, Right: right}
+		left = BinaryExpr{Ekind: ExprAnd, Left: left, Right: right}
 	}
 	return left, nil
 }
@@ -268,6 +264,7 @@ func (p *parser) parseCondition() (Expr, error) {
 	p.next()
 
 	tokenOp := p.cur.Op
+	opName := p.input[p.cur.Start:p.cur.End]
 	p.next()
 	switch tokenOp {
 	case OpNeq:
@@ -275,28 +272,39 @@ func (p *parser) parseCondition() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return NotExpr{Child: TermExpr{Field: field, Op: OpEq, Value: val}}, nil
+		return NotExpr{Child: TermExpr{Field: field, Op: FOpEq, Value: val}}, nil
 	case OpLt, OpLe, OpGt, OpGe, OpEq:
 		val, err := p.parseValue()
 		if err != nil {
 			return nil, err
 		}
-		return TermExpr{Field: field, Op: tokenOp, Value: val}, nil
+		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
 	case OpBetween:
 		values, err := p.parseValueList()
 		if err != nil {
 			return nil, err
 		}
-		//TODO: check there are 2 values (from,to)
-		return TermManyExpr{Field: field, Op: OpBetween, Values: values}, nil
+		return TermManyExpr{Field: field, Op: FOpBetween, Values: values}, nil
 	case OpIn:
 		values, err := p.parseValueList()
 		if err != nil {
 			return nil, err
 		}
-		return TermManyExpr{Field: field, Op: OpIn, Values: values}, nil
-	// case tokIdent:
-	// maybe relations like startswith
+		return TermManyExpr{Field: field, Op: FOpIn, Values: values}, nil
+	// user defined operation
+	case OpIdent:
+		if p.cur.Op == OpLParen {
+			values, err := p.parseValueList()
+			if err != nil {
+				return nil, err
+			}
+			return TermManyExpr{Field: field, Op: FilterOp{Op: -1, String: opName}, Values: values}, nil
+		}
+		val, err := p.parseValue()
+		if err != nil {
+			return nil, err
+		}
+		return TermExpr{Field: field, Op: FilterOp{Op: -1, String: opName}, Value: val}, nil
 	default:
 		return nil, p.unexpectedWithMsg("missing relation like: =, !=, <, ...")
 	}

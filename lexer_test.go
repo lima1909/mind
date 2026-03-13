@@ -39,6 +39,7 @@ func TestLexer_OneOpen(t *testing.T) {
 		{query: ` - `, expected: OpUndefined},
 
 		{query: `startswith`, expected: OpIdent},
+		{query: `ancestors_1`, expected: OpIdent},
 	}
 
 	for _, tt := range tests {
@@ -119,6 +120,11 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpIdent,
 			OpString,
 		}},
+		{query: `name startswith "Ma"`, expected: []Op{
+			OpIdent,
+			OpIdent,
+			OpString,
+		}},
 		{query: `name between("a", "x")`, expected: []Op{
 			OpIdent,
 			OpBetween,
@@ -135,6 +141,15 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpString,
 			OpComma,
 			OpString,
+			OpRParen,
+		}},
+		{query: `name ancestors_1(2, 7)`, expected: []Op{
+			OpIdent,
+			OpIdent,
+			OpLParen,
+			OpNumberInt,
+			OpComma,
+			OpNumberInt,
 			OpRParen,
 		}},
 	}

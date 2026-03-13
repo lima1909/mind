@@ -23,10 +23,10 @@ This allows queries / filters to be improved, as is also the case in databases.
  
 #### Advantage
 
-The fast access can be achieved by using different indexes:
-
-- `MapIndex` (hash map), supported operation art `=, !=`
-- `MapIndex` ([SkipList](https://en.wikipedia.org/wiki/Skip_list)), supported operation art `=, !=, >, >=, <, <=, between(from, to)`
+- `Mind` has __NO__ dependencies
+- fast access can be achieved by using different indexes:
+    - `MapIndex` (hash map), supported operation art `=, !=`
+    - `SortedIndex` ([SkipList](https://en.wikipedia.org/wiki/Skip_list)), supported operation art `=, !=, >, >=, <, <=, between(from, to)`
 
 => All operations can be combined with `or`, `and` or `not`.
 

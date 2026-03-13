@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type User struct {
@@ -176,10 +177,10 @@ func TestParser_Cast(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
 			query, err := Parse(tt.query)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, bs.ToSlice())
 		})
 	}
@@ -266,5 +267,144 @@ func TestParser_Error(t *testing.T) {
 				fmt.Sprintf("%q != %q", tt.expected_op, parseErr.expected),
 			)
 		})
+	}
+}
+
+func TestParser_UDF(t *testing.T) {
+	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
+	indexMap.idIndex.Set(&User{ID: 40}, 0)
+	indexMap.idIndex.Set(&User{ID: 42}, 1)
+	indexMap.index["name"] = newUdfIndex((*User).Name)
+	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
+	indexMap.index["price"] = newUdfIndex((*User).Price)
+	indexMap.index["price"].Set(&User{price: 3.0}, 0)
+	indexMap.index["price"].Set(&User{price: 1.2}, 1)
+	indexMap.allIDs.Set(0)
+	indexMap.allIDs.Set(1)
+
+	tests := []struct {
+		query    string
+		expected []uint32
+	}{
+		{query: `price my_eq 1.2`, expected: []uint32{1}},
+		{query: `price my_eq 4.2`, expected: []uint32{}},
+		{query: `Not(price my_eq 4.2)`, expected: []uint32{0, 1}},
+
+		{query: `name my_eq "Alice" AND price = 1.2`, expected: []uint32{1}},
+		{query: `name my_eq "Nix" OR price my_eq 3.0`, expected: []uint32{0}},
+
+		{query: `price my_eq(1.2, 3.0)`, expected: []uint32{0, 1}},
+		{query: `price my_eq(3.0, 1.2)`, expected: []uint32{0, 1}},
+
+		// without UDF works too
+		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
+		{query: `price = 1.2`, expected: []uint32{1}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			query, err := Parse(tt.query)
+			assert.NoError(t, err)
+
+			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, bs.ToSlice())
+		})
+	}
+}
+
+var udfOp = FilterOp{Op: -1, String: "my_eq"}
+
+type udfIndex[OBJ any, V comparable, LI Value] struct {
+	data       map[any]*BitSet[LI]
+	fieldGetFn FromField[OBJ, V]
+}
+
+func newUdfIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index32[OBJ] {
+	return &udfIndex[OBJ, V, uint32]{
+		data:       make(map[any]*BitSet[uint32]),
+		fieldGetFn: fromField,
+	}
+}
+
+func (mi *udfIndex[OBJ, V, LI]) Set(obj *OBJ, lidx LI) {
+	value := mi.fieldGetFn(obj)
+	bs, found := mi.data[value]
+	if !found {
+		bs = NewEmptyBitSet[LI]()
+	}
+	bs.Set(lidx)
+	mi.data[value] = bs
+}
+
+func (mi *udfIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
+	value := mi.fieldGetFn(obj)
+	if bs, found := mi.data[value]; found {
+		bs.UnSet(lidx)
+		if bs.Count() == 0 {
+			delete(mi.data, value)
+		}
+	}
+}
+
+func (mi *udfIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
+	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
+}
+
+func (mi *udfIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*BitSet[LI], error) {
+	v, err := ValueFromAny[V](value)
+	if err != nil {
+		return nil, InvalidValueTypeError[V]{value}
+	}
+
+	if op != udfOp && op.Op != OpEq {
+		return nil, InvalidOperationError{MapIndexName, op.Op}
+	}
+
+	bs, found := mi.data[v]
+	if !found {
+		return NewEmptyBitSet[LI](), nil
+	}
+
+	return bs, nil
+}
+
+// MatchMany is not supported by MapIndex, so that always returns an error
+func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*BitSet[LI], error) {
+	switch op {
+	case udfOp, FOpIn:
+		if len(values) == 0 {
+			return NewEmptyBitSet[LI](), nil
+		}
+
+		matched := make([]*BitSet[LI], 0, len(values))
+		var maxLen int
+
+		for _, v := range values {
+			key, err := ValueFromAny[V](v)
+			if err != nil {
+				return nil, err
+			}
+
+			if bs, found := mi.data[key]; found {
+				matched = append(matched, bs)
+				if len(bs.data) > maxLen {
+					maxLen = len(bs.data)
+				}
+			}
+		}
+
+		if len(matched) == 0 {
+			return NewEmptyBitSet[LI](), nil
+		}
+
+		result := NewBitSetWithCapacity[LI](maxLen)
+		for _, bs := range matched {
+			result.Or(bs)
+		}
+
+		return result, nil
+	default:
+		return nil, InvalidOperationError{MapIndexName, op.Op}
 	}
 }

@@ -152,14 +152,14 @@ func (id *idAutoIncIndex[OBJ]) GetID(*OBJ) (uint64, int, error) {
 	return 0, -1, errors.New("GedID is not supported for this Index")
 }
 
-func (id *idAutoIncIndex[OBJ]) Match(op Op, value any) (*BitSet[uint32], error) {
+func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*BitSet[uint32], error) {
 	i, ok := value.(uint64)
 	if !ok {
 		return nil, InvalidValueTypeError[uint32]{value}
 	}
 
-	if op != OpEq {
-		return nil, InvalidOperationError{IDAutoIncName, op}
+	if op.Op != OpEq {
+		return nil, InvalidOperationError{IDAutoIncName, op.Op}
 	}
 
 	idx, err := id.GetIndex(i)
@@ -172,8 +172,8 @@ func (id *idAutoIncIndex[OBJ]) Match(op Op, value any) (*BitSet[uint32], error) 
 }
 
 // MatchMany is not supported by idAutoIncIndex, so that always returns an error
-func (id *idAutoIncIndex[OBJ]) MatchMany(op Op, values ...any) (*BitSet[uint32], error) {
-	return nil, InvalidOperationError{IDAutoIncName, op}
+func (id *idAutoIncIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*BitSet[uint32], error) {
+	return nil, InvalidOperationError{IDAutoIncName, op.Op}
 }
 
 const IDMapIndexName = "IDMapIndex"
@@ -218,14 +218,14 @@ func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, int, error) {
 	return null, 0, ValueNotFoundError{id}
 }
 
-func (mi *idMapIndex[OBJ, ID]) Match(op Op, value any) (*BitSet[uint32], error) {
+func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*BitSet[uint32], error) {
 	id, ok := value.(ID)
 	if !ok {
 		return nil, InvalidValueTypeError[ID]{value}
 	}
 
-	if op != OpEq {
-		return nil, InvalidOperationError{IDMapIndexName, op}
+	if op.Op != OpEq {
+		return nil, InvalidOperationError{IDMapIndexName, op.Op}
 	}
 
 	idx, err := mi.GetIndex(id)
@@ -238,8 +238,8 @@ func (mi *idMapIndex[OBJ, ID]) Match(op Op, value any) (*BitSet[uint32], error) 
 }
 
 // MatchMany is not supported by idMapIndex, so that always returns an error
-func (mi *idMapIndex[OBJ, ID]) MatchMany(op Op, values ...any) (*BitSet[uint32], error) {
-	return nil, InvalidOperationError{IDMapIndexName, op}
+func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*BitSet[uint32], error) {
+	return nil, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
 // ------------------------------------------
@@ -258,13 +258,31 @@ type Index[OBJ any, LI Value] interface {
 	Filter[LI]
 }
 
+var (
+	FOpEq         = FilterOp{Op: OpEq}
+	FOpLe         = FilterOp{Op: OpLe}
+	FOpLt         = FilterOp{Op: OpLt}
+	FOpGe         = FilterOp{Op: OpGe}
+	FOpGt         = FilterOp{Op: OpGt}
+	FOpIn         = FilterOp{Op: OpIn}
+	FOpBetween    = FilterOp{Op: OpBetween}
+	FOpStartsWith = FilterOp{String: "startswith"}
+)
+
+// FilterOp is a wrapper over the Op, which contains the Op and a String.
+// For User defined FilterOp is no Op defined, so the User defined Index can use the String.
+type FilterOp struct {
+	Op     Op
+	String string
+}
+
 // Filter32 the List only supports uint32 List-Indices
 type Filter32 = Filter[uint32]
 
 // Filter returns the BitSet or an error by a given Relation and Value
 type Filter[LI Value] interface {
-	Match(op Op, value any) (*BitSet[LI], error)
-	MatchMany(op Op, values ...any) (*BitSet[LI], error)
+	Match(op FilterOp, value any) (*BitSet[LI], error)
+	MatchMany(op FilterOp, values ...any) (*BitSet[LI], error)
 }
 
 // FromField is a function, which returns a value from an given object.
@@ -331,12 +349,12 @@ const MapIndexName = "MapIndex"
 
 // MapIndex is a mapping of any value to the Index in the List.
 // This index only supported Queries with the Equal Ralation!
-type MapIndex[OBJ any, V any, LI Value] struct {
+type MapIndex[OBJ any, V comparable, LI Value] struct {
 	data       map[any]*BitSet[LI]
 	fieldGetFn FromField[OBJ, V]
 }
 
-func NewMapIndex[OBJ any, V any](fromField FromField[OBJ, V]) Index32[OBJ] {
+func NewMapIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index32[OBJ] {
 	return &MapIndex[OBJ, V, uint32]{
 		data:       make(map[any]*BitSet[uint32]),
 		fieldGetFn: fromField,
@@ -364,18 +382,17 @@ func (mi *MapIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
 }
 
 func (mi *MapIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
-	// couldn't compare V, so always true
-	return true
+	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
 }
 
-func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
+func (mi *MapIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*BitSet[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
-	if op != OpEq {
-		return nil, InvalidOperationError{MapIndexName, op}
+	if op.Op != OpEq {
+		return nil, InvalidOperationError{MapIndexName, op.Op}
 	}
 
 	bs, found := mi.data[v]
@@ -387,8 +404,8 @@ func (mi *MapIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *MapIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], error) {
-	switch op {
+func (mi *MapIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*BitSet[LI], error) {
+	switch op.Op {
 	case OpIn:
 		if len(values) == 0 {
 			return NewEmptyBitSet[LI](), nil
@@ -422,7 +439,7 @@ func (mi *MapIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], er
 
 		return result, nil
 	default:
-		return nil, InvalidOperationError{MapIndexName, op}
+		return nil, InvalidOperationError{MapIndexName, op.Op}
 	}
 }
 
@@ -465,13 +482,13 @@ func (si *SortedIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
 	return si.fieldGetFn(oldItem) != si.fieldGetFn(newItem)
 }
 
-func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
+func (si *SortedIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*BitSet[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
-	switch op {
+	switch op.Op {
 	case OpEq:
 		if bs, found := si.skipList.Get(v); found {
 			return bs, nil
@@ -505,24 +522,26 @@ func (si *SortedIndex[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) 
 			return true
 		})
 		return result, nil
-	case OpStartsWith:
-		if _, ok := value.(string); !ok {
-			return nil, InvalidValueTypeError[string]{value}
+	default:
+		if op.String == FOpStartsWith.String {
+			if _, ok := value.(string); !ok {
+				return nil, InvalidValueTypeError[string]{value}
+			}
+
+			result := NewBitSet[LI]()
+			si.skipList.StringStartsWith(v, func(_ V, bs *BitSet[LI]) bool {
+				result.Or(bs)
+				return true
+			})
+			return result, nil
 		}
 
-		result := NewBitSet[LI]()
-		si.skipList.StringStartsWith(v, func(_ V, bs *BitSet[LI]) bool {
-			result.Or(bs)
-			return true
-		})
-		return result, nil
-	default:
-		return nil, InvalidOperationError{SortedIndexName, op}
+		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
 }
 
-func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], error) {
-	switch op {
+func (si *SortedIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*BitSet[LI], error) {
+	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
 			return nil, InvalidArgsLenError{defined: "2", got: len(values)}
@@ -576,7 +595,7 @@ func (si *SortedIndex[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI],
 
 		return result, nil
 	default:
-		return nil, InvalidOperationError{SortedIndexName, op}
+		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
 }
 
@@ -610,13 +629,13 @@ func (ft *FullScan[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
 	return false
 }
 
-func (ft *FullScan[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
+func (ft *FullScan[OBJ, V, LI]) Match(op FilterOp, value any) (*BitSet[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
-	switch op {
+	switch op.Op {
 	case OpEq:
 		return ft.filter(func(item *OBJ) bool {
 			return ft.fieldGetFn(item) == v
@@ -638,13 +657,13 @@ func (ft *FullScan[OBJ, V, LI]) Match(op Op, value any) (*BitSet[LI], error) {
 			return ft.fieldGetFn(item) >= v
 		}), nil
 	default:
-		return nil, InvalidOperationError{FullScanName, op}
+		return nil, InvalidOperationError{FullScanName, op.Op}
 	}
 }
 
-func (ft *FullScan[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], error) {
+func (ft *FullScan[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*BitSet[LI], error) {
 
-	switch op {
+	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
 			return nil, InvalidArgsLenError{defined: "2", got: len(values)}
@@ -688,6 +707,6 @@ func (ft *FullScan[OBJ, V, LI]) MatchMany(op Op, values ...any) (*BitSet[LI], er
 			return false
 		}), nil
 	default:
-		return nil, InvalidOperationError{FullScanName, op}
+		return nil, InvalidOperationError{FullScanName, op.Op}
 	}
 }
