@@ -1,31 +1,25 @@
 package mind
 
-// Query32 supports only uint32 List-Indices
-type Query32 = Query[uint32]
-
 // Query is a filter function, find the correct Index an execute the Index.Get method
 // and returns a BitSet pointer
-type Query[LI Value] func(l FilterByName[LI], allIDs *BitSet[LI]) (bs *BitSet[LI], canMutate bool, err error)
-
-// FilterByName32 supports only uint32 List-Indices
-type FilterByName32 = FilterByName[uint32]
+type Query func(l FilterByName, allIDs *BitSet32) (bs *BitSet32, canMutate bool, err error)
 
 // FilterByName finds the Filter by a given field-name
-type FilterByName[LI Value] = func(string) (Filter[LI], error)
+type FilterByName = func(string) (Filter, error)
 
 // All means returns all Items, no filtering
-func All() Query32 { return all[uint32]() }
+func All() Query { return all() }
 
 //go:inline
-func all[LI Value]() Query[LI] {
-	return func(_ FilterByName[LI], allIDs *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func all() Query {
+	return func(_ FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		return allIDs, false, nil
 	}
 }
 
 //go:inline
-func match[LI Value](fieldName string, op FilterOp, value any) Query[LI] {
-	return func(l FilterByName[LI], _ *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func match(fieldName string, op FilterOp, value any) Query {
+	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -37,8 +31,8 @@ func match[LI Value](fieldName string, op FilterOp, value any) Query[LI] {
 }
 
 //go:inline
-func matchMany[LI Value](fieldName string, op FilterOp, values ...any) Query[LI] {
-	return func(l FilterByName[LI], _ *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func matchMany(fieldName string, op FilterOp, values ...any) Query {
+	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -50,29 +44,29 @@ func matchMany[LI Value](fieldName string, op FilterOp, values ...any) Query[LI]
 }
 
 // ID id = val
-func ID(val any) Query32 { return match[uint32](IDIndexFieldName, FOpEq, val) }
+func ID(val any) Query { return match(IDIndexFieldName, FOpEq, val) }
 
 // Eq fieldName = val
-func Eq(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpEq, val) }
+func Eq(fieldName string, val any) Query { return match(fieldName, FOpEq, val) }
 
 // Lt Less fieldName < val
-func Lt(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpLt, val) }
+func Lt(fieldName string, val any) Query { return match(fieldName, FOpLt, val) }
 
 // Le Less Equal fieldName <= val
-func Le(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpLe, val) }
+func Le(fieldName string, val any) Query { return match(fieldName, FOpLe, val) }
 
 // Gt Greater fieldName > val
-func Gt(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpGt, val) }
+func Gt(fieldName string, val any) Query { return match(fieldName, FOpGt, val) }
 
 // Ge Greater Equal fieldName >= val
-func Ge(fieldName string, val any) Query32 { return match[uint32](fieldName, FOpGe, val) }
+func Ge(fieldName string, val any) Query { return match(fieldName, FOpGe, val) }
 
 // IsNil is a Query which checks for a given type the nil value
-func IsNil[V any](fieldName string) Query32 { return isNil[V, uint32](fieldName) }
+func IsNil[V any](fieldName string) Query { return isNil[V](fieldName) }
 
 //go:inline
-func isNil[V any, LI Value](fieldName string) Query[LI] {
-	return func(l FilterByName[LI], _ *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func isNil[V any](fieldName string) Query {
+	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -85,13 +79,13 @@ func isNil[V any, LI Value](fieldName string) Query[LI] {
 
 // In combines Eq with an Or
 // In("name", "Paul", "Egon") => name == "Paul" Or name == "Egon"
-func In(fieldName string, vals ...any) Query32 { return in[uint32](fieldName, vals...) }
+func In(fieldName string, vals ...any) Query { return in(fieldName, vals...) }
 
 //go:inline
-func in[LI Value](fieldName string, vals ...any) Query[LI] {
-	return func(l FilterByName[LI], _ *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func in(fieldName string, vals ...any) Query {
+	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		if len(vals) == 0 {
-			return NewEmptyBitSet[LI](), true, nil
+			return NewEmptyBitSet[uint32](), true, nil
 		}
 
 		filter, err := l(fieldName)
@@ -99,7 +93,7 @@ func in[LI Value](fieldName string, vals ...any) Query[LI] {
 			return nil, false, err
 		}
 
-		matched := make([]*BitSet[LI], 0, len(vals))
+		matched := make([]*BitSet32, 0, len(vals))
 		var maxLen int
 
 		for _, v := range vals {
@@ -116,12 +110,12 @@ func in[LI Value](fieldName string, vals ...any) Query[LI] {
 
 		switch len(matched) {
 		case 0:
-			return NewEmptyBitSet[LI](), true, nil
+			return NewEmptyBitSet[uint32](), true, nil
 		case 1:
 			return matched[0], false, nil
 		}
 
-		result := NewBitSetWithCapacity[LI](maxLen)
+		result := NewBitSetWithCapacity[uint32](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}
@@ -131,11 +125,11 @@ func in[LI Value](fieldName string, vals ...any) Query[LI] {
 }
 
 // NotEq is a shorcut for Not(Eq(...))
-func NotEq(fieldName string, val any) Query32 { return notEq[uint32](fieldName, val) }
+func NotEq(fieldName string, val any) Query { return notEq(fieldName, val) }
 
 //go:inline
-func notEq[LI Value](fieldName string, val any) Query[LI] {
-	return func(l FilterByName[LI], allIDs *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func notEq(fieldName string, val any) Query {
+	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -158,8 +152,8 @@ func notEq[LI Value](fieldName string, val any) Query[LI] {
 }
 
 // Not Not(Query)
-func Not[LI Value](q Query[LI]) Query[LI] {
-	return func(l FilterByName[LI], allIDs *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func Not(q Query) Query {
+	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		// can Mutate is not relevant, because allIDs are copied
 		qres, _, err := q(l, allIDs)
 		if err != nil {
@@ -174,13 +168,13 @@ func Not[LI Value](q Query[LI]) Query[LI] {
 }
 
 // Eq fieldName = val
-func WithPrefix(fieldName string, val string) Query32 {
-	return match[uint32](fieldName, FOpStartsWith, val)
+func WithPrefix(fieldName string, val string) Query {
+	return match(fieldName, FOpStartsWith, val)
 }
 
 // And combines 2 or more queries with an logical And
-func And[LI Value](a Query[LI], b Query[LI], other ...Query[LI]) Query[LI] {
-	return func(l FilterByName[LI], allIDs *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func And(a Query, b Query, other ...Query) Query {
+	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		result, err := ensureMutable(a(l, allIDs))
 		if err != nil {
 			return nil, false, err
@@ -205,8 +199,8 @@ func And[LI Value](a Query[LI], b Query[LI], other ...Query[LI]) Query[LI] {
 }
 
 // Or combines 2 or more queries with an logical Or
-func Or[LI Value](a Query[LI], b Query[LI], other ...Query[LI]) Query[LI] {
-	return func(l FilterByName[LI], allIDs *BitSet[LI]) (_ *BitSet[LI], canMutate bool, _ error) {
+func Or(a Query, b Query, other ...Query) Query {
+	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
 		result, err := ensureMutable(a(l, allIDs))
 		if err != nil {
 			return nil, false, err
@@ -232,8 +226,8 @@ func Or[LI Value](a Query[LI], b Query[LI], other ...Query[LI]) Query[LI] {
 
 // AndNot performs: baseQuery AND NOT(subQuery)
 // example: status = 'active' AND type != 'guest'
-func AndNot[LI Value](base Query[LI], sub Query[LI]) Query[LI] {
-	return func(l FilterByName[LI], allIDs *BitSet[LI]) (*BitSet[LI], bool, error) {
+func AndNot(base Query, sub Query) Query {
+	return func(l FilterByName, allIDs *BitSet32) (*BitSet32, bool, error) {
 		// base result (e.g., the 'active')
 		result, canMutate, err := base(l, allIDs)
 		if err != nil {
@@ -266,7 +260,7 @@ func AndNot[LI Value](base Query[LI], sub Query[LI]) Query[LI] {
 // only copy, if not mutable
 //
 //go:inline
-func ensureMutable[LI Value](b *BitSet[LI], canMutate bool, err error) (*BitSet[LI], error) {
+func ensureMutable(b *BitSet32, canMutate bool, err error) (*BitSet32, error) {
 	if err != nil {
 		return nil, err
 	}

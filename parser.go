@@ -5,29 +5,23 @@ import (
 	"strings"
 )
 
+type Expr interface{}
+
 type ExprKind uint8
 
 const (
-	ExprTerm ExprKind = iota
-	ExprOr
+	ExprOr ExprKind = iota
 	ExprAnd
 	ExprAndNot
-	ExprNot
 )
 
-type Expr interface{ kind() ExprKind }
-
 type BinaryExpr struct {
-	Ekind ExprKind // exprOr, exprAnd, exprAndNot
+	Ekind ExprKind
 	Left  Expr
 	Right Expr
 }
 
-func (e BinaryExpr) kind() ExprKind { return e.Ekind }
-
 type NotExpr struct{ Child Expr }
-
-func (e NotExpr) kind() ExprKind { return ExprNot }
 
 type TermExpr struct {
 	Field string
@@ -35,22 +29,11 @@ type TermExpr struct {
 	Value any
 }
 
-func (e TermExpr) kind() ExprKind { return ExprTerm }
-
 type TermManyExpr struct {
 	Field            string
 	Op               FilterOp
 	Values           []any
 	MinIncl, MaxIncl bool
-}
-
-func (e TermManyExpr) kind() ExprKind { return ExprTerm }
-
-// Parser impl starts
-type parser struct {
-	input string
-	lex   lexer
-	cur   token
 }
 
 func optimize(e Expr) Expr {
@@ -152,14 +135,10 @@ func optimize(e Expr) Expr {
 	}
 }
 
-func compile(e Expr) Query32 {
+func compile(e Expr) Query {
 	switch n := e.(type) {
 	case TermExpr:
-		return match[uint32](n.Field, n.Op, n.Value)
-
-	case NotExpr:
-		return Not(compile(n.Child))
-
+		return match(n.Field, n.Op, n.Value)
 	case BinaryExpr:
 		left := compile(n.Left)
 		right := compile(n.Right)
@@ -172,14 +151,16 @@ func compile(e Expr) Query32 {
 		case ExprAndNot:
 			return AndNot(left, right)
 		}
+	case NotExpr:
+		return Not(compile(n.Child))
 	case TermManyExpr:
-		return matchMany[uint32](n.Field, n.Op, n.Values...)
+		return matchMany(n.Field, n.Op, n.Values...)
 	}
 
 	panic(fmt.Sprintf("NOT supported Expression in compile: %T", e))
 }
 
-func Parse(input string) (Query32, error) {
+func Parse(input string) (Query, error) {
 	p := parser{input: input, lex: lexer{input: input, pos: 0}}
 	p.next()
 	ast, err := p.parseOr()
@@ -193,6 +174,13 @@ func Parse(input string) (Query32, error) {
 	ast = optimize(ast)
 	return compile(ast), nil
 
+}
+
+// Parser impl starts
+type parser struct {
+	input string
+	lex   lexer
+	cur   token
 }
 
 //go:inline

@@ -6,11 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func set[T any](idx Index32[T], t T, r uint32)   { idx.Set(&t, r) }
-func unSet[T any](idx Index32[T], t T, r uint32) { idx.UnSet(&t, r) }
+func set[T any](idx Index[T], t T, r uint32)   { idx.Set(&t, r) }
+func unSet[T any](idx Index[T], t T, r uint32) { idx.UnSet(&t, r) }
 
-func fieldIndexMapFn[T any](mi Index32[T]) FilterByName32 {
-	return func(fieldName string) (Filter32, error) {
+func fieldIndexMapFn[T any](mi Index[T]) FilterByName {
+	return func(fieldName string) (Filter, error) {
 		if fieldName == "val" {
 			return mi, nil
 		}

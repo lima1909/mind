@@ -4,22 +4,22 @@ import (
 	"slices"
 )
 
-type SliceSet[V Value] struct {
+type SliceSet[V UInt] struct {
 	data []V
 }
 
 // NewSliceSet creates a new SliceSet
-func NewSliceSet[V Value]() *SliceSet[V] {
+func NewSliceSet[V UInt]() *SliceSet[V] {
 	return &SliceSet[V]{data: make([]V, 0)}
 }
 
 // NewSliceSetWithCapacity creates a new SliceSet with starting capacity
-func NewSliceSetWithCapacity[V Value](size int) *SliceSet[V] {
+func NewSliceSetWithCapacity[V UInt](size int) *SliceSet[V] {
 	return &SliceSet[V]{data: make([]V, 0, size)}
 }
 
 // NewSliceSetFrom creates a new SliceSet from given values
-func NewSliceSetFrom[V Value](values ...V) *SliceSet[V] {
+func NewSliceSetFrom[V UInt](values ...V) *SliceSet[V] {
 	s := NewSliceSetWithCapacity[V](len(values))
 	for _, v := range values {
 		s.Set(v)

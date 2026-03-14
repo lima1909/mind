@@ -39,7 +39,7 @@ func NewListWithID[T any, ID comparable](fieldIDGetFn func(*T) ID) *List[T, ID] 
 //   - Index: a impl of the Index interface
 //
 // Hint: empty field-name or the field-name ID are not allowed!
-func (l *List[T, ID]) CreateIndex(fieldName string, index Index32[T]) error {
+func (l *List[T, ID]) CreateIndex(fieldName string, index Index[T]) error {
 	if fieldName == "" {
 		return fmt.Errorf("empty fieldName is not allowed")
 	}
@@ -59,7 +59,7 @@ func (l *List[T, ID]) CreateIndex(fieldName string, index Index32[T]) error {
 	}
 
 	// inject the list for filtering
-	if noIndex, ok := index.(ListFilterFn[T, uint32]); ok {
+	if noIndex, ok := index.(ListFilterFn[T]); ok {
 		noIndex.SetListFilterFn(l.list.filterBS)
 	}
 
@@ -194,13 +194,13 @@ func (l *List[T, ID]) QueryStr(queryStr string) *QueryResult[T, ID] {
 }
 
 // Query execute the given Query.
-func (l *List[T, ID]) Query(query Query32) *QueryResult[T, ID] {
+func (l *List[T, ID]) Query(query Query) *QueryResult[T, ID] {
 	return &QueryResult[T, ID]{list: l, query: query}
 }
 
 type QueryResult[T any, ID comparable] struct {
 	list  *List[T, ID]
-	query Query32
+	query Query
 	err   error
 }
 

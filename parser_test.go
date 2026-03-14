@@ -315,12 +315,12 @@ func TestParser_UDF(t *testing.T) {
 
 var udfOp = FilterOp{Op: -1, String: "my_eq"}
 
-type udfIndex[OBJ any, V comparable, LI Value] struct {
+type udfIndex[OBJ any, V comparable, LI UInt] struct {
 	data       map[any]*BitSet[LI]
 	fieldGetFn FromField[OBJ, V]
 }
 
-func newUdfIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index32[OBJ] {
+func newUdfIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index[OBJ] {
 	return &udfIndex[OBJ, V, uint32]{
 		data:       make(map[any]*BitSet[uint32]),
 		fieldGetFn: fromField,

@@ -2,8 +2,6 @@ package mind
 
 import (
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func BenchmarkLexer(b *testing.B) {
@@ -32,10 +30,16 @@ func BenchmarkParser(b *testing.B) {
 
 	for b.Loop() {
 		query, err := Parse(`role = "admin" OR ok = false AND price = 0.0`)
-		assert.NoError(b, err)
+		if err != nil {
+			b.Fatal(err)
+		}
 
 		bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-		assert.NoError(b, err)
-		assert.Equal(b, []uint32{1}, bs.ToSlice())
+		if err != nil {
+			b.Fatal(err)
+		}
+		if 1 != bs.ToSlice()[0] {
+			b.Fatalf("expected: %v, got: %v", []uint32{1}, bs.ToSlice())
+		}
 	}
 }

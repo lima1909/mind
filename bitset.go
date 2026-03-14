@@ -4,11 +4,14 @@ import (
 	"math/bits"
 )
 
-type Value interface {
+type UInt interface {
 	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
 }
 
-type BitSet[V Value] struct {
+// BitSet32 is the default BitSet
+type BitSet32 = BitSet[uint32]
+
+type BitSet[U UInt] struct {
 	data  []uint64
 	count int // cached popcount; -1 means dirty (needs recount)
 }
@@ -16,31 +19,31 @@ type BitSet[V Value] struct {
 const defaultSize = (1 << 16) / 64
 
 // NewBitSet creates a new BitSet
-func NewBitSet[V Value]() *BitSet[V] {
-	return &BitSet[V]{data: make([]uint64, 0, defaultSize)}
+func NewBitSet[U UInt]() *BitSet[U] {
+	return &BitSet[U]{data: make([]uint64, 0, defaultSize)}
 }
 
 // NewEmptyBitSet creates a new BitSet with len and cap = 0
-func NewEmptyBitSet[V Value]() *BitSet[V] {
-	return &BitSet[V]{data: make([]uint64, 0)}
+func NewEmptyBitSet[U UInt]() *BitSet[U] {
+	return &BitSet[U]{data: make([]uint64, 0)}
 }
 
 // NewBitSetWithCapacity creates a new BitSet with starting capacity
-func NewBitSetWithCapacity[V Value](bits int) *BitSet[V] {
+func NewBitSetWithCapacity[U UInt](bits int) *BitSet[U] {
 	words := (bits + 63) >> 6
-	return &BitSet[V]{data: make([]uint64, 0, words)}
+	return &BitSet[U]{data: make([]uint64, 0, words)}
 }
 
 // NewBitSetFrom creates a new BitSet from given values
-func NewBitSetFrom[V Value](values ...V) *BitSet[V] {
-	var maxVal V
+func NewBitSetFrom[U UInt](values ...U) *BitSet[U] {
+	var maxVal U
 	for _, v := range values {
 		if v > maxVal {
 			maxVal = v
 		}
 	}
 
-	b := NewBitSetWithCapacity[V](int(maxVal) + 1)
+	b := NewBitSetWithCapacity[U](int(maxVal) + 1)
 	for _, v := range values {
 		b.Set(v)
 	}
@@ -49,7 +52,7 @@ func NewBitSetFrom[V Value](values ...V) *BitSet[V] {
 }
 
 //go:inline
-func (b *BitSet[V]) grow(targetIndex int) {
+func (b *BitSet[U]) grow(targetIndex int) {
 	needed := targetIndex + 1 - len(b.data)
 	if needed > 0 {
 		// runtime optimizes this allocation pattern heavily.
@@ -59,7 +62,7 @@ func (b *BitSet[V]) grow(targetIndex int) {
 }
 
 // Set inserts or updates the key in the BitSet
-func (b *BitSet[V]) Set(value V) {
+func (b *BitSet[U]) Set(value U) {
 	// i>>6 is equals i/64 but faster
 	// i&63 is the same: i%64, but faster
 
@@ -79,7 +82,7 @@ func (b *BitSet[V]) Set(value V) {
 }
 
 // UnSet removes the key from the BitSet. Clear the bit value to 0.
-func (b *BitSet[V]) UnSet(value V) bool {
+func (b *BitSet[U]) UnSet(value U) bool {
 	index := int(value) >> 6
 	if index < len(b.data) {
 		bit := uint64(1) << (value & 63)
@@ -96,7 +99,7 @@ func (b *BitSet[V]) UnSet(value V) bool {
 }
 
 // Contains check, is the value saved in the BitSet
-func (b *BitSet[V]) Contains(value V) bool {
+func (b *BitSet[U]) Contains(value U) bool {
 	index := int(value) >> 6
 	if index >= len(b.data) {
 		return false
@@ -113,7 +116,7 @@ func (b *BitSet[V]) Contains(value V) bool {
 // 3 -> 42
 // 4 -> 1028
 // 5 -> not found
-func (b *BitSet[V]) ValueOnIndex(idx uint32) (uint32, bool) {
+func (b *BitSet[U]) ValueOnIndex(idx uint32) (uint32, bool) {
 	for i, word := range b.data {
 		if word == 0 {
 			continue
@@ -147,7 +150,7 @@ func (b *BitSet[V]) ValueOnIndex(idx uint32) (uint32, bool) {
 
 // Range iterates over set bits between 'from' and 'to' (inclusive).
 // It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
-func (b *BitSet[V]) Range(from, to V, visit func(v V) bool) {
+func (b *BitSet[U]) Range(from, to U, visit func(v U) bool) {
 	if from > to || len(b.data) == 0 {
 		return
 	}
@@ -178,7 +181,7 @@ func (b *BitSet[V]) Range(from, to V, visit func(v V) bool) {
 
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
-			val := V(i<<6) + V(t)
+			val := U(i<<6) + U(t)
 
 			if !visit(val) {
 				return
@@ -192,7 +195,7 @@ func (b *BitSet[V]) Range(from, to V, visit func(v V) bool) {
 // Min return the min value where an Bit is set
 // [1, 3, 100] => 1
 // if no max found, return -1
-func (b *BitSet[V]) Min() int {
+func (b *BitSet[U]) Min() int {
 	bd := b.data
 
 	for i, w := range bd {
@@ -211,7 +214,7 @@ func (b *BitSet[V]) Min() int {
 // Max return the max value where an Bit is set
 // [1, 3, 100] => 100
 // if no max found, return -1
-func (b *BitSet[V]) Max() int {
+func (b *BitSet[U]) Max() int {
 	bl := len(b.data)
 	bd := b.data
 
@@ -229,7 +232,7 @@ func (b *BitSet[V]) Max() int {
 }
 
 // MaxSetIndex return the max index where an Bit is set
-func (b *BitSet[V]) MaxSetIndex() int {
+func (b *BitSet[U]) MaxSetIndex() int {
 	bl := len(b.data)
 	bd := b.data
 
@@ -244,7 +247,7 @@ func (b *BitSet[V]) MaxSetIndex() int {
 
 // Count returns how many bits are set in the BitSet.
 // Uses a cached value when available (O(1)), recounts only after bulk operations.
-func (b *BitSet[V]) Count() int {
+func (b *BitSet[U]) Count() int {
 	if b.count >= 0 {
 		return b.count
 	}
@@ -258,7 +261,7 @@ func (b *BitSet[V]) Count() int {
 }
 
 // IsEmpty there are no bits set
-func (b *BitSet[V]) IsEmpty() bool {
+func (b *BitSet[U]) IsEmpty() bool {
 	if b.count == 0 {
 		return true
 	}
@@ -275,28 +278,28 @@ func (b *BitSet[V]) IsEmpty() bool {
 }
 
 // Len returns the len of the bit slice
-func (b *BitSet[V]) Len() int { return len(b.data) }
+func (b *BitSet[U]) Len() int { return len(b.data) }
 
 // how many bytes is using
-func (b *BitSet[V]) usedBytes() int { return 24 + (len(b.data) * 8) }
+func (b *BitSet[U]) usedBytes() int { return 24 + (len(b.data) * 8) }
 
 // Clear removes all bits
-func (b *BitSet[V]) Clear() {
+func (b *BitSet[U]) Clear() {
 	b.data = b.data[:0]
 	b.count = 0
 }
 
 // Copy copy the complete BitSet.
-func (b *BitSet[V]) Copy() *BitSet[V] {
+func (b *BitSet[U]) Copy() *BitSet[U] {
 	target := make([]uint64, len(b.data))
 	copy(target, b.data)
-	return &BitSet[V]{data: target, count: b.count}
+	return &BitSet[U]{data: target, count: b.count}
 }
 
 // CopyInto copies the current BitSet into the provided buffer.
 // It returns a new BitSet wrapper sharing the provided buffer.
 // Assumption: cap(buf) >= len(b.data), if not, then panic.
-func (b *BitSet[V]) CopyInto(buf []uint64) *BitSet[V] {
+func (b *BitSet[U]) CopyInto(buf []uint64) *BitSet[U] {
 	needed := len(b.data)
 
 	if cap(buf) < needed {
@@ -306,12 +309,12 @@ func (b *BitSet[V]) CopyInto(buf []uint64) *BitSet[V] {
 	target := buf[:needed]
 	copy(target, b.data)
 
-	return &BitSet[V]{data: target, count: b.count}
+	return &BitSet[U]{data: target, count: b.count}
 }
 
 // And is the logical AND of two BitSet
 // In this BitSet is the result, this means the values will be overwritten!
-func (b *BitSet[V]) And(other *BitSet[V]) {
+func (b *BitSet[U]) And(other *BitSet[U]) {
 	l := min(len(b.data), len(other.data))
 
 	// zero out the tail to prevent "Zombie Bits"
@@ -329,7 +332,7 @@ func (b *BitSet[V]) And(other *BitSet[V]) {
 }
 
 // Or is the logical OR of two BitSet
-func (b *BitSet[V]) Or(other *BitSet[V]) {
+func (b *BitSet[U]) Or(other *BitSet[U]) {
 	od := other.data
 	ol := len(od)
 	bl := len(b.data)
@@ -362,7 +365,7 @@ func (b *BitSet[V]) Or(other *BitSet[V]) {
 }
 
 // XOr is the logical XOR of two BitSet
-func (b *BitSet[V]) Xor(other *BitSet[V]) {
+func (b *BitSet[U]) Xor(other *BitSet[U]) {
 	bl := len(b.data)
 	ol := len(other.data)
 
@@ -395,7 +398,7 @@ func (b *BitSet[V]) Xor(other *BitSet[V]) {
 // Known as "Bit Clear" or "Set Difference"
 //
 // Example: [1, 2, 110, 2345] AndNot [2, 110] => [1, 2345]
-func (b *BitSet[V]) AndNot(other *BitSet[V]) {
+func (b *BitSet[U]) AndNot(other *BitSet[U]) {
 	if len(other.data) == 0 || len(b.data) == 0 {
 		return
 	}
@@ -421,7 +424,7 @@ func (b *BitSet[V]) AndNot(other *BitSet[V]) {
 // XOR           Yes         Yes
 // AND           No          Yes
 // AND NOT       No          Yes
-func (b *BitSet[V]) Shrink() {
+func (b *BitSet[U]) Shrink() {
 	bd := b.data
 
 	// start from the end
@@ -437,12 +440,12 @@ func (b *BitSet[V]) Shrink() {
 }
 
 // Values iterate over the complete BitSet and call the yield function, for every value
-func (b *BitSet[V]) Values(yield func(V) bool) {
+func (b *BitSet[U]) Values(yield func(U) bool) {
 	for i, w := range b.data {
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
 			val := (i << 6) + t
-			if !yield(V(val)) {
+			if !yield(U(val)) {
 				return
 			}
 			w &= (w - 1)
@@ -450,16 +453,16 @@ func (b *BitSet[V]) Values(yield func(V) bool) {
 	}
 }
 
-func (b *BitSet[V]) ValuesBatch(yield func([]V) bool) {
+func (b *BitSet[U]) ValuesBatch(yield func([]U) bool) {
 	const batchSize = 256
-	buffer := make([]V, batchSize)
+	buffer := make([]U, batchSize)
 	pos := 0
 
 	for i, w := range b.data {
 		base := i << 6
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
-			buffer[pos] = V(base + t)
+			buffer[pos] = U(base + t)
 			pos++
 
 			// If buffer is full, yield the whole batch
@@ -480,9 +483,9 @@ func (b *BitSet[V]) ValuesBatch(yield func([]V) bool) {
 }
 
 // ToSlice create a new slice which contains all saved values
-func (b *BitSet[V]) ToSlice() []V {
-	res := make([]V, 0, b.Count())
-	b.Values(func(v V) bool {
+func (b *BitSet[U]) ToSlice() []U {
+	res := make([]U, 0, b.Count())
+	b.Values(func(v U) bool {
 		res = append(res, v)
 		return true
 	})
