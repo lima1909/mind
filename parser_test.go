@@ -69,6 +69,12 @@ func TestParser_Base(t *testing.T) {
 		// RULE: NOT (A <= B) --> A > B
 		{query: `Not(price <= 2.2)`, expected: []uint32{0}},
 
+		// DE MORGAN'S LAWS: Push NOT down the tree
+		// RULE: Not(A AND B) -> Not(A) OR Not(B)
+		{query: `Not(price = 1.2 AND price = 3.0)`, expected: []uint32{0, 1}},
+		// RULE: Not(A OR B) -> Not(A) AND NOT(B)
+		{query: `Not(price = 1.2 OR price = 3.0)`, expected: []uint32{}},
+
 		{query: `id = 42 and role = "admin"`, expected: []uint32{1}},
 		{query: `ok = true or price = 0.0`, expected: []uint32{0}},
 		{query: `role = "admin" AND price = 9.9`, expected: []uint32{}},
@@ -270,6 +276,49 @@ func TestParser_Error(t *testing.T) {
 	}
 }
 
+func TestParser_Optimize(t *testing.T) {
+
+	tests := []struct {
+		input     string
+		optimized string
+	}{
+		{input: `price = 1`, optimized: `price = 1`},
+		// RULE: And(A, Not(B)) -> AndNot(A, B)
+		{input: `price = 1 and not(price = 2)`, optimized: `price = 1 ANDNOT price = 2`},
+		// RULE: And(Not(A), B) -> AndNot(A, B)
+		{input: `not(price = 1) and price = 2`, optimized: `price = 2 ANDNOT price = 1`},
+		// RULE: And(A > X, B < Y) -> BETWEEN(A, B)
+		{input: `price > 1 and price < 2`, optimized: `price BETWEEN [1 2]`},
+		// RULE: Not(Not(A)) -> A (Double Negative)
+		{input: `not(not(price = 1))`, optimized: `price = 1`},
+		// RULE: Not(A AND B) -> Not(A) OR Not(B)
+		{input: `not(price = 1 and price = 2)`, optimized: ` NOT(price = 1)  OR  NOT(price = 2) `},
+		// RULE: Not(A OR B) -> Not(A) AND NOT(B)
+		{input: `not(price = 1 or price = 2)`, optimized: ` NOT(price = 1)  ANDNOT price = 2`},
+		// RULE: NOT (A = B)  -->  A != B
+		{input: `not(price = 1)`, optimized: ` NOT(price = 1) `},
+		// RULE: NOT (A > B) --> A <= B
+		{input: `not(price > 1)`, optimized: `price <= 1`},
+		// RULE: NOT (A >= B) --> A < B
+		{input: `not(price >= 1)`, optimized: `price < 1`},
+		// RULE: NOT (A < B) --> A >= B
+		{input: `not(price < 1)`, optimized: `price >= 1`},
+		// RULE: NOT (A <= B) --> A > B
+		{input: `not(price <= 1)`, optimized: `price > 1`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			p := parser{input: tt.input, lex: lexer{input: tt.input, pos: 0}}
+			ast, err := p.parse()
+			require.NoError(t, err)
+			optimized := optimize(ast)
+
+			assert.Equal(t, tt.optimized, optimized.String())
+		})
+	}
+}
+
 func TestParser_UDF(t *testing.T) {
 	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
 	indexMap.idIndex.Set(&User{ID: 40}, 0)
@@ -313,7 +362,7 @@ func TestParser_UDF(t *testing.T) {
 	}
 }
 
-var udfOp = FilterOp{Op: -1, String: "my_eq"}
+var udfOp = FilterOp{Op: -1, Name: "my_eq"}
 
 type udfIndex[OBJ any, V comparable, LI UInt] struct {
 	data       map[any]*BitSet[LI]

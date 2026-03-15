@@ -13,6 +13,10 @@ func BenchmarkLexer(b *testing.B) {
 	}
 }
 
+// GOGC=off go test -bench=Parser -cpuprofile=cpu.prof
+// go tool pprof  cpu.prof
+// go tool pprof -http=:8080 cpu.prof
+
 func BenchmarkParser(b *testing.B) {
 	user := User{name: "Alice", role: "admin", ok: false, price: 1.2}
 
@@ -38,7 +42,7 @@ func BenchmarkParser(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if 1 != bs.ToSlice()[0] {
+		if bs.ToSlice()[0] != 1 {
 			b.Fatalf("expected: %v, got: %v", []uint32{1}, bs.ToSlice())
 		}
 	}

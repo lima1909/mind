@@ -263,14 +263,22 @@ var (
 	FOpGt         = FilterOp{Op: OpGt}
 	FOpIn         = FilterOp{Op: OpIn}
 	FOpBetween    = FilterOp{Op: OpBetween}
-	FOpStartsWith = FilterOp{String: "startswith"}
+	FOpStartsWith = FilterOp{Name: "startswith"}
 )
 
 // FilterOp is a wrapper over the Op, which contains the Op and a String.
 // For User defined FilterOp is no Op defined, so the User defined Index can use the String.
 type FilterOp struct {
-	Op     Op
-	String string
+	Op   Op
+	Name string
+}
+
+func (f FilterOp) String() string {
+	if f.Name != "" {
+		return f.Name
+	}
+	return f.Op.String()
+
 }
 
 // Filter returns the BitSet or an error by a given Relation and Value
@@ -517,7 +525,7 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) 
 		})
 		return result, nil
 	default:
-		if op.String == FOpStartsWith.String {
+		if op.Name == FOpStartsWith.Name {
 			if _, ok := value.(string); !ok {
 				return nil, InvalidValueTypeError[string]{value}
 			}

@@ -5,7 +5,10 @@ import (
 	"strings"
 )
 
-type Expr interface{}
+type Expr interface {
+	Equals(Expr) bool
+	String() string
+}
 
 type ExprKind uint8
 
@@ -15,13 +18,52 @@ const (
 	ExprAndNot
 )
 
+func (e ExprKind) String() string {
+	switch e {
+	case ExprOr:
+		return " OR "
+	case ExprAnd:
+		return " AND "
+	case ExprAndNot:
+		return " ANDNOT "
+	default:
+		return " "
+	}
+}
+
 type BinaryExpr struct {
 	Ekind ExprKind
 	Left  Expr
 	Right Expr
 }
 
+func (e BinaryExpr) Equals(other Expr) bool {
+	o, ok := other.(BinaryExpr)
+	if !ok {
+		return false
+	}
+
+	if e.Ekind != o.Ekind {
+		return false
+	}
+
+	return e.Left.Equals(o.Left) && e.Right.Equals(o.Right)
+}
+
+func (e BinaryExpr) String() string { return fmt.Sprintf("%s%s%s", e.Left, e.Ekind, e.Right) }
+
 type NotExpr struct{ Child Expr }
+
+func (e NotExpr) Equals(other Expr) bool {
+	o, ok := other.(NotExpr)
+	if !ok {
+		return false
+	}
+
+	return e.Child.Equals(o.Child)
+}
+
+func (e NotExpr) String() string { return fmt.Sprintf(" NOT(%s) ", e.Child) }
 
 type TermExpr struct {
 	Field string
@@ -29,12 +71,44 @@ type TermExpr struct {
 	Value any
 }
 
+func (e TermExpr) Equals(other Expr) bool {
+	o, ok := other.(TermExpr)
+	if !ok {
+		return false
+	}
+
+	return e.Field == o.Field && e.Op == o.Op && e.Value == o.Value
+}
+
+func (e TermExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Value) }
+
 type TermManyExpr struct {
 	Field            string
 	Op               FilterOp
 	Values           []any
 	MinIncl, MaxIncl bool
 }
+
+func (e TermManyExpr) Equals(other Expr) bool {
+	o, ok := other.(TermManyExpr)
+	if !ok {
+		return false
+	}
+
+	if len(e.Values) != len(o.Values) {
+		return false
+	}
+
+	for i, ev := range e.Values {
+		if ev != o.Values[i] {
+			return false
+		}
+	}
+
+	return e.Field == o.Field && e.Op == o.Op
+}
+
+func (e TermManyExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Values) }
 
 func optimize(e Expr) Expr {
 	if e == nil {
@@ -51,7 +125,7 @@ func optimize(e Expr) Expr {
 			if notNode, ok := right.(NotExpr); ok {
 				return BinaryExpr{Ekind: ExprAndNot, Left: left, Right: notNode.Child}
 			}
-			// RULE: And(A, Not(B)) -> AndNot(A, B)
+			// RULE: And(Not(A), B) -> AndNot(A, B)
 			if notNode, ok := left.(NotExpr); ok {
 				return BinaryExpr{Ekind: ExprAndNot, Left: right, Right: notNode.Child}
 			}
@@ -91,6 +165,13 @@ func optimize(e Expr) Expr {
 				}
 			}
 		}
+
+		// GC OPTIMIZATION: If nothing was optimized in the children, return the original interface
+		// to prevent allocating a new struct on the heap.
+		if left.Equals(n.Left) && right.Equals(n.Right) {
+			return e
+		}
+
 		return BinaryExpr{Ekind: n.Ekind, Left: left, Right: right}
 
 	case NotExpr:
@@ -99,12 +180,32 @@ func optimize(e Expr) Expr {
 		// RULE: Not(Not(A)) -> A (Double Negative)
 		case NotExpr:
 			return optimize(c.Child)
+
+		// DE MORGAN'S LAWS: Push NOT down the tree
+		case BinaryExpr:
+			if c.Ekind == ExprAnd {
+				// RULE: Not(A AND B) -> Not(A) OR Not(B)
+				return optimize(BinaryExpr{
+					Ekind: ExprOr,
+					Left:  NotExpr{Child: c.Left},
+					Right: NotExpr{Child: c.Right},
+				})
+			}
+			if c.Ekind == ExprOr {
+				// RULE: Not(A OR B) -> Not(A) AND NOT(B)
+				return optimize(BinaryExpr{
+					Ekind: ExprAnd,
+					Left:  NotExpr{Child: c.Left},
+					Right: NotExpr{Child: c.Right},
+				})
+			}
+
 		case TermExpr:
 			switch c.Op.Op {
 			// I'm not sure, that this is faster
 			// RULE: NOT (A = B)  -->  A != B
-			//  case OpEq:
-			//      return TermExpr{Field: c.Field, Op: OpNeq, Value: c.Value}
+			// case OpEq:
+			// 	return NotExpr{Child: TermExpr{Field: c.Field, Op: FOpEq, Value: c.Value}}
 			// RULE: NOT (A != B)  -->  A = B
 			case OpNeq:
 				return TermExpr{Field: c.Field, Op: FOpEq, Value: c.Value}
@@ -120,19 +221,17 @@ func optimize(e Expr) Expr {
 			// RULE: NOT (A <= B) --> A > B
 			case OpLe:
 				return TermExpr{Field: c.Field, Op: FOpGt, Value: c.Value}
-
-			default:
-				//  no otimizations
-				return n
 			}
-		default:
-			//  no otimizations
-			return n
 
 		}
-	default:
-		return e
+		// GC OPTIMIZATION: If the child didn't change, return the original wrapper
+		if child.Equals(n.Child) {
+			return e
+		}
+
+		return NotExpr{Child: child}
 	}
+	return e
 }
 
 func compile(e Expr) Query {
@@ -162,13 +261,9 @@ func compile(e Expr) Query {
 
 func Parse(input string) (Query, error) {
 	p := parser{input: input, lex: lexer{input: input, pos: 0}}
-	p.next()
-	ast, err := p.parseOr()
+	ast, err := p.parse()
 	if err != nil {
 		return nil, err
-	}
-	if p.cur.Op != OpEOF {
-		return nil, p.unexpectedWithMsg("unexpected end of the input")
 	}
 
 	ast = optimize(ast)
@@ -185,6 +280,19 @@ type parser struct {
 
 //go:inline
 func (p *parser) next() { p.cur = p.lex.nextToken() }
+
+func (p *parser) parse() (Expr, error) {
+	p.next()
+	ast, err := p.parseOr()
+	if err != nil {
+		return nil, err
+	}
+	if p.cur.Op != OpEOF {
+		return nil, p.unexpectedWithMsg("unexpected end of the input")
+	}
+
+	return ast, nil
+}
 
 func (p *parser) parseOr() (Expr, error) {
 	// the rule: AND before OR
@@ -286,13 +394,13 @@ func (p *parser) parseCondition() (Expr, error) {
 			if err != nil {
 				return nil, err
 			}
-			return TermManyExpr{Field: field, Op: FilterOp{Op: -1, String: opName}, Values: values}, nil
+			return TermManyExpr{Field: field, Op: FilterOp{Op: -1, Name: opName}, Values: values}, nil
 		}
 		val, err := p.parseValue()
 		if err != nil {
 			return nil, err
 		}
-		return TermExpr{Field: field, Op: FilterOp{Op: -1, String: opName}, Value: val}, nil
+		return TermExpr{Field: field, Op: FilterOp{Op: -1, Name: opName}, Value: val}, nil
 	default:
 		return nil, p.unexpectedWithMsg("missing relation like: =, !=, <, ...")
 	}
