@@ -99,6 +99,9 @@ func TestParser_Base(t *testing.T) {
 		{query: `role in("admin")`, expected: []uint32{1}},
 		{query: `role in("developer")`, expected: []uint32{0}},
 		{query: `role in("nix")`, expected: []uint32{}},
+
+		{query: `price > 10 and price < 5`, expected: []uint32{}},
+		{query: `NOT(price > 10 and price < 5)`, expected: []uint32{0, 1}},
 	}
 
 	for _, tt := range tests {
@@ -305,6 +308,15 @@ func TestParser_Optimize(t *testing.T) {
 		{input: `not(price < 1)`, optimized: `price >= 1`},
 		// RULE: NOT (A <= B) --> A > B
 		{input: `not(price <= 1)`, optimized: `price > 1`},
+
+		// Impossible range: A > 10 AND A < 5 => FALSE
+		{input: `price > 10 and price < 5`, optimized: `FALSE`},
+		// Impossible range: A >= 10 AND A < 10 => FALSE
+		{input: `price >= 10 and price < 10`, optimized: `FALSE`},
+		// Impossible range: A > 10 AND A <= 10 => FALSE
+		{input: `price > 10 and price <= 10`, optimized: `FALSE`},
+		// Equal bounds, both inclusive: A >= 5 AND A <= 5 => valid BETWEEN (not false)
+		{input: `price >= 5 and price <= 5`, optimized: `price BETWEEN [5 5]`},
 	}
 
 	for _, tt := range tests {
@@ -315,6 +327,91 @@ func TestParser_Optimize(t *testing.T) {
 			optimized := optimize(ast)
 
 			assert.Equal(t, tt.optimized, optimized.String())
+		})
+	}
+}
+
+func TestParser_ConstantFolding(t *testing.T) {
+	tests := []struct {
+		input     string
+		optimized string
+	}{
+		// FALSE propagation through AND
+		// impossible range on left, valid term on right => FALSE
+		{input: `(price > 10 and price < 5) and role = 1`, optimized: `FALSE`},
+		// valid term on left, impossible range on right => FALSE
+		{input: `role = 1 and (price > 10 and price < 5)`, optimized: `FALSE`},
+
+		// FALSE propagation through OR
+		// impossible range OR valid term => valid term survives
+		{input: `(price > 10 and price < 5) or role = 1`, optimized: `role = 1`},
+		// valid term OR impossible range => valid term survives
+		{input: `role = 1 or (price > 10 and price < 5)`, optimized: `role = 1`},
+
+		// NOT(FALSE) => TRUE
+		{input: `not(price > 10 and price < 5)`, optimized: `TRUE`},
+
+		// TRUE propagation through OR => TRUE
+		{input: `not(price > 10 and price < 5) or role = 1`, optimized: `TRUE`},
+		{input: `role = 1 or not(price > 10 and price < 5)`, optimized: `TRUE`},
+
+		// TRUE propagation through AND => the other side
+		{input: `not(price > 10 and price < 5) and role = 1`, optimized: `role = 1`},
+		{input: `role = 1 and not(price > 10 and price < 5)`, optimized: `role = 1`},
+
+		// NOT(TRUE) => FALSE
+		{input: `not(not(price > 10 and price < 5))`, optimized: `FALSE`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			p := parser{input: tt.input, lex: lexer{input: tt.input, pos: 0}}
+			ast, err := p.parse()
+			require.NoError(t, err)
+			optimized := optimize(ast)
+
+			assert.Equal(t, tt.optimized, optimized.String())
+		})
+	}
+}
+
+func TestParser_ImpossibleRange(t *testing.T) {
+	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
+	indexMap.idIndex.Set(&User{ID: 40}, 0)
+	indexMap.idIndex.Set(&User{ID: 42}, 1)
+	indexMap.index["role"] = NewSortedIndex((*User).Role)
+	indexMap.index["role"].Set(&User{role: "developer"}, 0)
+	indexMap.index["role"].Set(&User{role: "admin"}, 1)
+	indexMap.index["price"] = NewSortedIndex((*User).Price)
+	indexMap.index["price"].Set(&User{price: 3.0}, 0)
+	indexMap.index["price"].Set(&User{price: 1.2}, 1)
+	indexMap.allIDs.Set(0)
+	indexMap.allIDs.Set(1)
+
+	tests := []struct {
+		query    string
+		expected []uint32
+	}{
+		// Impossible range: price > 10 AND price < 5 => empty
+		{query: `price > 10 and price < 5`, expected: []uint32{}},
+		// Impossible range ORed with valid condition => valid condition
+		{query: `(price > 10 and price < 5) or role = "admin"`, expected: []uint32{1}},
+		// Impossible range ANDed with valid condition => empty
+		{query: `(price > 10 and price < 5) and role = "admin"`, expected: []uint32{}},
+		// NOT(impossible) => all items
+		{query: `not(price > 10 and price < 5)`, expected: []uint32{0, 1}},
+		// NOT(impossible) AND valid => valid
+		{query: `not(price > 10 and price < 5) and role = "admin"`, expected: []uint32{1}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			query, err := Parse(tt.query)
+			assert.NoError(t, err)
+
+			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, bs.ToSlice())
 		})
 	}
 }

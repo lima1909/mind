@@ -83,10 +83,9 @@ func (e TermExpr) Equals(other Expr) bool {
 func (e TermExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Value) }
 
 type TermManyExpr struct {
-	Field            string
-	Op               FilterOp
-	Values           []any
-	MinIncl, MaxIncl bool
+	Field  string
+	Op     FilterOp
+	Values []any
 }
 
 func (e TermManyExpr) Equals(other Expr) bool {
@@ -110,6 +109,44 @@ func (e TermManyExpr) Equals(other Expr) bool {
 
 func (e TermManyExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Values) }
 
+// FalseExpr represents a condition that is always false.
+// like: A > 10 AND A < 5
+type FalseExpr struct{}
+
+func (e FalseExpr) Equals(other Expr) bool { _, ok := other.(FalseExpr); return ok }
+func (e FalseExpr) String() string         { return "FALSE" }
+
+// TrueExpr represents a condition that is always true.
+type TrueExpr struct{}
+
+func (e TrueExpr) Equals(other Expr) bool { _, ok := other.(TrueExpr); return ok }
+func (e TrueExpr) String() string         { return "TRUE" }
+
+// A > 10 AND A < 5; is always false -> FalseExpr
+func isImpossibleRange(min, max any, minInc, maxInc bool) bool {
+	switch lo := min.(type) {
+	case int64:
+		if hi, ok := max.(int64); ok {
+			if lo > hi {
+				return true
+			}
+			if lo == hi && (!minInc || !maxInc) {
+				return true
+			}
+		}
+	case float64:
+		if hi, ok := max.(float64); ok {
+			if lo > hi {
+				return true
+			}
+			if lo == hi && (!minInc || !maxInc) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func optimize(e Expr) Expr {
 	if e == nil {
 		return nil
@@ -119,6 +156,47 @@ func optimize(e Expr) Expr {
 	case BinaryExpr:
 		left := optimize(n.Left)
 		right := optimize(n.Right)
+
+		if n.Ekind == ExprAnd {
+			// AND: with one part FALSE -> result is FALSE
+			if _, ok := left.(FalseExpr); ok {
+				return FalseExpr{}
+			}
+			if _, ok := right.(FalseExpr); ok {
+				return FalseExpr{}
+			}
+			// check, that NOT both are FALSE
+			if _, ok := left.(TrueExpr); ok {
+				return right
+			}
+			if _, ok := right.(TrueExpr); ok {
+				return left
+			}
+		}
+		if n.Ekind == ExprOr {
+			// OR: with at least one is TRUE -> result is TRUE
+			if _, ok := left.(TrueExpr); ok {
+				return TrueExpr{}
+			}
+			if _, ok := right.(TrueExpr); ok {
+				return TrueExpr{}
+			}
+			// check, that NOT both are TRUE
+			if _, ok := left.(FalseExpr); ok {
+				return right
+			}
+			if _, ok := right.(FalseExpr); ok {
+				return left
+			}
+		}
+		if n.Ekind == ExprAndNot {
+			if _, ok := left.(FalseExpr); ok {
+				return FalseExpr{}
+			}
+			if _, ok := right.(FalseExpr); ok {
+				return left
+			}
+		}
 
 		if n.Ekind == ExprAnd {
 			// RULE: And(A, Not(B)) -> AndNot(A, B)
@@ -153,11 +231,13 @@ func optimize(e Expr) Expr {
 
 						// If we found both a min and a max, we have a BETWEEN
 						if min != nil && max != nil {
+							if isImpossibleRange(min, max, minInc, maxInc) {
+								return FalseExpr{}
+							}
 							return TermManyExpr{
-								Field:   lt.Field,
-								Op:      FOpBetween,
-								Values:  []any{min, max},
-								MinIncl: minInc, MaxIncl: maxInc,
+								Field:  lt.Field,
+								Op:     FOpBetween,
+								Values: []any{min, max},
 							}
 						}
 
@@ -199,6 +279,13 @@ func optimize(e Expr) Expr {
 					Right: NotExpr{Child: c.Right},
 				})
 			}
+
+		// RULE: NOT(FALSE) -> TRUE
+		case FalseExpr:
+			return TrueExpr{}
+		// RULE: NOT(TRUE) -> FALSE
+		case TrueExpr:
+			return FalseExpr{}
 
 		case TermExpr:
 			switch c.Op.Op {
@@ -254,6 +341,16 @@ func compile(e Expr) Query {
 		return Not(compile(n.Child))
 	case TermManyExpr:
 		return matchMany(n.Field, n.Op, n.Values...)
+	case FalseExpr:
+		// returns always an empty BitSet
+		return func(_ FilterByName, _ *BitSet32) (*BitSet32, bool, error) {
+			return NewEmptyBitSet[uint32](), true, nil
+		}
+	case TrueExpr:
+		// returns always an all IDs BitSet
+		return func(_ FilterByName, allIDs *BitSet32) (*BitSet32, bool, error) {
+			return allIDs, false, nil
+		}
 	}
 
 	panic(fmt.Sprintf("NOT supported Expression in compile: %T", e))
