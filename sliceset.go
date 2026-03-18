@@ -4,23 +4,23 @@ import (
 	"slices"
 )
 
-type SliceSet[V UInt] struct {
-	data []V
+type SliceSet[U UInt] struct {
+	data []U
 }
 
 // NewSliceSet creates a new SliceSet
-func NewSliceSet[V UInt]() *SliceSet[V] {
-	return &SliceSet[V]{data: make([]V, 0)}
+func NewSliceSet[U UInt]() *SliceSet[U] {
+	return &SliceSet[U]{data: make([]U, 0)}
 }
 
 // NewSliceSetWithCapacity creates a new SliceSet with starting capacity
-func NewSliceSetWithCapacity[V UInt](size int) *SliceSet[V] {
-	return &SliceSet[V]{data: make([]V, 0, size)}
+func NewSliceSetWithCapacity[U UInt](size int) *SliceSet[U] {
+	return &SliceSet[U]{data: make([]U, 0, size)}
 }
 
 // NewSliceSetFrom creates a new SliceSet from given values
-func NewSliceSetFrom[V UInt](values ...V) *SliceSet[V] {
-	s := NewSliceSetWithCapacity[V](len(values))
+func NewSliceSetFrom[U UInt](values ...U) *SliceSet[U] {
+	s := NewSliceSetWithCapacity[U](len(values))
 	for _, v := range values {
 		s.Set(v)
 	}
@@ -28,7 +28,7 @@ func NewSliceSetFrom[V UInt](values ...V) *SliceSet[V] {
 }
 
 // Set inserts or updates the key in the Set
-func (s *SliceSet[V]) Set(value V) {
+func (s *SliceSet[U]) Set(value U) {
 	l := len(s.data)
 	if l == 0 {
 		s.data = append(s.data, value)
@@ -52,7 +52,7 @@ func (s *SliceSet[V]) Set(value V) {
 }
 
 // UnSet removes the key from the Set.
-func (s *SliceSet[V]) UnSet(value V) bool {
+func (s *SliceSet[U]) UnSet(value U) bool {
 	idx, found := slices.BinarySearch(s.data, value)
 	if !found {
 		return false
@@ -64,7 +64,7 @@ func (s *SliceSet[V]) UnSet(value V) bool {
 }
 
 // Contains check, is the value saved in the Set
-func (s *SliceSet[V]) Contains(value V) bool {
+func (s *SliceSet[U]) Contains(value U) bool {
 	_, found := slices.BinarySearch(s.data, value)
 	return found
 }
@@ -72,7 +72,7 @@ func (s *SliceSet[V]) Contains(value V) bool {
 // Min return the min value of this Set
 // [1, 3, 100] => 1
 // if the set is empty, return -1
-func (s *SliceSet[V]) Min() int {
+func (s *SliceSet[U]) Min() int {
 	if len(s.data) == 0 {
 		return -1
 	}
@@ -83,7 +83,7 @@ func (s *SliceSet[V]) Min() int {
 // Max return the max value of this Set
 // [1, 3, 100] => 100
 // if the set is empty, return -1
-func (s *SliceSet[V]) Max() int {
+func (s *SliceSet[U]) Max() int {
 	l := len(s.data)
 	if l == 0 {
 		return -1
@@ -93,7 +93,7 @@ func (s *SliceSet[V]) Max() int {
 }
 
 // MaxSetIndex return the max index the Set
-func (s *SliceSet[V]) MaxSetIndex() int {
+func (s *SliceSet[U]) MaxSetIndex() int {
 	l := len(s.data)
 	if l == 0 {
 		return -1
@@ -103,20 +103,20 @@ func (s *SliceSet[V]) MaxSetIndex() int {
 }
 
 // Counts how many values are in the Set, the len of the Set.
-func (s *SliceSet[V]) Count() int { return len(s.data) }
+func (s *SliceSet[U]) Count() int { return len(s.data) }
 
 // Len how many values are in the Set, the len of the Set.
-func (s *SliceSet[V]) Len() int { return len(s.data) }
+func (s *SliceSet[U]) Len() int { return len(s.data) }
 
 // Copy copy the complete Set.
-func (s *SliceSet[V]) Copy() *SliceSet[V] {
-	target := make([]V, len(s.data))
+func (s *SliceSet[U]) Copy() *SliceSet[U] {
+	target := make([]U, len(s.data))
 	copy(target, s.data)
-	return &SliceSet[V]{data: target}
+	return &SliceSet[U]{data: target}
 }
 
 // And computes the logical And, (intersection) of two sorted Set.
-func (s *SliceSet[V]) And(other *SliceSet[V]) {
+func (s *SliceSet[U]) And(other *SliceSet[U]) {
 	la, lo := len(s.data), len(other.data)
 	if la == 0 || lo == 0 {
 		s.data = s.data[:0]
@@ -150,7 +150,7 @@ func (s *SliceSet[V]) And(other *SliceSet[V]) {
 }
 
 // Or computes the logical OR (union) of two  sorted Set.
-func (s *SliceSet[V]) Or(other *SliceSet[V]) {
+func (s *SliceSet[U]) Or(other *SliceSet[U]) {
 	la, lo := len(s.data), len(other.data)
 	if lo == 0 {
 		return
@@ -162,7 +162,7 @@ func (s *SliceSet[V]) Or(other *SliceSet[V]) {
 
 	sa, so := s.data, other.data
 	i, j := 0, 0
-	res := make([]V, 0, la+lo)
+	res := make([]U, 0, la+lo)
 
 	for i < la && j < lo {
 		av, ov := sa[i], so[j]
@@ -189,7 +189,7 @@ func (s *SliceSet[V]) Or(other *SliceSet[V]) {
 }
 
 // Xor computes the logical XOR  of two  sorted Set.
-func (s *SliceSet[V]) Xor(other *SliceSet[V]) {
+func (s *SliceSet[U]) Xor(other *SliceSet[U]) {
 	la, lo := len(s.data), len(other.data)
 	// A XOR 0 = A
 	if lo == 0 {
@@ -203,7 +203,7 @@ func (s *SliceSet[V]) Xor(other *SliceSet[V]) {
 
 	sa, so := s.data, other.data
 	i, j := 0, 0
-	res := make([]V, 0, la+lo)
+	res := make([]U, 0, la+lo)
 
 	for i < la && j < lo {
 		av, ov := sa[i], so[j]
@@ -232,7 +232,7 @@ func (s *SliceSet[V]) Xor(other *SliceSet[V]) {
 // Known as "Clear" or "Difference"
 //
 // Example: [1, 2, 110, 2345] AndNot [2, 110] => [1, 2345]
-func (s *SliceSet[V]) AndNot(other *SliceSet[V]) {
+func (s *SliceSet[U]) AndNot(other *SliceSet[U]) {
 	la, lo := len(s.data), len(other.data)
 	if la == 0 || lo == 0 {
 		return
@@ -269,7 +269,7 @@ func (s *SliceSet[V]) AndNot(other *SliceSet[V]) {
 	s.data = sa[:writeIdx]
 }
 
-func (s *SliceSet[V]) Values(yield func(V) bool) {
+func (s *SliceSet[U]) Values(yield func(U) bool) {
 	sa := s.data
 	for _, v := range sa {
 		if !yield(v) {
@@ -278,5 +278,5 @@ func (s *SliceSet[V]) Values(yield func(V) bool) {
 	}
 }
 
-func (s *SliceSet[V]) ToSlice() []V         { return s.data }
-func (s *SliceSet[V]) ToBitSet() *BitSet[V] { return NewBitSetFrom(s.data...) }
+func (s *SliceSet[U]) ToSlice() []U         { return s.data }
+func (s *SliceSet[U]) ToBitSet() *BitSet[U] { return NewBitSetFrom(s.data...) }

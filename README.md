@@ -7,36 +7,46 @@
 ![License](https://img.shields.io/github/license/lima1909/mind)
 [![Stars](https://img.shields.io/github/stars/lima1909/mind)](https://github.com/lima1909/mind/stargazers)
 
+**Fast, in-memory indexed collections for Go — filter your data like a database.**
+
 </div>
 
-`Mind (Multi INDex list)` finding list items faster by using indexes.
+`Mind` **(Multi INDex list)** lets you query in-memory collections by multiple fields using indexes, just like a database — but without one.
+It is particularly well suited where data is **read more often than written**.
 
-This allows queries / filters to be improved, as is also the case in databases.
+> ⚠️ Mind is in an early stage of development and the API may change.
 
-`Mind` is particularly well suited where data is read more than written.
+## Installation
+
+```bash
+go get github.com/lima1909/mind
+```
+
+## Features
+
+### Index Types
+
+| Index | Backed by | Supported operations |
+|-------|-----------|---------------------|
+| `MapIndex` | Hash map | `=`, `!=` |
+| `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `!=`, `>`, `>=`, `<`, `<=`, `between`, `startswith` |
+
+All operations can be combined with `and`, `or` and `not`.
+
+## Trade-offs
+
+#### Advantages
+- Zero dependencies
+- Generic — works with any struct type
+- Fast reads via bitmap-accelerated index intersection
+- SQL-like query language (with optimizer)
+
+#### Disadvantages
+- Higher memory usage: indexes store additional data alongside user data
+- Slower writes: every mutation updates all registered indexes
 
 
-<div>
-⚠️ <strong>Mind is in a very early stage of development and can change!</strong>
-</div>
-
- 
-#### Advantage
-
-- `Mind` has __NO__ dependencies
-- fast access can be achieved by using different indexes:
-    - `MapIndex` (hash map), supported operation art `=, !=`
-    - `SortedIndex` ([SkipList](https://en.wikipedia.org/wiki/Skip_list)), supported operation art `=, !=, >, >=, <, <=, between(from, to)`
-
-=> All operations can be combined with `or`, `and` or `not`.
-
-#### Disadvantage
-
-- it is more memory required. In addition to the user data, data for the _hash_, _index_ are also stored.
-- the write operation are slower, because for every wirte operation is an another one (for storing the index data) necessary
-
-
-#### Example
+## Examples
 
 [List](https://github.com/lima1909/mind/blob/main/example/list/main.go)
 
