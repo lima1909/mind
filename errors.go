@@ -5,31 +5,31 @@ import (
 	"reflect"
 )
 
-type InvalidNameError struct{ fieldName string }
+type InvalidNameError struct{ FieldName string }
 
 func (e InvalidNameError) Error() string {
-	return fmt.Sprintf("could not found index for field name: %s", e.fieldName)
+	return fmt.Sprintf("could not found index for field name: %s", e.FieldName)
 }
 
-type InvalidValueTypeError[V any] struct{ value any }
+type InvalidValueTypeError[V any] struct{ Value any }
 
 func (e InvalidValueTypeError[V]) Error() string {
-	return fmt.Sprintf("invalid index value type: %T, expected type: %v", e.value, reflect.TypeFor[V]())
+	return fmt.Sprintf("invalid index value type: %T, expected type: %v", e.Value, reflect.TypeFor[V]())
 }
 
 type InvalidOperationError struct {
-	indexName string
-	op        Op
+	IndexName string
+	Op        Op
 }
 
 func (e InvalidOperationError) Error() string {
-	return fmt.Sprintf("index: %q doesn't support the operation: %s", e.indexName, e.op)
+	return fmt.Sprintf("index: %q doesn't support the operation: %s", e.IndexName, e.Op)
 }
 
-type ValueNotFoundError struct{ value any }
+type ValueNotFoundError struct{ Value any }
 
 func (e ValueNotFoundError) Error() string {
-	return fmt.Sprintf("index value not found: %v", e.value)
+	return fmt.Sprintf("index value not found: %v", e.Value)
 }
 
 type NoIdIndexDefinedError struct{}
@@ -39,10 +39,10 @@ func (e NoIdIndexDefinedError) Error() string {
 }
 
 type InvalidArgsLenError struct {
-	defined string
-	got     int
+	Defined string
+	Got     int
 }
 
 func (e InvalidArgsLenError) Error() string {
-	return fmt.Sprintf("expected: %s values, got: %d", e.defined, e.got)
+	return fmt.Sprintf("expected: %s values, got: %d", e.Defined, e.Got)
 }

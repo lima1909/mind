@@ -116,7 +116,7 @@ func TestSortedIndex_Between_String(t *testing.T) {
 
 	// errors
 	_, err = si.MatchMany(FOpBetween, "b")
-	assert.ErrorIs(t, InvalidArgsLenError{defined: "2", got: 1}, err)
+	assert.ErrorIs(t, InvalidArgsLenError{Defined: "2", Got: 1}, err)
 }
 
 func TestSortedIndex_Between_Int(t *testing.T) {

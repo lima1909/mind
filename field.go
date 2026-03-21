@@ -3,7 +3,69 @@ package mind
 import (
 	"fmt"
 	"math"
+	"reflect"
+	"unsafe"
 )
+
+// FromField is a function, which returns a value from an given object.
+// example:
+// Person{name string}
+// func (p *Person) Name() { return p.name }
+// (*Person).Name is the FieldGetFn
+type FromField[OBJ any, V any] = func(*OBJ) V
+
+// FromValue returns a Getter that simply returns the value itself.
+// Use this when your list contains the raw values you want to index.
+func FromValue[V any]() FromField[V, V] { return func(v *V) V { return *v } }
+
+// FromName returns per reflection the propery (field) value from the given object.
+func FromName[OBJ any, V any](fieldName string) FromField[OBJ, V] {
+	var zero OBJ
+	typ := reflect.TypeOf(zero)
+	isPtr := false
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+		isPtr = true
+	}
+
+	if typ.Kind() != reflect.Struct {
+		panic(fmt.Sprintf("expected struct, got %s", typ.Kind()))
+	}
+
+	field, ok := typ.FieldByName(fieldName)
+	if !ok {
+		panic(fmt.Sprintf("field %s not found", fieldName))
+	}
+	// reflection cannot access lowercase (unexported) fields via .Interface()
+	// unless we use unsafe, but let's stick to standard safety checks at setup time.
+	// Actually, unsafe access works on unexported fields too, but usually discouraged.
+	// But let's fail as per original behavior.
+	if !field.IsExported() {
+		panic(fmt.Sprintf("field %s is unexported", fieldName))
+	}
+
+	offset := field.Offset
+
+	if isPtr {
+		// OBJ is *Struct. input is **Struct.
+		return func(obj *OBJ) V {
+			// *obj is the *Struct.
+			// We need unsafe.Pointer(*obj) + offset
+			structPtr := *(**unsafe.Pointer)(unsafe.Pointer(obj))
+			if structPtr == nil {
+				var zero V
+				return zero // Or panic? Original reflect would panic on nil pointer deref usually.
+			}
+			return *(*V)(unsafe.Add(*structPtr, offset))
+		}
+	}
+
+	// OBJ is Struct. input is *Struct.
+	return func(obj *OBJ) V {
+		// obj is *Struct
+		return *(*V)(unsafe.Add(unsafe.Pointer(obj), offset))
+	}
+}
 
 func ValueFromAny[T any](value any) (T, error) {
 	if v, ok := value.(T); ok {
