@@ -11,14 +11,14 @@ const IDIndexFieldName = "id"
 type indexMap[OBJ any, ID comparable] struct {
 	idIndex idIndex[OBJ, ID]
 	index   map[string]Index[OBJ]
-	allIDs  *BitSet[uint32]
+	allIDs  *RawIDs32
 }
 
 func newIndexMap[OBJ any, ID comparable](idIndex idIndex[OBJ, ID]) indexMap[OBJ, ID] {
 	return indexMap[OBJ, ID]{
 		idIndex: idIndex,
 		index:   make(map[string]Index[OBJ]),
-		allIDs:  NewBitSet[uint32](),
+		allIDs:  NewRawIDs[uint32](),
 	}
 }
 
@@ -149,7 +149,7 @@ func (id *idAutoIncIndex[OBJ]) GetID(*OBJ) (uint64, int, error) {
 	return 0, -1, errors.New("GedID is not supported for this Index")
 }
 
-func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*BitSet[uint32], error) {
+func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	i, ok := value.(uint64)
 	if !ok {
 		return nil, InvalidValueTypeError[uint32]{value}
@@ -164,12 +164,12 @@ func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*BitSet[uint32], e
 		return nil, err
 	}
 
-	return NewBitSetFrom(uint32(idx)), nil
+	return NewRawIDsFrom(uint32(idx)), nil
 
 }
 
 // MatchMany is not supported by idAutoIncIndex, so that always returns an error
-func (id *idAutoIncIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*BitSet[uint32], error) {
+func (id *idAutoIncIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	return nil, InvalidOperationError{IDAutoIncName, op.Op}
 }
 
@@ -215,7 +215,7 @@ func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, int, error) {
 	return null, 0, ValueNotFoundError{id}
 }
 
-func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*BitSet[uint32], error) {
+func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	id, ok := value.(ID)
 	if !ok {
 		return nil, InvalidValueTypeError[ID]{value}
@@ -230,12 +230,12 @@ func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*BitSet[uint32], e
 		return nil, err
 	}
 
-	return NewBitSetFrom(uint32(idx)), nil
+	return NewRawIDsFrom(uint32(idx)), nil
 
 }
 
 // MatchMany is not supported by idMapIndex, so that always returns an error
-func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*BitSet[uint32], error) {
+func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	return nil, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
@@ -278,10 +278,10 @@ func (f FilterOp) String() string {
 
 }
 
-// Filter returns the BitSet or an error by a given Relation and Value
+// Filter returns the RawIDs or an error by a given Relation and Value
 type Filter interface {
-	Match(op FilterOp, value any) (*BitSet32, error)
-	MatchMany(op FilterOp, values ...any) (*BitSet32, error)
+	Match(op FilterOp, value any) (*RawIDs32, error)
+	MatchMany(op FilterOp, values ...any) (*RawIDs32, error)
 }
 
 const MapIndexName = "MapIndex"
@@ -289,13 +289,13 @@ const MapIndexName = "MapIndex"
 // MapIndex is a mapping of any value to the Index in the List.
 // This index only supported Queries with the Equal Ralation!
 type MapIndex[OBJ any, V comparable] struct {
-	data       map[any]*BitSet32
+	data       map[any]*RawIDs32
 	fieldGetFn FromField[OBJ, V]
 }
 
 func NewMapIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index[OBJ] {
 	return &MapIndex[OBJ, V]{
-		data:       make(map[any]*BitSet32),
+		data:       make(map[any]*RawIDs32),
 		fieldGetFn: fromField,
 	}
 }
@@ -304,7 +304,7 @@ func (mi *MapIndex[OBJ, V]) Set(obj *OBJ, lidx uint32) {
 	value := mi.fieldGetFn(obj)
 	bs, found := mi.data[value]
 	if !found {
-		bs = NewEmptyBitSet[uint32]()
+		bs = NewRawIDs[uint32]()
 	}
 	bs.Set(lidx)
 	mi.data[value] = bs
@@ -324,7 +324,7 @@ func (mi *MapIndex[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
 	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
 }
 
-func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) {
+func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -336,21 +336,21 @@ func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) {
 
 	bs, found := mi.data[v]
 	if !found {
-		return NewEmptyBitSet[uint32](), nil
+		return NewRawIDs[uint32](), nil
 	}
 
 	return bs, nil
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *MapIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32, error) {
+func (mi *MapIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	switch op.Op {
 	case OpIn:
 		if len(values) == 0 {
-			return NewEmptyBitSet[uint32](), nil
+			return NewRawIDs[uint32](), nil
 		}
 
-		matched := make([]*BitSet32, 0, len(values))
+		matched := make([]*RawIDs32, 0, len(values))
 		var maxLen int
 
 		for _, v := range values {
@@ -359,19 +359,20 @@ func (mi *MapIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32, er
 				return nil, err
 			}
 
-			if bs, found := mi.data[key]; found {
-				matched = append(matched, bs)
-				if len(bs.data) > maxLen {
-					maxLen = len(bs.data)
+			if rid, found := mi.data[key]; found {
+				matched = append(matched, rid)
+				rcount := rid.Len()
+				if rcount > maxLen {
+					maxLen = rcount
 				}
 			}
 		}
 
 		if len(matched) == 0 {
-			return NewEmptyBitSet[uint32](), nil
+			return NewRawIDs[uint32](), nil
 		}
 
-		result := NewBitSetWithCapacity[uint32](maxLen)
+		result := NewRawIDsWithCapacity[uint32](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}
@@ -386,13 +387,13 @@ const SortedIndexName = "SortedIndex"
 
 // SortedIndex is well suited for Queries with: Range, Min, Max, Greater and Less
 type SortedIndex[OBJ any, V cmp.Ordered] struct {
-	skipList   SkipList[V, *BitSet32]
+	skipList   SkipList[V, *RawIDs32]
 	fieldGetFn FromField[OBJ, V]
 }
 
 func NewSortedIndex[OBJ any, V cmp.Ordered](fieldGetFn FromField[OBJ, V]) Index[OBJ] {
 	return &SortedIndex[OBJ, V]{
-		skipList:   NewSkipList[V, *BitSet32](),
+		skipList:   NewSkipList[V, *RawIDs32](),
 		fieldGetFn: fieldGetFn,
 	}
 }
@@ -401,7 +402,7 @@ func (si *SortedIndex[OBJ, V]) Set(obj *OBJ, lidx uint32) {
 	value := si.fieldGetFn(obj)
 	bs, found := si.skipList.Get(value)
 	if !found {
-		bs = NewEmptyBitSet[uint32]()
+		bs = NewRawIDs[uint32]()
 	}
 	bs.Set(lidx)
 	si.skipList.Put(value, bs)
@@ -421,7 +422,7 @@ func (si *SortedIndex[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
 	return si.fieldGetFn(oldItem) != si.fieldGetFn(newItem)
 }
 
-func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) {
+func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -432,31 +433,31 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) 
 		if bs, found := si.skipList.Get(v); found {
 			return bs, nil
 		}
-		return NewEmptyBitSet[uint32](), nil
+		return NewRawIDs[uint32](), nil
 	case OpLt:
-		result := NewBitSet[uint32]()
-		si.skipList.Less(v, func(v V, bs *BitSet32) bool {
+		result := NewRawIDs[uint32]()
+		si.skipList.Less(v, func(v V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
 		return result, nil
 	case OpLe:
-		result := NewBitSet[uint32]()
-		si.skipList.LessEqual(v, func(_ V, bs *BitSet32) bool {
+		result := NewRawIDs[uint32]()
+		si.skipList.LessEqual(v, func(_ V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
 		return result, nil
 	case OpGt:
-		result := NewBitSet[uint32]()
-		si.skipList.Greater(v, func(v V, bs *BitSet32) bool {
+		result := NewRawIDs[uint32]()
+		si.skipList.Greater(v, func(v V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
 		return result, nil
 	case OpGe:
-		result := NewBitSet[uint32]()
-		si.skipList.GreaterEqual(v, func(_ V, bs *BitSet32) bool {
+		result := NewRawIDs[uint32]()
+		si.skipList.GreaterEqual(v, func(_ V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
@@ -467,8 +468,8 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) 
 				return nil, InvalidValueTypeError[string]{value}
 			}
 
-			result := NewBitSet[uint32]()
-			si.skipList.StringStartsWith(v, func(_ V, bs *BitSet32) bool {
+			result := NewRawIDs[uint32]()
+			si.skipList.StringStartsWith(v, func(_ V, bs *RawIDs32) bool {
 				result.Or(bs)
 				return true
 			})
@@ -479,7 +480,7 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) 
 	}
 }
 
-func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32, error) {
+func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
@@ -495,18 +496,18 @@ func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32,
 			return nil, InvalidValueTypeError[V]{values[1]}
 		}
 
-		result := NewBitSet[uint32]()
-		si.skipList.Range(min, max, func(_ V, bs *BitSet32) bool {
+		result := NewRawIDs[uint32]()
+		si.skipList.Range(min, max, func(_ V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
 		return result, nil
 	case OpIn:
 		if len(values) == 0 {
-			return NewEmptyBitSet[uint32](), nil
+			return NewRawIDs[uint32](), nil
 		}
 
-		matched := make([]*BitSet32, 0, len(values))
+		matched := make([]*RawIDs32, 0, len(values))
 		var maxLen int
 
 		for _, v := range values {
@@ -515,19 +516,20 @@ func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32,
 				return nil, err
 			}
 
-			if bs, found := si.skipList.Get(key); found {
-				matched = append(matched, bs)
-				if len(bs.data) > maxLen {
-					maxLen = len(bs.data)
+			if rid, found := si.skipList.Get(key); found {
+				matched = append(matched, rid)
+				rcount := rid.Len()
+				if rcount > maxLen {
+					maxLen = rcount
 				}
 			}
 		}
 
 		if len(matched) == 0 {
-			return NewEmptyBitSet[uint32](), nil
+			return NewRawIDs[uint32](), nil
 		}
 
-		result := NewBitSetWithCapacity[uint32](maxLen)
+		result := NewRawIDsWithCapacity[uint32](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}
@@ -541,7 +543,7 @@ func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32,
 const FullScanName = "FullScan"
 
 type ListFilterFn[OBJ any] interface {
-	SetListFilterFn(func(predicat func(item *OBJ) bool) *BitSet32)
+	SetListFilterFn(func(predicat func(item *OBJ) bool) *RawIDs32)
 }
 
 // FullScan, reads every item and execute the given predicate
@@ -550,14 +552,14 @@ type ListFilterFn[OBJ any] interface {
 type FullScan[OBJ any, V cmp.Ordered] struct {
 	fieldGetFn FromField[OBJ, V]
 	// will be injected from the List
-	filter func(predicat func(item *OBJ) bool) *BitSet32
+	filter func(predicat func(item *OBJ) bool) *RawIDs32
 }
 
 func NewFullScan[OBJ any, V cmp.Ordered](fieldGetFn FromField[OBJ, V]) Index[OBJ] {
 	return &FullScan[OBJ, V]{fieldGetFn: fieldGetFn}
 }
 
-func (ft *FullScan[OBJ, V]) SetListFilterFn(filter func(predicat func(item *OBJ) bool) *BitSet32) {
+func (ft *FullScan[OBJ, V]) SetListFilterFn(filter func(predicat func(item *OBJ) bool) *RawIDs32) {
 	ft.filter = filter
 }
 
@@ -568,7 +570,7 @@ func (ft *FullScan[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
 	return false
 }
 
-func (ft *FullScan[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) {
+func (ft *FullScan[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -600,7 +602,7 @@ func (ft *FullScan[OBJ, V]) Match(op FilterOp, value any) (*BitSet32, error) {
 	}
 }
 
-func (ft *FullScan[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32, error) {
+func (ft *FullScan[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 
 	switch op.Op {
 	case OpBetween:
@@ -623,7 +625,7 @@ func (ft *FullScan[OBJ, V]) MatchMany(op FilterOp, values ...any) (*BitSet32, er
 		}), nil
 	case OpIn:
 		if len(values) == 0 {
-			return NewEmptyBitSet[uint32](), nil
+			return NewRawIDs[uint32](), nil
 		}
 
 		// check the values type corresponds to the field value

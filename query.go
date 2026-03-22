@@ -2,7 +2,7 @@ package mind
 
 // Query is a filter function, find the correct Index an execute the Index.Get method
 // and returns a BitSet pointer
-type Query func(l FilterByName, allIDs *BitSet32) (bs *BitSet32, canMutate bool, err error)
+type Query func(l FilterByName, allIDs *RawIDs32) (bs *RawIDs32, canMutate bool, err error)
 
 // FilterByName finds the Filter by a given field-name
 type FilterByName = func(string) (Filter, error)
@@ -12,14 +12,14 @@ func All() Query { return all() }
 
 //go:inline
 func all() Query {
-	return func(_ FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(_ FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		return allIDs, false, nil
 	}
 }
 
 //go:inline
 func match(fieldName string, op FilterOp, value any) Query {
-	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -32,7 +32,7 @@ func match(fieldName string, op FilterOp, value any) Query {
 
 //go:inline
 func matchMany(fieldName string, op FilterOp, values ...any) Query {
-	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -66,7 +66,7 @@ func IsNil[V any](fieldName string) Query { return isNil[V](fieldName) }
 
 //go:inline
 func isNil[V any](fieldName string) Query {
-	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -83,9 +83,9 @@ func In(fieldName string, vals ...any) Query { return in(fieldName, vals...) }
 
 //go:inline
 func in(fieldName string, vals ...any) Query {
-	return func(l FilterByName, _ *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		if len(vals) == 0 {
-			return NewEmptyBitSet[uint32](), true, nil
+			return NewRawIDs[uint32](), true, nil
 		}
 
 		filter, err := l(fieldName)
@@ -93,29 +93,30 @@ func in(fieldName string, vals ...any) Query {
 			return nil, false, err
 		}
 
-		matched := make([]*BitSet32, 0, len(vals))
+		matched := make([]*RawIDs32, 0, len(vals))
 		var maxLen int
 
 		for _, v := range vals {
-			bs, err := filter.Match(FOpEq, v)
+			rid, err := filter.Match(FOpEq, v)
 			if err != nil {
 				return nil, false, err
 			}
 
-			matched = append(matched, bs)
-			if len(bs.data) > maxLen {
-				maxLen = len(bs.data)
+			matched = append(matched, rid)
+			rcount := rid.Len()
+			if rcount > maxLen {
+				maxLen = rcount
 			}
 		}
 
 		switch len(matched) {
 		case 0:
-			return NewEmptyBitSet[uint32](), true, nil
+			return NewRawIDs[uint32](), true, nil
 		case 1:
 			return matched[0], false, nil
 		}
 
-		result := NewBitSetWithCapacity[uint32](maxLen)
+		result := NewRawIDsWithCapacity[uint32](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}
@@ -129,7 +130,7 @@ func NotEq(fieldName string, val any) Query { return notEq(fieldName, val) }
 
 //go:inline
 func notEq(fieldName string, val any) Query {
-	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -153,7 +154,7 @@ func notEq(fieldName string, val any) Query {
 
 // Not Not(Query)
 func Not(q Query) Query {
-	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		// can Mutate is not relevant, because allIDs are copied
 		qres, _, err := q(l, allIDs)
 		if err != nil {
@@ -174,7 +175,7 @@ func WithPrefix(fieldName string, val string) Query {
 
 // And combines 2 or more queries with an logical And
 func And(a Query, b Query, other ...Query) Query {
-	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		result, err := ensureMutable(a(l, allIDs))
 		if err != nil {
 			return nil, false, err
@@ -200,7 +201,7 @@ func And(a Query, b Query, other ...Query) Query {
 
 // Or combines 2 or more queries with an logical Or
 func Or(a Query, b Query, other ...Query) Query {
-	return func(l FilterByName, allIDs *BitSet32) (_ *BitSet32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		result, err := ensureMutable(a(l, allIDs))
 		if err != nil {
 			return nil, false, err
@@ -227,7 +228,7 @@ func Or(a Query, b Query, other ...Query) Query {
 // AndNot performs: baseQuery AND NOT(subQuery)
 // example: status = 'active' AND type != 'guest'
 func AndNot(base Query, sub Query) Query {
-	return func(l FilterByName, allIDs *BitSet32) (*BitSet32, bool, error) {
+	return func(l FilterByName, allIDs *RawIDs32) (*RawIDs32, bool, error) {
 		// base result (e.g., the 'active')
 		result, canMutate, err := base(l, allIDs)
 		if err != nil {
@@ -260,14 +261,14 @@ func AndNot(base Query, sub Query) Query {
 // only copy, if not mutable
 //
 //go:inline
-func ensureMutable(b *BitSet32, canMutate bool, err error) (*BitSet32, error) {
+func ensureMutable(rid *RawIDs32, canMutate bool, err error) (*RawIDs32, error) {
 	if err != nil {
 		return nil, err
 	}
 
 	if canMutate {
-		return b, nil
+		return rid, nil
 	}
 
-	return b.Copy(), nil
+	return rid.Copy(), nil
 }

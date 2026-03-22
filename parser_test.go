@@ -462,13 +462,13 @@ func TestParser_UDF(t *testing.T) {
 var udfOp = FilterOp{Op: -1, Name: "my_eq"}
 
 type udfIndex[OBJ any, V comparable, LI UInt] struct {
-	data       map[any]*BitSet[LI]
+	data       map[any]*RawIDs[LI]
 	fieldGetFn FromField[OBJ, V]
 }
 
 func newUdfIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index[OBJ] {
 	return &udfIndex[OBJ, V, uint32]{
-		data:       make(map[any]*BitSet[uint32]),
+		data:       make(map[any]*RawIDs32),
 		fieldGetFn: fromField,
 	}
 }
@@ -477,7 +477,7 @@ func (mi *udfIndex[OBJ, V, LI]) Set(obj *OBJ, lidx LI) {
 	value := mi.fieldGetFn(obj)
 	bs, found := mi.data[value]
 	if !found {
-		bs = NewEmptyBitSet[LI]()
+		bs = NewRawIDs[LI]()
 	}
 	bs.Set(lidx)
 	mi.data[value] = bs
@@ -497,7 +497,7 @@ func (mi *udfIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
 	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*BitSet[LI], error) {
+func (mi *udfIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*RawIDs[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -509,21 +509,21 @@ func (mi *udfIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*BitSet[LI], erro
 
 	bs, found := mi.data[v]
 	if !found {
-		return NewEmptyBitSet[LI](), nil
+		return NewRawIDs[LI](), nil
 	}
 
 	return bs, nil
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*BitSet[LI], error) {
+func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[LI], error) {
 	switch op {
 	case udfOp, FOpIn:
 		if len(values) == 0 {
-			return NewEmptyBitSet[LI](), nil
+			return NewRawIDs[LI](), nil
 		}
 
-		matched := make([]*BitSet[LI], 0, len(values))
+		matched := make([]*RawIDs[LI], 0, len(values))
 		var maxLen int
 
 		for _, v := range values {
@@ -532,19 +532,20 @@ func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*BitSet[L
 				return nil, err
 			}
 
-			if bs, found := mi.data[key]; found {
-				matched = append(matched, bs)
-				if len(bs.data) > maxLen {
-					maxLen = len(bs.data)
+			if rid, found := mi.data[key]; found {
+				matched = append(matched, rid)
+				rcount := rid.Count()
+				if rcount > maxLen {
+					maxLen = rcount
 				}
 			}
 		}
 
 		if len(matched) == 0 {
-			return NewEmptyBitSet[LI](), nil
+			return NewRawIDs[LI](), nil
 		}
 
-		result := NewBitSetWithCapacity[LI](maxLen)
+		result := NewRawIDsWithCapacity[LI](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}

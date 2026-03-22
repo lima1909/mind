@@ -74,7 +74,7 @@ func TestMapIndex_Get(t *testing.T) {
 	set(mi, 42, 42)
 
 	bs, _ := mi.Match(FOpEq, 1)
-	assert.Equal(t, NewBitSetFrom[uint32](1), bs)
+	assert.Equal(t, NewRawIDsFrom[uint32](1), bs)
 	bs, _ = mi.Match(FOpEq, 3)
 	assert.Equal(t, []uint32{3, 5}, bs.ToSlice())
 
@@ -102,7 +102,7 @@ func TestMapIndex_Query(t *testing.T) {
 	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{3, 5}, result.ToSlice())
 
-	// repeat the Eq with the same paramter, to check the result BitSet is not changed
+	// repeat the Eq with the same paramter, to check the result RawIDs is not changed
 	result, _, err = Eq("val", 3)(fi, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{3, 5}, result.ToSlice())
@@ -129,7 +129,7 @@ func TestMapIndex_Query(t *testing.T) {
 	assert.Equal(t, []uint32{1, 3, 5}, result.ToSlice())
 
 	// AND
-	result, canMutate, err = And(Eq("val", 3), Not(Eq("val", 3)))(fi, NewBitSetFrom[uint32](1, 3, 5, 42))
+	result, canMutate, err = And(Eq("val", 3), Not(Eq("val", 3)))(fi, NewRawIDsFrom[uint32](1, 3, 5, 42))
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{}, result.ToSlice())
@@ -145,7 +145,7 @@ func TestMapIndex_Query(t *testing.T) {
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5}, result.ToSlice())
 
-	// after and | or, to check the original BitSet is not changed
+	// after and | or, to check the original RawIDs is not changed
 	bs, _ := mi.Match(FOpEq, 1)
 	assert.Equal(t, []uint32{1}, bs.ToSlice())
 	bs, _ = mi.Match(FOpEq, 42)
@@ -163,7 +163,7 @@ func TestMapIndex_Query_Not(t *testing.T) {
 
 	fi := fieldIndexMapFn(mi)
 
-	allIDs := NewBitSetFrom[uint32](1, 3, 5, 42)
+	allIDs := NewRawIDsFrom[uint32](1, 3, 5, 42)
 
 	// Not
 	result, canMutate, err := Not(Eq("val", 3))(fi, allIDs)
@@ -177,7 +177,7 @@ func TestMapIndex_Query_Not(t *testing.T) {
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
 
-	// after and | or, to check the original BitSet is not changed
+	// after and | or, to check the original RawIDs is not changed
 	bs, _ := mi.Match(FOpEq, 1)
 	assert.Equal(t, []uint32{1}, bs.ToSlice())
 	bs, _ = mi.Match(FOpEq, 42)
@@ -213,7 +213,7 @@ func TestMapIndex_Query_In(t *testing.T) {
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
 
-	// after and | or, to check the original BitSet is not changed
+	// after and | or, to check the original RawIDs is not changed
 	bs, _ := mi.Match(FOpEq, 1)
 	assert.Equal(t, []uint32{1}, bs.ToSlice())
 	bs, _ = mi.Match(FOpEq, 42)
@@ -230,7 +230,7 @@ func TestMapIndex_QueryAll(t *testing.T) {
 	set(mi, 42, 42)
 
 	fi := fieldIndexMapFn(mi)
-	result, canMutate, err := All()(fi, NewBitSetFrom[uint32](1, 3, 5, 42))
+	result, canMutate, err := All()(fi, NewRawIDsFrom[uint32](1, 3, 5, 42))
 	assert.NoError(t, err)
 	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5, 42}, result.ToSlice())
@@ -244,7 +244,7 @@ func TestSortedIndex_StringStartsWith(t *testing.T) {
 	set(mi, "appx", 42)
 
 	fi := fieldIndexMapFn(mi)
-	allIDs := NewBitSetFrom[uint32](1, 3, 5, 42)
+	allIDs := NewRawIDsFrom[uint32](1, 3, 5, 42)
 
 	result, canMutate, err := WithPrefix("val", "not found")(fi, allIDs)
 	assert.NoError(t, err)

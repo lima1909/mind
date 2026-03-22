@@ -254,12 +254,12 @@ func (qr *QueryResult[T, ID]) exec(p Paginate) ([]T, PageInfo, error) {
 	qr.list.lock.RLock()
 	defer qr.list.lock.RUnlock()
 
-	bs, _, err := qr.query(qr.list.indexMap.FilterByName, qr.list.indexMap.allIDs)
+	rids, _, err := qr.query(qr.list.indexMap.FilterByName, qr.list.indexMap.allIDs)
 	if err != nil {
 		return nil, PageInfo{}, err
 	}
 
-	total := uint32(bs.Count())
+	total := uint32(rids.Count())
 	offset := p.Offset
 	limit := total // default to "all"
 	// if limit is provided and not zero, use it; otherwise stay at "total"
@@ -281,7 +281,7 @@ func (qr *QueryResult[T, ID]) exec(p Paginate) ([]T, PageInfo, error) {
 
 	startIndex := uint32(0)
 	if offset > 0 {
-		idx, found := bs.ValueOnIndex(offset)
+		idx, found := rids.ValueOnIndex(offset)
 		if !found {
 			return []T{}, pi, nil
 		}
@@ -291,8 +291,8 @@ func (qr *QueryResult[T, ID]) exec(p Paginate) ([]T, PageInfo, error) {
 	// the theoretical maximum bit index for the "to" parameter
 	result := make([]T, 0, limit)
 
-	maxBitIndex := uint32(len(bs.data)*64 - 1)
-	bs.Range(startIndex, maxBitIndex, func(idx uint32) bool {
+	maxBitIndex := uint32(rids.Max())
+	rids.Range(startIndex, maxBitIndex, func(idx uint32) bool {
 		item, _ := qr.list.list.Get(int(idx))
 		result = append(result, item)
 

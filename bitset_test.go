@@ -314,7 +314,7 @@ func TestBitSet_Range(t *testing.T) {
 	}
 }
 
-func TestBitSet_IndexOff(t *testing.T) {
+func TestBitSet_ValueOnIndex(t *testing.T) {
 
 	bs := NewBitSetFrom[uint32](1, 2, 8, 42, 1028)
 

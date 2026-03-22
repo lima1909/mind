@@ -286,7 +286,7 @@ func TestRawID_Rebalance(t *testing.T) {
 	assert.Equal(t, 5, s.Count())
 
 	// Manual rebalance should demote
-	s.Rebalance()
+	s.rebalance()
 	assert.True(t, s.IsSlice(), "after removing most elements and rebalancing, should demote")
 	assert.Equal(t, []uint32{0, 1, 2, 3, 4}, s.ToSlice())
 }

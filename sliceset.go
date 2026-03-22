@@ -63,10 +63,52 @@ func (s *SliceSet[U]) UnSet(value U) bool {
 
 }
 
+// Range iterates over set bits between 'from' and 'to' (inclusive).
+// It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
+func (s *SliceSet[U]) Range(from, to U, visit func(v U) bool) {
+	if len(s.data) == 0 || from > to {
+		return
+	}
+
+	// Binary Search to find the exact starting index.
+	// We are looking for the FIRST index where s.data[i] >= from.
+	low, high := 0, len(s.data)
+	for low < high {
+		// Bitwise shift is a micro-optimization for: (low + high) / 2
+		mid := int(uint(low+high) >> 1)
+
+		if s.data[mid] < from {
+			low = mid + 1
+		} else {
+			high = mid
+		}
+	}
+
+	for i := low; i < len(s.data); i++ {
+		val := s.data[i]
+		if val > to {
+			break
+		}
+
+		if !visit(val) {
+			break
+		}
+	}
+}
+
 // Contains check, is the value saved in the Set
 func (s *SliceSet[U]) Contains(value U) bool {
 	_, found := slices.BinarySearch(s.data, value)
 	return found
+}
+
+// ValueOnIndex returns the Value of the dx-th matched item.
+func (s *SliceSet[U]) ValueOnIndex(idx uint32) (uint32, bool) {
+	if int(idx) >= len(s.data) {
+		return 0, false
+	}
+
+	return uint32(s.data[idx]), true
 }
 
 // Min return the min value of this Set

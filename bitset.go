@@ -364,6 +364,13 @@ func (b *BitSet[U]) Or(other *BitSet[U]) {
 	b.count = -1 // invalidate cached count
 }
 
+func (b *BitSet[U]) flipTheBit(val U) {
+	word, bit := val/64, val%64
+	// If the bit is 0, (1<<bit) sets it.
+	// If the bit is 1, (1<<bit) clears it.
+	b.data[word] ^= (1 << bit)
+}
+
 // XOr is the logical XOR of two BitSet
 func (b *BitSet[U]) Xor(other *BitSet[U]) {
 	bl := len(b.data)

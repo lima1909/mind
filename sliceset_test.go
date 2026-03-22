@@ -1,6 +1,7 @@
 package mind
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,4 +123,138 @@ func TestSliceSet_AndNot(t *testing.T) {
 	empty = NewSliceSet[uint16]()
 	empty.AndNot(NewSliceSet[uint16]())
 	assert.Equal(t, []uint16{}, empty.ToSlice())
+}
+
+func TestSliceSet_Range(t *testing.T) {
+
+	tests := []struct {
+		name     string
+		ss       *SliceSet[uint32]
+		from     uint32
+		to       uint32
+		expected []uint32
+	}{
+		{
+			name:     "Middle of set",
+			ss:       NewSliceSetFrom[uint32](1, 2, 8, 42),
+			from:     2,
+			to:       8,
+			expected: []uint32{2, 8},
+		},
+		{
+			name:     "Last value",
+			ss:       NewSliceSetFrom[uint32](0, 1, 2),
+			from:     2,
+			to:       2,
+			expected: []uint32{2},
+		},
+		{
+			name:     "Single bit range (Exact match)",
+			ss:       NewSliceSetFrom[uint32](10, 20, 30),
+			from:     20,
+			to:       20,
+			expected: []uint32{20},
+		},
+		{
+			name:     "Empty Range (Nothing found)",
+			ss:       NewSliceSetFrom[uint32](10, 20, 30),
+			from:     11,
+			to:       19,
+			expected: nil,
+		},
+		{
+			name: "Spanning Word Boundaries",
+			// Word 0: bit 63 | Word 1: bit 64, 65 | Word 2: bit 130
+			ss:       NewSliceSetFrom[uint32](0, 63, 64, 65, 130),
+			from:     63,
+			to:       100,
+			expected: []uint32{63, 64, 65},
+		},
+		{
+			name:     "From > To (Invalid range)",
+			ss:       NewSliceSetFrom[uint32](1, 2, 3),
+			from:     10,
+			to:       5,
+			expected: nil,
+		},
+		{
+			name:     "Full Set Range",
+			ss:       NewSliceSetFrom[uint32](5, 10),
+			from:     0,
+			to:       100,
+			expected: []uint32{5, 10},
+		},
+		{
+			name:     "Boundary: Bit at 0",
+			ss:       NewSliceSetFrom[uint32](0, 1, 2),
+			from:     0,
+			to:       0,
+			expected: []uint32{0},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			var results []uint32
+			tt.ss.Range(tt.from, tt.to, func(val uint32) bool {
+				results = append(results, val)
+				return true
+			})
+
+			if len(results) != len(tt.expected) {
+				t.Fatalf("expected %d results, got %d", len(tt.expected), len(results))
+			}
+
+			for i := range results {
+				if results[i] != tt.expected[i] {
+					t.Errorf("at result %d: expected %+v, got %+v", i, tt.expected[i], results[i])
+				}
+			}
+		})
+	}
+}
+
+func TestSliceSet_ValueOnIndex(t *testing.T) {
+
+	ss := NewSliceSetFrom[uint32](1, 2, 8, 42, 1028)
+
+	tests := []struct {
+		index    uint32
+		found    bool
+		expected uint32
+	}{
+		{
+			// first
+			index:    0,
+			found:    true,
+			expected: 1,
+		},
+		{
+			// middle
+			index:    2,
+			found:    true,
+			expected: 8,
+		},
+		{
+			// end
+			index:    4,
+			found:    true,
+			expected: 1028,
+		},
+		{
+			// to big, not found
+			index:    1000,
+			found:    false,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("index_%d", tt.index), func(t *testing.T) {
+			val, found := ss.ValueOnIndex(tt.index)
+			assert.Equal(t, tt.found, found)
+			assert.Equal(t, tt.expected, val)
+		})
+	}
 }

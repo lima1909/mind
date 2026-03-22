@@ -5,6 +5,9 @@ const (
 	sparseMinCount = 64
 )
 
+// RawIDs32 is the default RawIDs
+type RawIDs32 = RawIDs[uint32]
+
 // RawIDs saved the internal position (index) from a list (slice).
 // It is a hybrid set that automatically switches between a SliceSet
 // (for sparse or small data) and a BitSet (for dense data) based on actual
@@ -68,7 +71,6 @@ func shouldPromote(count, maxUInt int) bool {
 
 // rebalance checks whether the current representation is optimal and switches if needed.
 func (s *RawIDs[U]) rebalance() {
-	count := s.Count()
 	maxVal := s.Max()
 
 	if maxVal < 0 {
@@ -80,6 +82,7 @@ func (s *RawIDs[U]) rebalance() {
 		return
 	}
 
+	count := s.Count()
 	promote := shouldPromote(count, maxVal)
 
 	if promote && s.slice != nil {
@@ -90,27 +93,6 @@ func (s *RawIDs[U]) rebalance() {
 		// demote: BitSet → SliceSet
 		s.slice = NewSliceSetFrom(s.bits.ToSlice()...)
 		s.bits = nil
-	}
-}
-
-// Rebalance forces a representation check and switches if beneficial.
-// Useful after a sequence of UnSet calls on a BitSet representation.
-func (s *RawIDs[U]) Rebalance() { s.rebalance() }
-
-// toBitSet returns the internal BitSet, or creates a temporary one from the SliceSet.
-// The returned value must NOT be mutated if it's a temporary.
-func (s *RawIDs[U]) toBitSet() *BitSet[U] {
-	if s.bits != nil {
-		return s.bits
-	}
-	return s.slice.ToBitSet()
-}
-
-// ensureBitSet converts the internal representation to BitSet in-place.
-func (s *RawIDs[U]) ensureBitSet() {
-	if s.bits == nil {
-		s.bits = s.slice.ToBitSet()
-		s.slice = nil
 	}
 }
 
@@ -133,6 +115,16 @@ func (s *RawIDs[U]) UnSet(value U) bool {
 		return s.slice.UnSet(value)
 	}
 	return s.bits.UnSet(value)
+}
+
+// Range iterates over set bits between 'from' and 'to' (inclusive).
+// It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
+func (s *RawIDs[U]) Range(from, to U, visit func(v U) bool) {
+	if s.IsSlice() {
+		s.slice.Range(from, to, visit)
+		return
+	}
+	s.bits.Range(from, to, visit)
 }
 
 // Contains checks if the value exists in the set.
@@ -167,12 +159,28 @@ func (s *RawIDs[U]) MaxSetIndex() int {
 	return s.bits.MaxSetIndex()
 }
 
+// ValueOnIndex returns the Value of the dx-th matched item.
+func (s *RawIDs[U]) ValueOnIndex(idx uint32) (uint32, bool) {
+	if s.IsSlice() {
+		return s.slice.ValueOnIndex(idx)
+	}
+	return s.bits.ValueOnIndex(idx)
+}
+
 // Count returns the number of elements in the set.
 func (s *RawIDs[U]) Count() int {
 	if s.IsSlice() {
 		return s.slice.Count()
 	}
 	return s.bits.Count()
+}
+
+// IsEmpty returns the number of elements in the set is equals 0.
+func (s *RawIDs[U]) IsEmpty() bool {
+	if s.IsSlice() {
+		return len(s.slice.data) == 0
+	}
+	return s.bits.IsEmpty()
 }
 
 // Len returns the length of the underlying storage.
@@ -194,46 +202,101 @@ func (s *RawIDs[U]) Copy() *RawIDs[U] {
 // And computes the intersection of two sets.
 // The result is stored in the receiver.
 func (s *RawIDs[U]) And(other *RawIDs[U]) {
-	// If both are slices, use the efficient merge-based SliceSet.And
-	if s.IsSlice() && other.IsSlice() {
+	switch {
+	// both are Slices
+	case s.bits == nil && other.bits == nil:
 		s.slice.And(other.slice)
-		return
+	// both are BitSets
+	case s.bits != nil && other.bits != nil:
+		s.bits.And(other.bits)
+	// BitSet and Slice
+	case s.bits != nil && other.bits == nil:
+		// Intersecting a massive BitSet with a small Slice MUST result in a Slice!
+		// We demote ourselves instantly, extracting only the matched bits.
+		newSlice := make([]U, 0, len(other.slice.data))
+		for _, val := range other.slice.data {
+			if s.bits.Contains(val) {
+				newSlice = append(newSlice, val)
+			}
+		}
+		s.slice = &SliceSet[U]{data: newSlice}
+		s.bits = nil
+	// Slice and BitSet
+	case s.bits == nil && other.bits != nil:
+		var n int
+		for _, val := range s.slice.data {
+			if other.bits.Contains(val) {
+				s.slice.data[n] = val
+				n++
+			}
+		}
+		s.slice.data = s.slice.data[:n] // Truncate to new size instantly
 	}
-
-	s.ensureBitSet()
-	otherBits := other.toBitSet()
-	s.bits.And(otherBits)
-	s.rebalance()
 }
 
 // Or computes the union of two sets.
 // The result is stored in the receiver.
 func (s *RawIDs[U]) Or(other *RawIDs[U]) {
-	if s.IsSlice() && other.IsSlice() {
+	switch {
+	// both are Slices
+	case s.bits == nil && other.bits == nil:
 		s.slice.Or(other.slice)
-		s.rebalance()
-		return
+		if len(s.slice.data) > sparseMinCount {
+			s.rebalance()
+		}
+	// both are BitSets
+	case s.bits != nil && other.bits != nil:
+		s.bits.Or(other.bits)
+	// BitSet and Slice
+	case s.bits != nil && other.bits == nil:
+		// Just turn on the bits from their slice. Zero allocations!
+		for _, val := range other.slice.data {
+			s.bits.Set(val)
+		}
+	// Slice and BitSet
+	case s.bits == nil && other.bits != nil:
+		// A BitSet dominates a Slice. We clone their BitSet,
+		// then insert our slice items into it.
+		s.bits = other.bits.Copy()
+		for _, val := range s.slice.data {
+			s.bits.Set(val)
+		}
+		s.slice = nil
 	}
-
-	s.ensureBitSet()
-	otherBits := other.toBitSet()
-	s.bits.Or(otherBits)
-	s.rebalance()
 }
 
 // Xor computes the symmetric difference of two sets.
 // The result is stored in the receiver.
 func (s *RawIDs[U]) Xor(other *RawIDs[U]) {
-	if s.IsSlice() && other.IsSlice() {
+	switch {
+	// both are Slices
+	case s.bits == nil && other.bits == nil:
 		s.slice.Xor(other.slice)
-		s.rebalance()
-		return
+		// Symmetric difference can grow larger than the original slice,
+		// so we check if promotion is needed.
+		if len(s.slice.data) > sparseMinCount {
+			s.rebalance()
+		}
+	// both are BitSets
+	case s.bits != nil && other.bits != nil:
+		s.bits.Xor(other.bits)
+	// BitSet and Slice
+	case s.bits != nil && other.bits == nil:
+		// Flip the bits from their slice into our bitset.
+		// If the bit was 1, it becomes 0. If it was 0, it becomes 1.
+		for _, val := range other.slice.data {
+			s.bits.flipTheBit(val)
+		}
+	// Slice and BitSet
+	case s.bits == nil && other.bits != nil:
+		// A BitSet usually dominates. Copy their BitSet and flip our slice bits into it.
+		newBits := other.bits.Copy()
+		for _, val := range s.slice.data {
+			newBits.flipTheBit(val)
+		}
+		s.bits = newBits
+		s.slice = nil
 	}
-
-	s.ensureBitSet()
-	otherBits := other.toBitSet()
-	s.bits.Xor(otherBits)
-	s.rebalance()
 }
 
 // AndNot removes all elements from the current set that exist in the other set.
@@ -241,15 +304,31 @@ func (s *RawIDs[U]) Xor(other *RawIDs[U]) {
 //
 // Example: [1, 2, 110, 2345] AndNot [2, 110] => [1, 2345]
 func (s *RawIDs[U]) AndNot(other *RawIDs[U]) {
-	if s.IsSlice() && other.IsSlice() {
+	switch {
+	// both are Slices
+	case s.bits == nil && other.bits == nil:
 		s.slice.AndNot(other.slice)
-		return
+	// both are BitSets
+	case s.bits != nil && other.bits != nil:
+		s.bits.AndNot(other.bits)
+	// BitSet and Slice
+	case s.bits != nil && other.bits == nil:
+		// Just unset the specific bits they have in their slice
+		for _, val := range other.slice.data {
+			s.bits.UnSet(val)
+		}
+	// Slice and BitSet
+	case s.bits == nil && other.bits != nil:
+		// Filter our slice IN-PLACE. If they have the bit, we drop the item.
+		var n int
+		for _, val := range s.slice.data {
+			if !other.bits.Contains(val) {
+				s.slice.data[n] = val
+				n++
+			}
+		}
+		s.slice.data = s.slice.data[:n]
 	}
-
-	s.ensureBitSet()
-	otherBits := other.toBitSet()
-	s.bits.AndNot(otherBits)
-	s.rebalance()
 }
 
 // UInts iterates over all values in the set.

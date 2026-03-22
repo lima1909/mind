@@ -171,8 +171,8 @@ func (l *FreeList[T]) filter(predicat func(item *T) bool, yield func(idx int) bo
 	}
 }
 
-func (l *FreeList[T]) filterBS(predicat func(item *T) bool) *BitSet[uint32] {
-	bs := NewBitSet[uint32]()
+func (l *FreeList[T]) filterBS(predicat func(item *T) bool) *RawIDs32 {
+	bs := NewRawIDs[uint32]()
 
 	for i, item := range l.slots {
 		if item.occupied {

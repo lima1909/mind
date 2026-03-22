@@ -343,12 +343,12 @@ func compile(e Expr) Query {
 		return matchMany(n.Field, n.Op, n.Values...)
 	case FalseExpr:
 		// returns always an empty BitSet
-		return func(_ FilterByName, _ *BitSet32) (*BitSet32, bool, error) {
-			return NewEmptyBitSet[uint32](), true, nil
+		return func(_ FilterByName, _ *RawIDs32) (*RawIDs32, bool, error) {
+			return NewRawIDs[uint32](), true, nil
 		}
 	case TrueExpr:
 		// returns always an all IDs BitSet
-		return func(_ FilterByName, allIDs *BitSet32) (*BitSet32, bool, error) {
+		return func(_ FilterByName, allIDs *RawIDs32) (*RawIDs32, bool, error) {
 			return allIDs, false, nil
 		}
 	}
