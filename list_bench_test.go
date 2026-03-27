@@ -55,11 +55,6 @@ func BenchmarkQueryStr(b *testing.B) {
 	err = il.CreateIndex("age", NewSortedIndex(FromName[person, int]("Age")))
 	assert.NoError(b, err)
 
-	err = il.CreateIndex("name2", NewFullScan(FromName[person, string]("Name")))
-	assert.NoError(b, err)
-	err = il.CreateIndex("age2", NewFullScan(FromName[person, int]("Age")))
-	assert.NoError(b, err)
-
 	n := 0
 	for i := 1; i <= ds; i++ {
 		if n%6779 == 0 {
