@@ -2,16 +2,16 @@
 
 # Mind 
 
+**Fast, in-memory indexed collections for Go — filter your data like a database.**
+
 [![GoDoc](https://pkg.go.dev/badge/github.com/lima1909/mind)](https://pkg.go.dev/github.com/lima1909/mind)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/lima1909/mind/ci.yml)](https://github.com/lima1909/mind/actions)
 ![License](https://img.shields.io/github/license/lima1909/mind)
 [![Stars](https://img.shields.io/github/stars/lima1909/mind)](https://github.com/lima1909/mind/stargazers)
 
-**Fast, in-memory indexed collections for Go — filter your data like a database.**
-
 </div>
 
-`Mind` **(Multi INDex list)** lets you query in-memory collections by multiple fields using indexes, just like a database — but without one.
+`Mind` (Multi INDex list) lets you query in-memory collections by multiple fields using indexes, just like a database — but without one.
 It is particularly well suited where data is **read more often than written**.
 
 > ⚠️ Mind is in an early stage of development and the API may change.

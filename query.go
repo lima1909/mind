@@ -10,10 +10,21 @@ type FilterByName = func(string) (Filter, error)
 // All means returns all Items, no filtering
 func All() Query { return all() }
 
+// all returns always an allIDs
+//
 //go:inline
 func all() Query {
 	return func(_ FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		return allIDs, false, nil
+	}
+}
+
+// empty returns always an empty RawIDs, the opposite of all
+//
+//go:inline
+func empty() Query {
+	return func(_ FilterByName, _ *RawIDs32) (*RawIDs32, bool, error) {
+		return NewRawIDs[uint32](), true, nil
 	}
 }
 
@@ -168,10 +179,8 @@ func Not(q Query) Query {
 	}
 }
 
-// Eq fieldName = val
-func WithPrefix(fieldName string, val string) Query {
-	return match(fieldName, FOpStartsWith, val)
-}
+// WithPrefix query for string starts with
+func WithPrefix(fieldName string, val string) Query { return match(fieldName, FOpStartsWith, val) }
 
 // And combines 2 or more queries with an logical And
 func And(a Query, b Query, other ...Query) Query {

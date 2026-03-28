@@ -5,11 +5,6 @@ import (
 	"strings"
 )
 
-type Expr interface {
-	Equals(Expr) bool
-	String() string
-}
-
 type ExprKind uint8
 
 const (
@@ -31,6 +26,12 @@ func (e ExprKind) String() string {
 	}
 }
 
+type Expr interface {
+	Equals(Expr) bool
+	Compile() Query
+	String() string
+}
+
 type BinaryExpr struct {
 	Ekind ExprKind
 	Left  Expr
@@ -50,6 +51,22 @@ func (e BinaryExpr) Equals(other Expr) bool {
 	return e.Left.Equals(o.Left) && e.Right.Equals(o.Right)
 }
 
+func (e BinaryExpr) Compile() Query {
+	left := e.Left.Compile()
+	right := e.Right.Compile()
+
+	switch e.Ekind {
+	case ExprOr:
+		return Or(left, right)
+	case ExprAnd:
+		return And(left, right)
+	case ExprAndNot:
+		return AndNot(left, right)
+	}
+
+	panic(fmt.Sprintf("Not supported BinaryExpr: %v", e))
+}
+
 func (e BinaryExpr) String() string { return fmt.Sprintf("%s%s%s", e.Left, e.Ekind, e.Right) }
 
 type NotExpr struct{ Child Expr }
@@ -63,6 +80,7 @@ func (e NotExpr) Equals(other Expr) bool {
 	return e.Child.Equals(o.Child)
 }
 
+func (e NotExpr) Compile() Query { return Not(e.Child.Compile()) }
 func (e NotExpr) String() string { return fmt.Sprintf(" NOT(%s) ", e.Child) }
 
 type TermExpr struct {
@@ -80,6 +98,7 @@ func (e TermExpr) Equals(other Expr) bool {
 	return e.Field == o.Field && e.Op == o.Op && e.Value == o.Value
 }
 
+func (e TermExpr) Compile() Query { return match(e.Field, e.Op, e.Value) }
 func (e TermExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Value) }
 
 type TermManyExpr struct {
@@ -107,6 +126,7 @@ func (e TermManyExpr) Equals(other Expr) bool {
 	return e.Field == o.Field && e.Op == o.Op
 }
 
+func (e TermManyExpr) Compile() Query { return matchMany(e.Field, e.Op, e.Values...) }
 func (e TermManyExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Values) }
 
 // FalseExpr represents a condition that is always false.
@@ -114,12 +134,14 @@ func (e TermManyExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, 
 type FalseExpr struct{}
 
 func (e FalseExpr) Equals(other Expr) bool { _, ok := other.(FalseExpr); return ok }
+func (e FalseExpr) Compile() Query         { return empty() }
 func (e FalseExpr) String() string         { return "FALSE" }
 
 // TrueExpr represents a condition that is always true.
 type TrueExpr struct{}
 
 func (e TrueExpr) Equals(other Expr) bool { _, ok := other.(TrueExpr); return ok }
+func (e TrueExpr) Compile() Query         { return all() }
 func (e TrueExpr) String() string         { return "TRUE" }
 
 // A > 10 AND A < 5; is always false -> FalseExpr
@@ -321,41 +343,6 @@ func optimize(e Expr) Expr {
 	return e
 }
 
-func compile(e Expr) Query {
-	switch n := e.(type) {
-	case TermExpr:
-		return match(n.Field, n.Op, n.Value)
-	case BinaryExpr:
-		left := compile(n.Left)
-		right := compile(n.Right)
-
-		switch n.Ekind {
-		case ExprAnd:
-			return And(left, right)
-		case ExprOr:
-			return Or(left, right)
-		case ExprAndNot:
-			return AndNot(left, right)
-		}
-	case NotExpr:
-		return Not(compile(n.Child))
-	case TermManyExpr:
-		return matchMany(n.Field, n.Op, n.Values...)
-	case FalseExpr:
-		// returns always an empty BitSet
-		return func(_ FilterByName, _ *RawIDs32) (*RawIDs32, bool, error) {
-			return NewRawIDs[uint32](), true, nil
-		}
-	case TrueExpr:
-		// returns always an all IDs BitSet
-		return func(_ FilterByName, allIDs *RawIDs32) (*RawIDs32, bool, error) {
-			return allIDs, false, nil
-		}
-	}
-
-	panic(fmt.Sprintf("NOT supported Expression in compile: %T", e))
-}
-
 func Parse(input string) (Query, error) {
 	p := parser{input: input, lex: lexer{input: input, pos: 0}}
 	ast, err := p.parse()
@@ -364,7 +351,7 @@ func Parse(input string) (Query, error) {
 	}
 
 	ast = optimize(ast)
-	return compile(ast), nil
+	return ast.Compile(), nil
 
 }
 
@@ -459,14 +446,9 @@ func (p *parser) parseCondition() (Expr, error) {
 	tokenOp := p.cur.Op
 	opName := p.input[p.cur.Start:p.cur.End]
 	p.next()
+
 	switch tokenOp {
-	case OpNeq:
-		val, err := p.parseValue()
-		if err != nil {
-			return nil, err
-		}
-		return NotExpr{Child: TermExpr{Field: field, Op: FOpEq, Value: val}}, nil
-	case OpLt, OpLe, OpGt, OpGe, OpEq:
+	case OpEq, OpLt, OpLe, OpGt, OpGe, OpNeq:
 		val, err := p.parseValue()
 		if err != nil {
 			return nil, err

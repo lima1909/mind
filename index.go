@@ -254,6 +254,7 @@ type Index[OBJ any] interface {
 
 var (
 	FOpEq         = FilterOp{Op: OpEq}
+	FOpNeq        = FilterOp{Op: OpNeq}
 	FOpLe         = FilterOp{Op: OpLe}
 	FOpLt         = FilterOp{Op: OpLt}
 	FOpGe         = FilterOp{Op: OpGe}
