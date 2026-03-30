@@ -118,7 +118,7 @@ func TestMapIndex_Query(t *testing.T) {
 	assert.Nil(t, result)
 
 	// OR
-	result, canMutate, err = Or(Eq("val", 3), Eq("val", 42), Eq("val", 1))(fi, nil)
+	result, canMutate, err = Or(Or(Eq("val", 3), Eq("val", 42)), Eq("val", 1))(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5, 42}, result.ToSlice())
@@ -134,7 +134,7 @@ func TestMapIndex_Query(t *testing.T) {
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{}, result.ToSlice())
 	// three Ands
-	result, canMutate, err = And(Eq("val", 3), Eq("val", 3), Eq("val", 3))(fi, nil)
+	result, canMutate, err = And(And(Eq("val", 3), Eq("val", 3)), Eq("val", 3))(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{3, 5}, result.ToSlice())

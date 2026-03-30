@@ -153,7 +153,7 @@ func notEq(fieldName string, val any) Query {
 		}
 
 		// OPTIMIZATION: If nobody has this value, NotEq is just "All"
-		if exclude.Count() == 0 {
+		if exclude.IsEmpty() {
 			return allIDs, false, nil
 		}
 
@@ -183,54 +183,64 @@ func Not(q Query) Query {
 func WithPrefix(fieldName string, val string) Query { return match(fieldName, FOpStartsWith, val) }
 
 // And combines 2 or more queries with an logical And
-func And(a Query, b Query, other ...Query) Query {
+func And(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
-		result, err := ensureMutable(a(l, allIDs))
+
+		result, canMutate, err := a(l, allIDs)
 		if err != nil {
 			return nil, false, err
 		}
+
+		// if Query 'a' has 0 matches, stop immediately.
+		// we completely skip executing 'b' and 'other'.
+		if result.IsEmpty() {
+			return result, canMutate, nil
+		}
+
+		result, err = ensureMutable(result, canMutate, nil)
+		if err != nil {
+			return nil, false, err
+		}
+
 		right, _, err := b(l, allIDs)
 		if err != nil {
 			return nil, false, err
 		}
 
 		result.And(right)
-		// others, if there
-		for _, o := range other {
-			next, _, err := o(l, allIDs)
-			if err != nil {
-				return nil, false, err
-			}
-			result.And(next)
-		}
-
 		return result, true, nil
 	}
 }
 
 // Or combines 2 or more queries with an logical Or
-func Or(a Query, b Query, other ...Query) Query {
+func Or(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
-		result, err := ensureMutable(a(l, allIDs))
-		if err != nil {
-			return nil, false, err
-		}
-		right, _, err := b(l, allIDs)
+		result, canMutate, err := a(l, allIDs)
 		if err != nil {
 			return nil, false, err
 		}
 
-		result.Or(right)
-		// others, if there
-		for _, o := range other {
-			next, _, err := o(l, allIDs)
+		right, rightMutate, err := b(l, allIDs)
+		if err != nil {
+			return nil, false, err
+		}
+
+		// if 'result' was empty, the result is just 'right'.
+		if result.IsEmpty() {
+			return right, rightMutate, nil
+		}
+
+		if !right.IsEmpty() {
+			// both have data, so we must merge them.
+			result, err = ensureMutable(result, canMutate, nil)
 			if err != nil {
 				return nil, false, err
 			}
-			result.Or(next)
+			result.Or(right)
+			canMutate = true
 		}
 
-		return result, true, nil
+		return result, canMutate, nil
 	}
 }
 
@@ -245,6 +255,7 @@ func AndNot(base Query, sub Query) Query {
 		}
 
 		// early return, if result is false (empty), stop immediately
+		// 0 - B = 0
 		if result.IsEmpty() {
 			return result, canMutate, nil
 		}
@@ -253,6 +264,12 @@ func AndNot(base Query, sub Query) Query {
 		exclude, _, err := sub(l, allIDs)
 		if err != nil {
 			return nil, false, err
+		}
+
+		// if 'b' is empty, A - 0 = A.
+		// We can return 'result' exactly as-is without allocating or mutating.
+		if exclude.IsEmpty() {
+			return result, canMutate, nil
 		}
 
 		result, err = ensureMutable(result, canMutate, nil)

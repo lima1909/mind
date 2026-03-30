@@ -59,7 +59,6 @@ func (t *Tracer) Trace(query Query, expr Expr, children ...*Tracer) Query {
 func (t *Tracer) Print(indent string, isLast bool) string {
 	var sb strings.Builder
 
-	// Choose the correct prefix symbols
 	marker := "├── "
 	if isLast {
 		marker = "└── "

@@ -11,7 +11,7 @@
 
 </div>
 
-`Mind` (Multi INDex list) lets you query in-memory collections by multiple fields using indexes, just like a database — but without one.
+**Mind** (Multi INDex list) lets you query in-memory collections by multiple fields using indexes, just like a database — but without one.
 It is particularly well suited where data is **read more often than written**.
 
 > ⚠️ Mind is in an early stage of development and the API may change.
@@ -29,7 +29,7 @@ go get github.com/lima1909/mind
 | Index | Backed by | Supported operations |
 |-------|-----------|---------------------|
 | `MapIndex` | Hash map | `=`, `!=` |
-| `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `!=`, `>`, `>=`, `<`, `<=`, `between`, `startswith` |
+| `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `>`, `>=`, `<`, `<=`, `Between`, `In` |
 
 All operations can be combined with `and`, `or` and `not`.
 

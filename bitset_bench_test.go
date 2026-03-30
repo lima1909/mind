@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func BenchmarkBitSetContains(b *testing.B) {
+func BenchmarkBitSet_Contains(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -18,7 +18,21 @@ func BenchmarkBitSetContains(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetCount(b *testing.B) {
+func BenchmarkBitSet_IsEmpty(b *testing.B) {
+	bs := NewBitSetWithCapacity[uint32](300_000)
+	bs2 := NewBitSetWithCapacity[uint32](60_000)
+	bs.And(bs2)
+	b.ResetTimer()
+
+	for b.Loop() {
+		r := bs.IsEmpty()
+		if !r {
+			b.Fatalf("Is not Empty")
+		}
+	}
+}
+
+func BenchmarkBitSet_Count(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -30,7 +44,7 @@ func BenchmarkBitSetCount(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetAnd(b *testing.B) {
+func BenchmarkBitSet_And(b *testing.B) {
 	bs1 := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		if i%3 == 0 {
@@ -52,7 +66,7 @@ func BenchmarkBitSetAnd(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetOr(b *testing.B) {
+func BenchmarkBitSet_Or(b *testing.B) {
 	bs1 := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		if i%3 == 0 {
@@ -74,7 +88,7 @@ func BenchmarkBitSetOr(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetXor(b *testing.B) {
+func BenchmarkBitSet_Xor(b *testing.B) {
 	bs1 := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		if i%3 == 0 {
@@ -96,7 +110,7 @@ func BenchmarkBitSetXor(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetToSlice(b *testing.B) {
+func BenchmarkBitSet_ToSlice(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -108,7 +122,7 @@ func BenchmarkBitSetToSlice(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetValuesIter(b *testing.B) {
+func BenchmarkBitSet_ValuesIter(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -127,7 +141,7 @@ func BenchmarkBitSetValuesIter(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetValuesBatchIter(b *testing.B) {
+func BenchmarkBitSet_ValuesBatchIter(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -145,7 +159,7 @@ func BenchmarkBitSetValuesBatchIter(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetShrink(b *testing.B) {
+func BenchmarkBitSet_Shrink(b *testing.B) {
 	bs := NewBitSetWithCapacity[uint32](2000)
 	bs.Set(1)
 	bs.Set(10)
@@ -158,7 +172,7 @@ func BenchmarkBitSetShrink(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetCopy(b *testing.B) {
+func BenchmarkBitSet_Copy(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -171,7 +185,7 @@ func BenchmarkBitSetCopy(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetCopyInto(b *testing.B) {
+func BenchmarkBitSet_CopyInto(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -185,7 +199,7 @@ func BenchmarkBitSetCopyInto(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetCreateNew(b *testing.B) {
+func BenchmarkBitSet_CreateNew(b *testing.B) {
 	for b.Loop() {
 		// 46875
 		bs := NewBitSetWithCapacity[uint32](47000)
@@ -195,7 +209,7 @@ func BenchmarkBitSetCreateNew(b *testing.B) {
 	}
 }
 
-func BenchmarkBitSetMaxSetIndex(b *testing.B) {
+func BenchmarkBitSet_MaxSetIndex(b *testing.B) {
 	bs := NewBitSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
