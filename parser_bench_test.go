@@ -33,10 +33,12 @@ func BenchmarkParser(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		query, err := Parse(`role = "admin" OR ok = false AND price = 0.0`)
+		ast, err := Parse(`role = "admin" OR ok = false AND price = 0.0`)
 		if err != nil {
 			b.Fatal(err)
 		}
+		ast = ast.Optimize()
+		query := ast.Compile(nil)
 
 		bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
 		if err != nil {

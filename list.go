@@ -182,9 +182,37 @@ func (l *List[T, ID]) Count() int {
 	return l.list.Count()
 }
 
+type QueryOption struct {
+	WithOptimizer bool
+	WithTracer    Tracer
+}
+
+type Opion func(*QueryOption)
+
+func NoOptimizer() Opion        { return func(o *QueryOption) { o.WithOptimizer = false } }
+func WithTracer(t Tracer) Opion { return func(o *QueryOption) { o.WithTracer = t } }
+
 // QueryStr execute the given Query-string.
-func (l *List[T, ID]) QueryStr(queryStr string) *QueryResult[T, ID] {
-	query, err := Parse(queryStr)
+func (l *List[T, ID]) QueryStr(queryStr string, opts ...Opion) *QueryResult[T, ID] {
+	var query Query
+	ast, err := Parse(queryStr)
+	if err == nil {
+		opt := QueryOption{
+			WithOptimizer: true,
+			WithTracer:    Tracer{},
+		}
+
+		for _, o := range opts {
+			o(&opt)
+		}
+
+		if opt.WithOptimizer {
+			ast = ast.Optimize()
+		}
+
+		query = ast.Compile(&opt.WithTracer)
+	}
+
 	return &QueryResult[T, ID]{list: l, query: query, err: err}
 }
 

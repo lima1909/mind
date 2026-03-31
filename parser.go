@@ -5,16 +5,9 @@ import (
 	"strings"
 )
 
-func Parse(input string) (Query, error) {
+func Parse(input string) (Expr, error) {
 	p := parser{input: input, lex: lexer{input: input, pos: 0}}
-	ast, err := p.parse()
-	if err != nil {
-		return nil, err
-	}
-
-	ast = optimize(ast)
-	return ast.Compile(nil), nil
-
+	return p.parse()
 }
 
 // Parser impl starts

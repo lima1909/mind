@@ -106,8 +106,10 @@ func TestParser_Base(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			query, err := Parse(tt.query)
+			ast, err := Parse(tt.query)
 			assert.NoError(t, err)
+			ast = ast.Optimize()
+			query := ast.Compile(nil)
 
 			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
 			assert.NoError(t, err)
@@ -185,8 +187,10 @@ func TestParser_Cast(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			query, err := Parse(tt.query)
+			ast, err := Parse(tt.query)
 			require.NoError(t, err)
+			ast = ast.Optimize()
+			query := ast.Compile(nil)
 
 			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
 			require.NoError(t, err)
@@ -324,7 +328,7 @@ func TestParser_Optimize(t *testing.T) {
 			p := parser{input: tt.input, lex: lexer{input: tt.input, pos: 0}}
 			ast, err := p.parse()
 			require.NoError(t, err)
-			optimized := optimize(ast)
+			optimized := ast.Optimize()
 
 			assert.Equal(t, tt.optimized, optimized.String())
 		})
@@ -368,7 +372,7 @@ func TestParser_ConstantFolding(t *testing.T) {
 			p := parser{input: tt.input, lex: lexer{input: tt.input, pos: 0}}
 			ast, err := p.parse()
 			require.NoError(t, err)
-			optimized := optimize(ast)
+			optimized := ast.Optimize()
 
 			assert.Equal(t, tt.optimized, optimized.String())
 		})
@@ -406,8 +410,10 @@ func TestParser_ImpossibleRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			query, err := Parse(tt.query)
+			ast, err := Parse(tt.query)
 			assert.NoError(t, err)
+			ast = ast.Optimize()
+			query := ast.Compile(nil)
 
 			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
 			assert.NoError(t, err)
@@ -449,8 +455,10 @@ func TestParser_UDF(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			query, err := Parse(tt.query)
+			ast, err := Parse(tt.query)
 			assert.NoError(t, err)
+			ast = ast.Optimize()
+			query := ast.Compile(nil)
 
 			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
 			require.NoError(t, err)
