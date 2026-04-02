@@ -109,18 +109,12 @@ func (p *parser) parseCondition() (Expr, error) {
 			return nil, err
 		}
 		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
-	case OpBetween:
+	case OpBetween, OpIn:
 		values, err := p.parseValueList()
 		if err != nil {
 			return nil, err
 		}
-		return TermManyExpr{Field: field, Op: FOpBetween, Values: values}, nil
-	case OpIn:
-		values, err := p.parseValueList()
-		if err != nil {
-			return nil, err
-		}
-		return TermManyExpr{Field: field, Op: FOpIn, Values: values}, nil
+		return TermManyExpr{Field: field, Op: FilterOp{Op: tokenOp}, Values: values}, nil
 	// user defined operation
 	case OpIdent:
 		if p.cur.Op == OpLParen {

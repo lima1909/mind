@@ -56,6 +56,7 @@ func TestParser_Base(t *testing.T) {
 		{query: `price > 1.2`, expected: []uint32{0}},
 		{query: `price >= 1.2`, expected: []uint32{0, 1}},
 
+		{query: `NOT(role = "admin")`, expected: []uint32{0}},
 		// RULE: Not(Not(A)) -> A (Double Negative)
 		{query: `NOT(NOT(role = "admin"))`, expected: []uint32{1}},
 		// RULE: NOT (A != B)  -->  A = B

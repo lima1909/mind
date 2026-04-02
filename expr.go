@@ -66,11 +66,11 @@ func (e BinaryExpr) Compile(t *Tracer) Query {
 
 	switch e.Ekind {
 	case ExprOr:
-		query = Or(left, right)
+		query = matchOr(left, right)
 	case ExprAnd:
-		query = And(left, right)
+		query = matchAnd(left, right)
 	case ExprAndNot:
-		query = AndNot(left, right)
+		query = matchAndNot(left, right)
 	default:
 		panic(fmt.Sprintf("Not supported BinaryExpr: %v", e))
 	}
@@ -190,7 +190,7 @@ func (e NotExpr) Compile(t *Tracer) Query {
 		childTracer = &Tracer{}
 	}
 
-	return t.Trace(Not(e.Child.Compile(childTracer)), e, childTracer)
+	return t.Trace(matchNot(e.Child.Compile(childTracer)), e, childTracer)
 }
 
 func (e NotExpr) Optimize() Expr {
@@ -229,10 +229,10 @@ func (e NotExpr) Optimize() Expr {
 
 	case TermExpr:
 		switch c.Op.Op {
-		// I'm not sure, that this is faster
+		// I think, this rule makes no sense in this context
 		// RULE: NOT (A = B)  -->  A != B
 		// case OpEq:
-		// 	return NotExpr{Child: TermExpr{Field: c.Field, Op: FOpEq, Value: c.Value}}
+		// 	return TermExpr{Field: c.Field, Op: FOpNeq, Value: c.Value}
 		// RULE: NOT (A != B)  -->  A = B
 		case OpNeq:
 			return TermExpr{Field: c.Field, Op: FOpEq, Value: c.Value}
@@ -276,9 +276,14 @@ func (e TermExpr) Equals(other Expr) bool {
 	return e.Field == o.Field && e.Op == o.Op && e.Value == o.Value
 }
 
-func (e TermExpr) Compile(t *Tracer) Query { return t.Trace(match(e.Field, e.Op, e.Value), e) }
-func (e TermExpr) Optimize() Expr          { return e }
-func (e TermExpr) String() string          { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Value) }
+func (e TermExpr) Compile(t *Tracer) Query {
+	if e.Op.Op == OpNeq {
+		return t.Trace(matchNotEq(e.Field, e.Value), e)
+	}
+	return t.Trace(match(e.Field, e.Op, e.Value), e)
+}
+func (e TermExpr) Optimize() Expr { return e }
+func (e TermExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Value) }
 
 type TermManyExpr struct {
 	Field  string
@@ -306,6 +311,9 @@ func (e TermManyExpr) Equals(other Expr) bool {
 }
 
 func (e TermManyExpr) Compile(t *Tracer) Query {
+	if e.Op.Op == OpIn {
+		return t.Trace(matchIn(e.Field, e.Values...), e)
+	}
 	return t.Trace(matchMany(e.Field, e.Op, e.Values...), e)
 }
 func (e TermManyExpr) Optimize() Expr { return e }
@@ -316,7 +324,7 @@ func (e TermManyExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, 
 type FalseExpr struct{}
 
 func (e FalseExpr) Equals(other Expr) bool  { _, ok := other.(FalseExpr); return ok }
-func (e FalseExpr) Compile(t *Tracer) Query { return t.Trace(empty(), e) }
+func (e FalseExpr) Compile(t *Tracer) Query { return t.Trace(matchEmpty(), e) }
 func (e FalseExpr) Optimize() Expr          { return e }
 func (e FalseExpr) String() string          { return "FALSE" }
 
@@ -324,7 +332,7 @@ func (e FalseExpr) String() string          { return "FALSE" }
 type TrueExpr struct{}
 
 func (e TrueExpr) Equals(other Expr) bool  { _, ok := other.(TrueExpr); return ok }
-func (e TrueExpr) Compile(t *Tracer) Query { return t.Trace(all(), e) }
+func (e TrueExpr) Compile(t *Tracer) Query { return t.Trace(matchAll(), e) }
 func (e TrueExpr) Optimize() Expr          { return e }
 func (e TrueExpr) String() string          { return "TRUE" }
 

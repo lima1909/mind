@@ -8,12 +8,12 @@ type Query func(l FilterByName, allIDs *RawIDs32) (bs *RawIDs32, canMutate bool,
 type FilterByName = func(string) (Filter, error)
 
 // All means returns all Items, no filtering
-func All() Query { return all() }
+func All() Expr { return TrueExpr{} }
 
 // all returns always an allIDs
 //
 //go:inline
-func all() Query {
+func matchAll() Query {
 	return func(_ FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		return allIDs, false, nil
 	}
@@ -22,7 +22,7 @@ func all() Query {
 // empty returns always an empty RawIDs, the opposite of all
 //
 //go:inline
-func empty() Query {
+func matchEmpty() Query {
 	return func(_ FilterByName, _ *RawIDs32) (*RawIDs32, bool, error) {
 		return NewRawIDs[uint32](), true, nil
 	}
@@ -55,45 +55,45 @@ func matchMany(fieldName string, op FilterOp, values ...any) Query {
 }
 
 // ID id = val
-func ID(val any) Query { return match(IDIndexFieldName, FOpEq, val) }
+func ID(val any) Expr { return TermExpr{IDIndexFieldName, FOpEq, val} }
 
 // Eq fieldName = val
-func Eq(fieldName string, val any) Query { return match(fieldName, FOpEq, val) }
+func Eq(fieldName string, val any) Expr { return TermExpr{fieldName, FOpEq, val} }
 
 // Lt Less fieldName < val
-func Lt(fieldName string, val any) Query { return match(fieldName, FOpLt, val) }
+func Lt(fieldName string, val any) Expr { return TermExpr{fieldName, FOpLt, val} }
 
 // Le Less Equal fieldName <= val
-func Le(fieldName string, val any) Query { return match(fieldName, FOpLe, val) }
+func Le(fieldName string, val any) Expr { return TermExpr{fieldName, FOpLe, val} }
 
 // Gt Greater fieldName > val
-func Gt(fieldName string, val any) Query { return match(fieldName, FOpGt, val) }
+func Gt(fieldName string, val any) Expr { return TermExpr{fieldName, FOpGt, val} }
 
 // Ge Greater Equal fieldName >= val
-func Ge(fieldName string, val any) Query { return match(fieldName, FOpGe, val) }
+func Ge(fieldName string, val any) Expr { return TermExpr{fieldName, FOpGe, val} }
 
 // IsNil is a Query which checks for a given type the nil value
-func IsNil[V any](fieldName string) Query { return isNil[V](fieldName) }
+// func IsNil[V any](fieldName string) Query { return isNil[V](fieldName) }
 
 //go:inline
-func isNil[V any](fieldName string) Query {
-	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
-		filter, err := l(fieldName)
-		if err != nil {
-			return nil, false, err
-		}
-
-		bs, err := filter.Match(FOpEq, (*V)(nil))
-		return bs, false, err
-	}
-}
+// func isNil[V any](fieldName string) Query {
+// 	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+// 		filter, err := l(fieldName)
+// 		if err != nil {
+// 			return nil, false, err
+// 		}
+//
+// 		bs, err := filter.Match(FOpEq, (*V)(nil))
+// 		return bs, false, err
+// 	}
+// }
 
 // In combines Eq with an Or
 // In("name", "Paul", "Egon") => name == "Paul" Or name == "Egon"
-func In(fieldName string, vals ...any) Query { return in(fieldName, vals...) }
+func In(fieldName string, vals ...any) Expr { return TermManyExpr{fieldName, FOpIn, vals} }
 
 //go:inline
-func in(fieldName string, vals ...any) Query {
+func matchIn(fieldName string, vals ...any) Query {
 	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		if len(vals) == 0 {
 			return NewRawIDs[uint32](), true, nil
@@ -137,10 +137,10 @@ func in(fieldName string, vals ...any) Query {
 }
 
 // NotEq is a shorcut for Not(Eq(...))
-func NotEq(fieldName string, val any) Query { return notEq(fieldName, val) }
+func NotEq(fieldName string, val any) Expr { return TermExpr{fieldName, FOpNeq, val} }
 
 //go:inline
-func notEq(fieldName string, val any) Query {
+func matchNotEq(fieldName string, val any) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
@@ -163,8 +163,10 @@ func notEq(fieldName string, val any) Query {
 	}
 }
 
+func Not(expr Expr) Expr { return NotExpr{expr} }
+
 // Not Not(Query)
-func Not(q Query) Query {
+func matchNot(q Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		// can Mutate is not relevant, because allIDs are copied
 		qres, _, err := q(l, allIDs)
@@ -182,8 +184,10 @@ func Not(q Query) Query {
 // WithPrefix query for string starts with
 func WithPrefix(fieldName string, val string) Query { return match(fieldName, FOpStartsWith, val) }
 
+func And(left Expr, right Expr) Expr { return BinaryExpr{ExprAnd, left, right} }
+
 // And combines 2 or more queries with an logical And
-func And(a Query, b Query) Query {
+func matchAnd(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 
 		result, canMutate, err := a(l, allIDs)
@@ -212,8 +216,10 @@ func And(a Query, b Query) Query {
 	}
 }
 
+func Or(left Expr, right Expr) Expr { return BinaryExpr{ExprOr, left, right} }
+
 // Or combines 2 or more queries with an logical Or
-func Or(a Query, b Query) Query {
+func matchOr(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		result, canMutate, err := a(l, allIDs)
 		if err != nil {
@@ -244,9 +250,11 @@ func Or(a Query, b Query) Query {
 	}
 }
 
+func AndNot(left Expr, right Expr) Expr { return BinaryExpr{ExprAndNot, left, right} }
+
 // AndNot performs: baseQuery AND NOT(subQuery)
 // example: status = 'active' AND type != 'guest'
-func AndNot(base Query, sub Query) Query {
+func matchAndNot(base Query, sub Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (*RawIDs32, bool, error) {
 		// base result (e.g., the 'active')
 		result, canMutate, err := base(l, allIDs)

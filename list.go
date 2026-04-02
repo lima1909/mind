@@ -194,27 +194,27 @@ func WithTracer(t *Tracer) Opion { return func(o *QueryOption) { o.WithTracer = 
 
 // QueryStr execute the given Query-string.
 func (l *List[T, ID]) QueryStr(queryStr string, opts ...Opion) *QueryResult[T, ID] {
-	var query Query
 	ast, err := Parse(queryStr)
-	if err == nil {
-		opt := QueryOption{WithOptimizer: true}
-		for _, o := range opts {
-			o(&opt)
-		}
-
-		if opt.WithOptimizer {
-			ast = ast.Optimize()
-		}
-
-		query = ast.Compile(opt.WithTracer)
+	if err != nil {
+		var query Query
+		return &QueryResult[T, ID]{list: l, query: query, err: err}
 	}
 
-	return &QueryResult[T, ID]{list: l, query: query, err: err}
+	return l.Query(ast, opts...)
 }
 
 // Query execute the given Query.
-func (l *List[T, ID]) Query(query Query) *QueryResult[T, ID] {
-	return &QueryResult[T, ID]{list: l, query: query}
+func (l *List[T, ID]) Query(query Expr, opts ...Opion) *QueryResult[T, ID] {
+	opt := QueryOption{WithOptimizer: true}
+	for _, o := range opts {
+		o(&opt)
+	}
+
+	if opt.WithOptimizer {
+		query = query.Optimize()
+	}
+
+	return &QueryResult[T, ID]{list: l, query: query.Compile(opt.WithTracer)}
 }
 
 type QueryResult[T any, ID comparable] struct {

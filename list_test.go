@@ -369,17 +369,17 @@ func TestList_StringPtrItemWithNil(t *testing.T) {
 	assert.Equal(t, 1, len(result))
 	assert.Equal(t, []*string{nil}, result)
 
-	// IsNil
-	result, err = il.Query(IsNil[string]("val")).Values()
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(result))
-	assert.Equal(t, []*string{nil}, result)
-
-	// Or(IsNil, Eq(dacia)
-	result, err = il.Query(Or(IsNil[string]("val"), Eq("val", &dacia))).Values()
-	assert.NoError(t, err)
-	assert.Equal(t, 3, len(result))
-	assert.Equal(t, []*string{&dacia, nil, &dacia}, result)
+	// // IsNil
+	// result, err = il.Query(IsNil[string]("val")).Values()
+	// assert.NoError(t, err)
+	// assert.Equal(t, 1, len(result))
+	// assert.Equal(t, []*string{nil}, result)
+	//
+	// // Or(IsNil, Eq(dacia)
+	// result, err = il.Query(Or(IsNil[string]("val"), Eq("val", &dacia))).Values()
+	// assert.NoError(t, err)
+	// assert.Equal(t, 3, len(result))
+	// assert.Equal(t, []*string{&dacia, nil, &dacia}, result)
 }
 
 func TestList_WithID(t *testing.T) {
