@@ -236,7 +236,7 @@ func TestMapIndex_Query_In(t *testing.T) {
 	// In one
 	result, canMutate, err = In("val", 1).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
-	assert.False(t, canMutate)
+	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1}, result.ToSlice())
 
 	// In many

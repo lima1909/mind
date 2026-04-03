@@ -46,7 +46,7 @@ func (p *parser) parseOr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = BinaryExpr{Ekind: ExprOr, Left: left, Right: right}
+		left = OrExpr{Left: left, Right: right}
 	}
 	return left, nil
 }
@@ -63,7 +63,7 @@ func (p *parser) parseAnd() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = BinaryExpr{Ekind: ExprAnd, Left: left, Right: right}
+		left = AndExpr{Left: left, Right: right}
 	}
 	return left, nil
 }

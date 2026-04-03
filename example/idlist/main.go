@@ -40,8 +40,18 @@ func main() {
 	// Output:
 	// true
 
-	values, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10))).Values()
+	t := &mind.Tracer{}
+	values, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)), mind.WithTracer(t)).Values()
 	fmt.Println(values)
 	// Output:
 	// [{1 Dacia 2} {2 Opel 12} {3 Mercedes 5}]
+
+	fmt.Println()
+	fmt.Println("Trace:")
+	fmt.Println(t.PrettyString())
+	// Output:
+	// Trace:
+	// └── name = Opel OR age < 10  [1.85µs] (3 matches)
+	//     ├── name = Opel  [620ns] (1 matches)
+	//     └── age < 10  [790ns] (2 matches)
 }

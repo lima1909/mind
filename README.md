@@ -26,10 +26,10 @@ go get github.com/lima1909/mind
 
 ### Index Types
 
-| Index | Backed by | Supported operations |
-|-------|-----------|---------------------|
-| `MapIndex` | Hash map | `=`, `!=` |
-| `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `>`, `>=`, `<`, `<=`, `Between`, `In` |
+| Index      | Backed by | Supported operations |
+|------------|-----------|----------------------|
+| `MapIndex` | Hash map  | `=`, `!=`            |
+| `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In` |
 
 All operations can be combined with `and`, `or` and `not`.
 
@@ -85,7 +85,8 @@ func main() {
 	l.Insert(Car{name: "Mercedes", age: 5})
 	l.Insert(Car{name: "Dacia", age: 22})
 
-	qr, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`)
+	t := &mind.Tracer{}
+	qr, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`, mind.WithTracer(t))
 	if err != nil {
 		panic(err)
 	}
@@ -93,6 +94,17 @@ func main() {
 	fmt.Println(qr.Values())
 	// Output:
 	// [{Dacia 2} {Opel 12} {Dacia 22}]
+
+	fmt.Println()
+	fmt.Println("Trace:")
+	fmt.Println(t.PrettyString())
+	// Output:
+	// Trace:
+	// └── name = Opel OR name = Dacia OR age > 10  [3.759µs] (3 matches)
+	//     ├── name = Opel OR name = Dacia  [2.215µs] (3 matches)
+	//     │   ├── name = Opel  [1.106µs] (1 matches)
+	//     │   └── name = Dacia  [151ns] (2 matches)
+	//     └── age > 10  [1.197µs] (2 matches)
 }
 ```
 
@@ -141,9 +153,19 @@ func main() {
 	// Output:
 	// true
 
-	result, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)))
+	t := &mind.Tracer{}
+	result, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)), mind.WithTracer(t))
 	fmt.Println(result.Values())
 	// Output:
 	// [{1 Dacia 2} {2 Opel 12} {3 Mercedes 5}]
+
+	fmt.Println()
+	fmt.Println("Trace:")
+	fmt.Println(t.PrettyString())
+	// Output:
+	// Trace:
+	// └── name = Opel OR age < 10  [1.85µs] (3 matches)
+	//     ├── name = Opel  [620ns] (1 matches)
+	//     └── age < 10  [790ns] (2 matches)
 }
 ```

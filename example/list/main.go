@@ -32,7 +32,8 @@ func main() {
 	l.Insert(Car{name: "Mercedes", age: 5})
 	l.Insert(Car{name: "Dacia", age: 22})
 
-	values, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`).Values()
+	t := &mind.Tracer{}
+	values, err := l.QueryStr(`name = "Opel" or name = "Dacia" or age > 10`, mind.WithTracer(t)).Values()
 	if err != nil {
 		panic(err)
 	}
@@ -40,4 +41,15 @@ func main() {
 	fmt.Println(values)
 	// Output:
 	// [{Dacia 2} {Opel 12} {Dacia 22}]
+
+	fmt.Println()
+	fmt.Println("Trace:")
+	fmt.Println(t.PrettyString())
+	// Output:
+	// Trace:
+	// └── name = Opel OR name = Dacia OR age > 10  [3.759µs] (3 matches)
+	//     ├── name = Opel OR name = Dacia  [2.215µs] (3 matches)
+	//     │   ├── name = Opel  [1.106µs] (1 matches)
+	//     │   └── name = Dacia  [151ns] (2 matches)
+	//     └── age > 10  [1.197µs] (2 matches)
 }

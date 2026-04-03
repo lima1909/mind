@@ -183,14 +183,14 @@ func (l *List[T, ID]) Count() int {
 }
 
 type QueryOption struct {
-	WithOptimizer bool
-	WithTracer    *Tracer
+	withOptimizer bool
+	tracer        *Tracer
 }
 
 type Opion func(*QueryOption)
 
-func NoOptimizer() Opion         { return func(o *QueryOption) { o.WithOptimizer = false } }
-func WithTracer(t *Tracer) Opion { return func(o *QueryOption) { o.WithTracer = t } }
+func NoOptimizer() Opion         { return func(o *QueryOption) { o.withOptimizer = false } }
+func WithTracer(t *Tracer) Opion { return func(o *QueryOption) { o.tracer = t } }
 
 // QueryStr execute the given Query-string.
 func (l *List[T, ID]) QueryStr(queryStr string, opts ...Opion) *QueryResult[T, ID] {
@@ -205,16 +205,16 @@ func (l *List[T, ID]) QueryStr(queryStr string, opts ...Opion) *QueryResult[T, I
 
 // Query execute the given Query.
 func (l *List[T, ID]) Query(query Expr, opts ...Opion) *QueryResult[T, ID] {
-	opt := QueryOption{WithOptimizer: true}
+	opt := QueryOption{withOptimizer: true}
 	for _, o := range opts {
 		o(&opt)
 	}
 
-	if opt.WithOptimizer {
+	if opt.withOptimizer {
 		query = query.Optimize()
 	}
 
-	return &QueryResult[T, ID]{list: l, query: query.Compile(opt.WithTracer)}
+	return &QueryResult[T, ID]{list: l, query: query.Compile(opt.tracer)}
 }
 
 type QueryResult[T any, ID comparable] struct {

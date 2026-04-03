@@ -28,8 +28,10 @@ func matchEmpty() Query {
 	}
 }
 
+// matchOne matched ONE given value
+//
 //go:inline
-func match(fieldName string, op FilterOp, value any) Query {
+func matchOne(fieldName string, op FilterOp, value any) Query {
 	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
@@ -41,6 +43,8 @@ func match(fieldName string, op FilterOp, value any) Query {
 	}
 }
 
+// matchMany matched MANY given value
+//
 //go:inline
 func matchMany(fieldName string, op FilterOp, values ...any) Query {
 	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
@@ -89,54 +93,10 @@ func Ge(fieldName string, val any) Expr { return TermExpr{fieldName, FOpGe, val}
 // }
 
 // In combines Eq with an Or
-// In("name", "Paul", "Egon") => name == "Paul" Or name == "Egon"
+// In("age", 21, 42) => age == 21 Or age == 42
 func In(fieldName string, vals ...any) Expr { return TermManyExpr{fieldName, FOpIn, vals} }
 
-//go:inline
-func matchIn(fieldName string, vals ...any) Query {
-	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
-		if len(vals) == 0 {
-			return NewRawIDs[uint32](), true, nil
-		}
-
-		filter, err := l(fieldName)
-		if err != nil {
-			return nil, false, err
-		}
-
-		matched := make([]*RawIDs32, 0, len(vals))
-		var maxLen int
-
-		for _, v := range vals {
-			rid, err := filter.Match(FOpEq, v)
-			if err != nil {
-				return nil, false, err
-			}
-
-			matched = append(matched, rid)
-			rcount := rid.Len()
-			if rcount > maxLen {
-				maxLen = rcount
-			}
-		}
-
-		switch len(matched) {
-		case 0:
-			return NewRawIDs[uint32](), true, nil
-		case 1:
-			return matched[0], false, nil
-		}
-
-		result := NewRawIDsWithCapacity[uint32](maxLen)
-		for _, bs := range matched {
-			result.Or(bs)
-		}
-
-		return result, true, nil
-	}
-}
-
-// NotEq is a shorcut for Not(Eq(...))
+// NotEq is a shorcut for Not(Eq(...)) and means for example age != 42
 func NotEq(fieldName string, val any) Expr { return TermExpr{fieldName, FOpNeq, val} }
 
 //go:inline
@@ -163,9 +123,12 @@ func matchNotEq(fieldName string, val any) Query {
 	}
 }
 
+// Not Not(Query), for example Not(age > 42)
 func Not(expr Expr) Expr { return NotExpr{expr} }
 
 // Not Not(Query)
+//
+//go:inline
 func matchNot(q Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		// can Mutate is not relevant, because allIDs are copied
@@ -182,11 +145,12 @@ func matchNot(q Query) Query {
 }
 
 // WithPrefix query for string starts with
-func WithPrefix(fieldName string, val string) Query { return match(fieldName, FOpStartsWith, val) }
-
-func And(left Expr, right Expr) Expr { return BinaryExpr{ExprAnd, left, right} }
+func WithPrefix(fieldName string, val string) Query { return matchOne(fieldName, FOpStartsWith, val) }
 
 // And combines 2 or more queries with an logical And
+func And(left Expr, right Expr) Expr { return AndExpr{left, right} }
+
+//go:inline
 func matchAnd(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 
@@ -216,9 +180,10 @@ func matchAnd(a Query, b Query) Query {
 	}
 }
 
-func Or(left Expr, right Expr) Expr { return BinaryExpr{ExprOr, left, right} }
-
 // Or combines 2 or more queries with an logical Or
+func Or(left Expr, right Expr) Expr { return OrExpr{left, right} }
+
+//go:inline
 func matchOr(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		result, canMutate, err := a(l, allIDs)
@@ -250,10 +215,11 @@ func matchOr(a Query, b Query) Query {
 	}
 }
 
-func AndNot(left Expr, right Expr) Expr { return BinaryExpr{ExprAndNot, left, right} }
-
 // AndNot performs: baseQuery AND NOT(subQuery)
 // example: status = 'active' AND type != 'guest'
+func AndNot(left Expr, right Expr) Expr { return AndNotExpr{left, right} }
+
+//go:inline
 func matchAndNot(base Query, sub Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (*RawIDs32, bool, error) {
 		// base result (e.g., the 'active')

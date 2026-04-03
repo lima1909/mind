@@ -6,160 +6,45 @@ import (
 	"time"
 )
 
-type ExprKind uint8
-
-const (
-	ExprOr ExprKind = iota
-	ExprAnd
-	ExprAndNot
-)
-
-func (e ExprKind) String() string {
-	switch e {
-	case ExprOr:
-		return " OR "
-	case ExprAnd:
-		return " AND "
-	case ExprAndNot:
-		return " ANDNOT "
-	default:
-		return " "
-	}
-}
-
 type Expr interface {
 	Equals(Expr) bool
-	Compile(*Tracer) Query
 	Optimize() Expr
+	Compile(*Tracer) Query
 	String() string
 }
 
-type BinaryExpr struct {
-	Ekind ExprKind
+type OrExpr struct {
 	Left  Expr
 	Right Expr
 }
 
-func (e BinaryExpr) Equals(other Expr) bool {
-	o, ok := other.(BinaryExpr)
+func (e OrExpr) Equals(other Expr) bool {
+	o, ok := other.(OrExpr)
 	if !ok {
-		return false
-	}
-
-	if e.Ekind != o.Ekind {
 		return false
 	}
 
 	return e.Left.Equals(o.Left) && e.Right.Equals(o.Right)
 }
 
-func (e BinaryExpr) Compile(t *Tracer) Query {
-	var leftTracer, rightTracer *Tracer
-	if t != nil {
-		leftTracer, rightTracer = &Tracer{}, &Tracer{}
-	}
-
-	left := e.Left.Compile(leftTracer)
-	right := e.Right.Compile(rightTracer)
-
-	var query Query
-
-	switch e.Ekind {
-	case ExprOr:
-		query = matchOr(left, right)
-	case ExprAnd:
-		query = matchAnd(left, right)
-	case ExprAndNot:
-		query = matchAndNot(left, right)
-	default:
-		panic(fmt.Sprintf("Not supported BinaryExpr: %v", e))
-	}
-
-	return t.Trace(query, e, leftTracer, rightTracer)
-}
-
-func (e BinaryExpr) Optimize() Expr {
+func (e OrExpr) Optimize() Expr {
 
 	left := e.Left.Optimize()
 	right := e.Right.Optimize()
 
-	switch e.Ekind {
-	case ExprAnd:
-		// RULE: And(A, Not(B)) -> AndNot(A, B)
-		if notNode, ok := right.(NotExpr); ok {
-			return BinaryExpr{Ekind: ExprAndNot, Left: left, Right: notNode.Child}
-		}
-		// RULE: And(Not(A), B) -> AndNot(A, B)
-		if notNode, ok := left.(NotExpr); ok {
-			return BinaryExpr{Ekind: ExprAndNot, Left: right, Right: notNode.Child}
-		}
-
-		// RULE: And(A > X, B < Y) -> BETWEEN(A, B)
-		if lt, okL := left.(TermExpr); okL {
-			if rt, okR := right.(TermExpr); okR {
-				if lt.Field == rt.Field {
-					var min, max any
-					var minInc, maxInc bool
-
-					// Identify Lower Bound
-					if lt.Op.Op == OpGt || lt.Op.Op == OpGe {
-						min, minInc = lt.Value, (lt.Op.Op == OpGe)
-					} else if rt.Op.Op == OpGt || rt.Op.Op == OpGe {
-						min, minInc = rt.Value, (rt.Op.Op == OpGe)
-					}
-
-					// Identify Upper Bound
-					if lt.Op.Op == OpLt || lt.Op.Op == OpLe {
-						max, maxInc = lt.Value, (lt.Op.Op == OpLe)
-					} else if rt.Op.Op == OpLt || rt.Op.Op == OpLe {
-						max, maxInc = rt.Value, (rt.Op.Op == OpLe)
-					}
-
-					// If we found both a min and a max, we have a BETWEEN
-					if min != nil && max != nil {
-						if isImpossibleRange(min, max, minInc, maxInc) {
-							return FalseExpr{}
-						}
-						return TermManyExpr{
-							Field:  lt.Field,
-							Op:     FOpBetween,
-							Values: []any{min, max},
-						}
-					}
-
-				}
-			}
-		}
-
-		// AND: with one part FALSE -> result is FALSE
-		if _, ok := left.(FalseExpr); ok {
-			return FalseExpr{}
-		}
-		if _, ok := right.(FalseExpr); ok {
-			return FalseExpr{}
-		}
-		// check, that NOT both are FALSE
-		if _, ok := left.(TrueExpr); ok {
-			return right
-		}
-		if _, ok := right.(TrueExpr); ok {
-			return left
-		}
-	case ExprOr:
-		// OR: with at least one is TRUE -> result is TRUE
-		if _, ok := left.(TrueExpr); ok {
-			return TrueExpr{}
-		}
-		if _, ok := right.(TrueExpr); ok {
-			return TrueExpr{}
-		}
-		// check, that NOT both are TRUE
-		if _, ok := left.(FalseExpr); ok {
-			return right
-		}
-		if _, ok := right.(FalseExpr); ok {
-			return left
-		}
+	// OR: with at least one is TRUE -> result is TRUE
+	if _, ok := left.(TrueExpr); ok {
+		return TrueExpr{}
+	}
+	if _, ok := right.(TrueExpr); ok {
+		return TrueExpr{}
+	}
+	// check, that NOT both are TRUE
+	if _, ok := left.(FalseExpr); ok {
+		return right
+	}
+	if _, ok := right.(FalseExpr); ok {
+		return left
 	}
 
 	// GC OPTIMIZATION: If nothing was optimized in the children, return the original interface
@@ -168,10 +53,149 @@ func (e BinaryExpr) Optimize() Expr {
 		return e
 	}
 
-	return BinaryExpr{Ekind: e.Ekind, Left: left, Right: right}
+	return OrExpr{Left: left, Right: right}
 }
 
-func (e BinaryExpr) String() string { return fmt.Sprintf("%s%s%s", e.Left, e.Ekind, e.Right) }
+func (e OrExpr) Compile(t *Tracer) Query {
+	var leftTracer, rightTracer *Tracer
+	if t != nil {
+		leftTracer, rightTracer = &Tracer{}, &Tracer{}
+	}
+
+	left := e.Left.Compile(leftTracer)
+	right := e.Right.Compile(rightTracer)
+	return t.Trace(matchOr(left, right), e, leftTracer, rightTracer)
+}
+
+func (e OrExpr) String() string { return fmt.Sprintf("%s OR %s", e.Left, e.Right) }
+
+type AndExpr struct {
+	Left  Expr
+	Right Expr
+}
+
+func (e AndExpr) Equals(other Expr) bool {
+	o, ok := other.(AndExpr)
+	if !ok {
+		return false
+	}
+
+	return e.Left.Equals(o.Left) && e.Right.Equals(o.Right)
+}
+func (e AndExpr) Optimize() Expr {
+	left := e.Left.Optimize()
+	right := e.Right.Optimize()
+
+	// RULE: And(A, Not(B)) -> AndNot(A, B)
+	if notNode, ok := right.(NotExpr); ok {
+		return AndNotExpr{Left: left, Right: notNode.Child}
+	}
+	// RULE: And(Not(A), B) -> AndNot(A, B)
+	if notNode, ok := left.(NotExpr); ok {
+		return AndNotExpr{Left: right, Right: notNode.Child}
+	}
+
+	// RULE: And(A > X, B < Y) -> BETWEEN(A, B)
+	if lt, okL := left.(TermExpr); okL {
+		if rt, okR := right.(TermExpr); okR {
+			if lt.Field == rt.Field {
+				var min, max any
+				var minInc, maxInc bool
+
+				// Identify Lower Bound
+				if lt.Op.Op == OpGt || lt.Op.Op == OpGe {
+					min, minInc = lt.Value, (lt.Op.Op == OpGe)
+				} else if rt.Op.Op == OpGt || rt.Op.Op == OpGe {
+					min, minInc = rt.Value, (rt.Op.Op == OpGe)
+				}
+
+				// Identify Upper Bound
+				if lt.Op.Op == OpLt || lt.Op.Op == OpLe {
+					max, maxInc = lt.Value, (lt.Op.Op == OpLe)
+				} else if rt.Op.Op == OpLt || rt.Op.Op == OpLe {
+					max, maxInc = rt.Value, (rt.Op.Op == OpLe)
+				}
+
+				// If we found both a min and a max, we have a BETWEEN
+				if min != nil && max != nil {
+					if isImpossibleRange(min, max, minInc, maxInc) {
+						return FalseExpr{}
+					}
+					return TermManyExpr{
+						Field:  lt.Field,
+						Op:     FOpBetween,
+						Values: []any{min, max},
+					}
+				}
+
+			}
+		}
+	}
+
+	// AND: with one part FALSE -> result is FALSE
+	if _, ok := left.(FalseExpr); ok {
+		return FalseExpr{}
+	}
+	if _, ok := right.(FalseExpr); ok {
+		return FalseExpr{}
+	}
+	// check, that NOT both are FALSE
+	if _, ok := left.(TrueExpr); ok {
+		return right
+	}
+	if _, ok := right.(TrueExpr); ok {
+		return left
+	}
+
+	// GC OPTIMIZATION: If nothing was optimized in the children, return the original interface
+	// to prevent allocating a new struct on the heap.
+	if left.Equals(e.Left) && right.Equals(e.Right) {
+		return e
+	}
+
+	return AndExpr{Left: left, Right: right}
+}
+
+func (e AndExpr) Compile(t *Tracer) Query {
+	var leftTracer, rightTracer *Tracer
+	if t != nil {
+		leftTracer, rightTracer = &Tracer{}, &Tracer{}
+	}
+
+	left := e.Left.Compile(leftTracer)
+	right := e.Right.Compile(rightTracer)
+	return t.Trace(matchAnd(left, right), e, leftTracer, rightTracer)
+}
+func (e AndExpr) String() string { return fmt.Sprintf("%s AND %s", e.Left, e.Right) }
+
+type AndNotExpr struct {
+	Left  Expr
+	Right Expr
+}
+
+func (e AndNotExpr) Equals(other Expr) bool {
+	o, ok := other.(AndNotExpr)
+	if !ok {
+		return false
+	}
+
+	return e.Left.Equals(o.Left) && e.Right.Equals(o.Right)
+}
+
+func (e AndNotExpr) Optimize() Expr { return e }
+
+func (e AndNotExpr) Compile(t *Tracer) Query {
+	var leftTracer, rightTracer *Tracer
+	if t != nil {
+		leftTracer, rightTracer = &Tracer{}, &Tracer{}
+	}
+
+	left := e.Left.Compile(leftTracer)
+	right := e.Right.Compile(rightTracer)
+	return t.Trace(matchAndNot(left, right), e, leftTracer, rightTracer)
+}
+
+func (e AndNotExpr) String() string { return fmt.Sprintf("%s ANDNOT %s", e.Left, e.Right) }
 
 type NotExpr struct{ Child Expr }
 
@@ -184,15 +208,6 @@ func (e NotExpr) Equals(other Expr) bool {
 	return e.Child.Equals(o.Child)
 }
 
-func (e NotExpr) Compile(t *Tracer) Query {
-	var childTracer *Tracer
-	if t != nil {
-		childTracer = &Tracer{}
-	}
-
-	return t.Trace(matchNot(e.Child.Compile(childTracer)), e, childTracer)
-}
-
 func (e NotExpr) Optimize() Expr {
 
 	child := e.Child.Optimize()
@@ -202,23 +217,12 @@ func (e NotExpr) Optimize() Expr {
 	case NotExpr:
 		return c.Child.Optimize()
 	// DE MORGAN'S LAWS: Push NOT down the tree
-	case BinaryExpr:
-		if c.Ekind == ExprAnd {
-			// RULE: Not(A AND B) -> Not(A) OR Not(B)
-			return BinaryExpr{
-				Ekind: ExprOr,
-				Left:  NotExpr{Child: c.Left},
-				Right: NotExpr{Child: c.Right},
-			}.Optimize()
-		}
-		if c.Ekind == ExprOr {
-			// RULE: Not(A OR B) -> Not(A) AND NOT(B)
-			return BinaryExpr{
-				Ekind: ExprAnd,
-				Left:  NotExpr{Child: c.Left},
-				Right: NotExpr{Child: c.Right},
-			}.Optimize()
-		}
+	case OrExpr:
+		// RULE: Not(A OR B) -> Not(A) AND NOT(B)
+		return AndExpr{Left: NotExpr{Child: c.Left}, Right: NotExpr{Child: c.Right}}.Optimize()
+	case AndExpr:
+		// RULE: Not(A AND B) -> Not(A) OR Not(B)
+		return OrExpr{Left: NotExpr{Child: c.Left}, Right: NotExpr{Child: c.Right}}.Optimize()
 
 	// RULE: NOT(FALSE) -> TRUE
 	case FalseExpr:
@@ -259,6 +263,15 @@ func (e NotExpr) Optimize() Expr {
 	return NotExpr{Child: child}
 }
 
+func (e NotExpr) Compile(t *Tracer) Query {
+	var childTracer *Tracer
+	if t != nil {
+		childTracer = &Tracer{}
+	}
+
+	return t.Trace(matchNot(e.Child.Compile(childTracer)), e, childTracer)
+}
+
 func (e NotExpr) String() string { return fmt.Sprintf(" NOT(%s) ", e.Child) }
 
 type TermExpr struct {
@@ -273,16 +286,21 @@ func (e TermExpr) Equals(other Expr) bool {
 		return false
 	}
 
-	return e.Field == o.Field && e.Op == o.Op && e.Value == o.Value
+	return e.Op == o.Op && e.Field == o.Field && e.Value == o.Value
 }
 
-func (e TermExpr) Compile(t *Tracer) Query {
-	if e.Op.Op == OpNeq {
-		return t.Trace(matchNotEq(e.Field, e.Value), e)
-	}
-	return t.Trace(match(e.Field, e.Op, e.Value), e)
-}
 func (e TermExpr) Optimize() Expr { return e }
+
+func (e TermExpr) Compile(t *Tracer) Query {
+	switch e.Op.Op {
+	case OpNeq:
+		// is much faster than !=
+		// and many Index like Map and SkipList doesn't support !=
+		return t.Trace(matchNotEq(e.Field, e.Value), e)
+	default:
+		return t.Trace(matchOne(e.Field, e.Op, e.Value), e)
+	}
+}
 func (e TermExpr) String() string { return fmt.Sprintf("%s %s %v", e.Field, e.Op, e.Value) }
 
 type TermManyExpr struct {
@@ -307,13 +325,10 @@ func (e TermManyExpr) Equals(other Expr) bool {
 		}
 	}
 
-	return e.Field == o.Field && e.Op == o.Op
+	return e.Op == o.Op && e.Field == o.Field
 }
 
 func (e TermManyExpr) Compile(t *Tracer) Query {
-	if e.Op.Op == OpIn {
-		return t.Trace(matchIn(e.Field, e.Values...), e)
-	}
 	return t.Trace(matchMany(e.Field, e.Op, e.Values...), e)
 }
 func (e TermManyExpr) Optimize() Expr { return e }
@@ -361,7 +376,7 @@ func isImpossibleRange(min, max any, minInc, maxInc bool) bool {
 	return false
 }
 
-// Trace collect, what Expr are called and
+// Tracer collect, what Expr are called and
 // how long is the execution durations and
 // how many matches are found
 type Tracer struct {
@@ -393,7 +408,18 @@ func (t *Tracer) Trace(query Query, expr Expr, children ...*Tracer) Query {
 	}
 }
 
-func (t *Tracer) Print(indent string, isLast bool) string {
+func (t *Tracer) PrettyString() string {
+	if t == nil {
+		return "<nil trace>"
+	}
+	return t.prettyString("", true)
+}
+
+func (t *Tracer) prettyString(indent string, isLast bool) string {
+	if t == nil {
+		return "<nil trace>"
+	}
+
 	var sb strings.Builder
 
 	marker := "├── "
@@ -417,15 +443,8 @@ func (t *Tracer) Print(indent string, isLast bool) string {
 	// Recursively print children
 	for i, child := range t.Children {
 		lastChild := i == len(t.Children)-1
-		sb.WriteString(child.Print(newIndent, lastChild))
+		sb.WriteString(child.prettyString(newIndent, lastChild))
 	}
 
 	return sb.String()
-}
-
-func (t *Tracer) String() string {
-	if t == nil {
-		return "<nil trace>"
-	}
-	return t.Print("", true)
 }

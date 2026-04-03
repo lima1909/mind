@@ -347,7 +347,18 @@ func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
 func (mi *MapIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	switch op.Op {
 	case OpIn:
-		if len(values) == 0 {
+		// fast path for 0 or 1 values
+		switch len(values) {
+		case 0:
+			return NewRawIDs[uint32](), nil
+		case 1:
+			key, err := ValueFromAny[V](values[0])
+			if err != nil {
+				return nil, err
+			}
+			if rid, found := mi.data[key]; found {
+				return rid.Copy(), nil
+			}
 			return NewRawIDs[uint32](), nil
 		}
 
@@ -369,8 +380,12 @@ func (mi *MapIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, er
 			}
 		}
 
-		if len(matched) == 0 {
+		// fast path for 0 or 1 matches
+		switch len(matched) {
+		case 0:
 			return NewRawIDs[uint32](), nil
+		case 1:
+			return matched[0].Copy(), nil
 		}
 
 		result := NewRawIDsWithCapacity[uint32](maxLen)
@@ -504,7 +519,18 @@ func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 		})
 		return result, nil
 	case OpIn:
-		if len(values) == 0 {
+		// fast path for 0 or 1 values
+		switch len(values) {
+		case 0:
+			return NewRawIDs[uint32](), nil
+		case 1:
+			key, err := ValueFromAny[V](values[0])
+			if err != nil {
+				return nil, err
+			}
+			if rid, found := si.skipList.Get(key); found {
+				return rid.Copy(), nil
+			}
 			return NewRawIDs[uint32](), nil
 		}
 
@@ -526,8 +552,12 @@ func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 			}
 		}
 
-		if len(matched) == 0 {
+		// fast path for 0 or 1 matches
+		switch len(matched) {
+		case 0:
 			return NewRawIDs[uint32](), nil
+		case 1:
+			return matched[0].Copy(), nil
 		}
 
 		result := NewRawIDsWithCapacity[uint32](maxLen)
