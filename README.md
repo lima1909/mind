@@ -28,10 +28,10 @@ go get github.com/lima1909/mind
 
 | Index      | Backed by | Supported operations |
 |------------|-----------|----------------------|
-| `MapIndex` | Hash map  | `=`, `!=`            |
+| `MapIndex` | Hash map  | `=`, `!=`, `In`      |
 | `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In` |
 
-All operations can be combined with `and`, `or` and `not`.
+**All operations** can be combined with `AND`, `OR` and `NOT`.
 
 ## Trade-offs
 
