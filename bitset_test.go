@@ -90,6 +90,11 @@ func TestBitSet_Or(t *testing.T) {
 	b2 := NewBitSetFrom[uint32](110)
 	b0.Or(b2)
 	assert.Equal(t, []uint32{110}, b0.ToSlice())
+
+	b10 := NewBitSetFrom[uint32](110)
+	b12 := NewBitSet[uint32]()
+	b10.Or(b12)
+	assert.Equal(t, []uint32{110}, b10.ToSlice())
 }
 
 func TestBitSet_Or1(t *testing.T) {

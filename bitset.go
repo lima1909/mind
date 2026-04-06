@@ -340,6 +340,10 @@ func (b *BitSet[U]) Or(other *BitSet[U]) {
 	if ol == 0 {
 		return
 	}
+	if bl == 0 {
+		b.data = other.data
+		return
+	}
 
 	overlap := min(bl, ol)
 
