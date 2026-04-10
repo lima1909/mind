@@ -40,22 +40,13 @@ func BenchmarkQueryStr(b *testing.B) {
 
 	minV := 10
 	maxV := 100
+	ds := 3_000_000
+	n := 0
 	names := strings.Split(names_txt, "\n")
 
 	start := time.Now()
-
-	// Sprintf is expensive, so we only test with 250_000 datasets
-	ds := 3_000_000
-
-	// list := make([]person, 0, ds)
-
 	il := NewList[person]()
-	err := il.CreateIndex("name", NewSortedIndex(FromName[person, string]("Name")))
-	assert.NoError(b, err)
-	err = il.CreateIndex("age", NewSortedIndex(FromName[person, int]("Age")))
-	assert.NoError(b, err)
 
-	n := 0
 	for i := 1; i <= ds; i++ {
 		if n%6779 == 0 {
 			n = 0
@@ -66,13 +57,15 @@ func BenchmarkQueryStr(b *testing.B) {
 			Name: names[n],
 			Age:  minV + rand.IntN(maxV-minV+1),
 		})
-
-		// list = append(list, person{
-		// 	Name: names[n],
-		// 	Age:  minV + rand.IntN(maxV-minV+1),
-		// })
 	}
 	fmt.Printf("- Count: %d, Time: %s\n", il.Count(), time.Since(start))
+
+	// create index after insert all data is MUCH faster
+	err := il.CreateIndex("name", NewSortedIndex(FromName[person, string]("Name")))
+	assert.NoError(b, err)
+	err = il.CreateIndex("age", NewSortedIndex(FromName[person, int]("Age")))
+	assert.NoError(b, err)
+
 	b.ResetTimer()
 
 	bmarks := []struct {
@@ -106,30 +99,6 @@ func BenchmarkQueryStr(b *testing.B) {
 				return count
 			},
 		},
-		// {
-		// 	name: "FullScan",
-		// 	bmark: func() int {
-		// 		count, _ := il.QueryStr(
-		// 			`name2 IN("Jule", "Magan") or age2 > 80`,
-		// 		).Count()
-		// 		return count
-		// 	},
-		// },
-		// {
-		// 	name: "List-NoIdx",
-		// 	bmark: func() int {
-		// 		count := 0
-		// 		for _, p := range list {
-		// 			if p.Name == "Jule" || p.Name == "Magan" || p.Age > 80 {
-		// 				count++
-		// 			}
-		// 			if count > 5000 {
-		// 				break
-		// 			}
-		// 		}
-		// 		return count
-		// 	},
-		// },
 	}
 
 	for _, bench := range bmarks {
