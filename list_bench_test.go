@@ -35,7 +35,7 @@ var names_txt string
 func BenchmarkQueryStr(b *testing.B) {
 	type person struct {
 		Name string
-		Age  int
+		Age  uint8
 	}
 
 	minV := 10
@@ -55,16 +55,19 @@ func BenchmarkQueryStr(b *testing.B) {
 
 		il.Insert(person{
 			Name: names[n],
-			Age:  minV + rand.IntN(maxV-minV+1),
+			Age:  uint8(minV + rand.IntN(maxV-minV+1)),
 		})
 	}
-	fmt.Printf("- Count: %d, Time: %s\n", il.Count(), time.Since(start))
 
 	// create index after insert all data is MUCH faster
 	err := il.CreateIndex("name", NewSortedIndex(FromName[person, string]("Name")))
 	assert.NoError(b, err)
-	err = il.CreateIndex("age", NewSortedIndex(FromName[person, int]("Age")))
+	err = il.CreateIndex("age", NewSortedIndex(FromName[person, uint8]("Age")))
 	assert.NoError(b, err)
+	err = il.CreateIndex("age2", NewRangeIndex(FromName[person, uint8]("Age")))
+	assert.NoError(b, err)
+
+	fmt.Printf("- Count: %d, Time: %s\n", il.Count(), time.Since(start))
 
 	b.ResetTimer()
 
@@ -82,19 +85,19 @@ func BenchmarkQueryStr(b *testing.B) {
 			},
 		},
 		{
-			name: "List-In",
+			name: "List-OrRg",
 			bmark: func() int {
 				count, _ := il.QueryStr(
-					`name IN("Jule", "Magan") or age > 80`,
+					`name = "Jule" or name = "Magan" or age2 > 80`,
 				).Count()
 				return count
 			},
 		},
 		{
-			name: "List-And",
+			name: "List-In",
 			bmark: func() int {
 				count, _ := il.QueryStr(
-					`name = "Jule" or name = "Magan" and age > 80`,
+					`name IN("Jule", "Magan") or age > 80`,
 				).Count()
 				return count
 			},

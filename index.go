@@ -452,7 +452,7 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) 
 		return NewRawIDs[uint32](), nil
 	case OpLt:
 		result := NewRawIDs[uint32]()
-		si.skipList.Less(v, func(v V, bs *RawIDs32) bool {
+		si.skipList.Less(v, func(_ V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
@@ -569,4 +569,168 @@ func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 	default:
 		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
+}
+
+const RangeIndexName = "RangeIndex"
+
+type RangeIndex[OBJ any] struct {
+	data [256]*RawIDs32
+	// the length of the data (the max value)
+	// max can be: 256 if the data is full from 0-255
+	max        int
+	fieldGetFn FromField[OBJ, uint8]
+}
+
+func NewRangeIndex[OBJ any](fieldGetFn FromField[OBJ, uint8]) Index[OBJ] {
+	return &RangeIndex[OBJ]{
+		// Array size must be 256 to cover indices 0-255
+		data:       [256]*RawIDs32{},
+		fieldGetFn: fieldGetFn,
+	}
+}
+
+func (ri *RangeIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
+	value := ri.fieldGetFn(obj)
+	valInt := int(value)
+
+	r := ri.data[valInt]
+	if r == nil {
+		r = NewRawIDs[uint32]()
+		ri.data[valInt] = r
+	}
+	r.Set(lidx)
+
+	// new max value, if value greater the old max value
+	if ri.max < valInt+1 {
+		ri.max = valInt + 1
+	}
+}
+
+func (ri *RangeIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {
+	value := ri.fieldGetFn(obj)
+	valInt := int(value)
+
+	r := ri.data[valInt]
+	if r == nil {
+		return
+	}
+	r.UnSet(lidx)
+
+	if r.IsEmpty() {
+		ri.data[valInt] = nil
+
+		// if is empty, calculate the new max value
+		if ri.max == valInt+1 {
+			ri.max = 0 // default fallback
+			for i := valInt - 1; i >= 0; i-- {
+				if ri.data[i] != nil && !ri.data[i].IsEmpty() {
+					ri.max = i + 1
+					break
+				}
+			}
+		}
+	}
+}
+
+func (ri *RangeIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
+	return ri.fieldGetFn(oldItem) != ri.fieldGetFn(newItem)
+}
+
+func (ri *RangeIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
+	v, err := ValueFromAny[uint8](value)
+	if err != nil {
+		return nil, InvalidValueTypeError[uint8]{value}
+	}
+	valInt := int(v)
+
+	switch op.Op {
+	case OpEq:
+		r := ri.data[valInt]
+		if r == nil {
+			return NewRawIDs[uint32](), nil
+		}
+		// CRITICAL: Protect internal memory!
+		return r.Copy(), nil
+
+	case OpLt, OpLe, OpGt, OpGe:
+		start, end := 0, ri.max
+		if op.Op == OpLt {
+			end = valInt
+		}
+		if op.Op == OpLe {
+			end = valInt + 1
+		}
+		if op.Op == OpGt {
+			start = valInt + 1
+		}
+		if op.Op == OpGe {
+			start = valInt
+		}
+
+		// Bound checks
+		if end > ri.max {
+			end = ri.max
+		}
+
+		result := NewRawIDs[uint32]()
+		for i := start; i < end; i++ {
+			if ri.data[i] != nil && !ri.data[i].IsEmpty() {
+				result.Or(ri.data[i])
+			}
+		}
+		return result, nil
+
+	default:
+		return nil, InvalidOperationError{SortedIndexName, op.Op}
+	}
+}
+
+func (ri *RangeIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+	switch op.Op {
+	case OpBetween:
+		if len(values) != 2 {
+			return nil, InvalidArgsLenError{Defined: "2", Got: len(values)}
+		}
+
+		minVal, err := ValueFromAny[uint8](values[0])
+		if err != nil {
+			return nil, InvalidValueTypeError[uint8]{values[0]}
+		}
+		maxVal, err := ValueFromAny[uint8](values[1])
+		if err != nil {
+			return nil, InvalidValueTypeError[uint8]{values[1]}
+		}
+
+		// Use ints to prevent infinite loop on maxVal == 255
+		min, max := int(minVal), int(maxVal)
+
+		result := NewRawIDs[uint32]()
+		for i := min; i <= max; i++ {
+			if i >= ri.max {
+				break
+			}
+			if ri.data[i] != nil && !ri.data[i].IsEmpty() {
+				result.Or(ri.data[i])
+			}
+		}
+		return result, nil
+	case OpIn:
+		result := NewRawIDs[uint32]()
+		for _, v := range values {
+			i, err := ValueFromAny[uint8](v)
+			if err != nil {
+				return nil, err
+			}
+
+			valInt := int(i)
+			if valInt < ri.max && ri.data[valInt] != nil && !ri.data[valInt].IsEmpty() {
+				result.Or(ri.data[i])
+			}
+		}
+		return result, nil
+
+	default:
+		return nil, InvalidOperationError{SortedIndexName, op.Op}
+	}
+
 }
