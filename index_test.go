@@ -21,15 +21,15 @@ func TestIndex_EquaString(t *testing.T) {
 			set(tt.index, "a", 2)
 			set(tt.index, "b", 3)
 
-			bs, _ := tt.index.Match(FOpEq, "a")
+			bs, _ := tt.index.Equal("a")
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
 
 			unSet(tt.index, "a", 2)
-			bs, _ = tt.index.Match(FOpEq, "a")
+			bs, _ = tt.index.Equal("a")
 			assert.Equal(t, []uint32{1}, bs.ToSlice())
 
 			unSet(tt.index, "a", 1)
-			bs, err := tt.index.Match(FOpEq, "a")
+			bs, err := tt.index.Equal("a")
 			assert.NoError(t, err)
 			assert.Equal(t, 0, bs.Count())
 		})
@@ -93,7 +93,7 @@ func index() []testIndex {
 func TestIndex_Empty(t *testing.T) {
 	for _, tt := range index() {
 		t.Run(tt.name, func(t *testing.T) {
-			bs, err := tt.index.Match(FOpEq, 1)
+			bs, err := tt.index.Equal(1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 
@@ -123,15 +123,15 @@ func TestIndex_Equal(t *testing.T) {
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
 
-			bs, err := tt.index.Match(FOpEq, 0)
+			bs, err := tt.index.Equal(0)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-			bs, err = tt.index.Match(FOpEq, 1)
+			bs, err = tt.index.Equal(1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
 
-			bs, err = tt.index.Match(FOpEq, 5)
+			bs, err = tt.index.Equal(5)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 		})
@@ -283,17 +283,17 @@ func TestIDIndex_Filter(t *testing.T) {
 	vw := car{name: "vw", age: 2}
 	mi.Set(&vw, 0)
 
-	bs, err := mi.Match(FOpEq, "vw")
+	bs, err := mi.Equal("vw")
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{0}, bs.ToSlice())
 
-	_, err = mi.Match(FOpEq, 4)
+	_, err = mi.Equal(4)
 	assert.ErrorIs(t, InvalidValueTypeError[string]{4}, err)
 
 	_, err = mi.Match(FOpLt, "vw")
 	assert.ErrorIs(t, InvalidOperationError{IDMapIndexName, OpLt}, err)
 
-	_, err = mi.Match(FOpEq, "opel")
+	_, err = mi.Equal("opel")
 	assert.ErrorIs(t, ValueNotFoundError{"opel"}, err)
 }
 
@@ -418,7 +418,7 @@ func TestIdAutoInc(t *testing.T) {
 	_, err = auto.GetIndex(2)
 	assert.ErrorIs(t, ValueNotFoundError{uint64(2)}, err)
 
-	bs, err := auto.Match(FOpEq, uint64(3))
+	bs, err := auto.Equal(uint64(3))
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{5}, bs.ToSlice())
 }

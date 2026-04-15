@@ -293,6 +293,8 @@ func (e TermExpr) Optimize() Expr { return e }
 
 func (e TermExpr) Compile(t *Tracer) Query {
 	switch e.Op.Op {
+	case OpEq:
+		return t.Trace(matchEqual(e.Field, e.Value), e)
 	case OpNeq:
 		// is much faster than !=
 		// and many Index like Map and SkipList doesn't support !=

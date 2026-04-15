@@ -28,6 +28,21 @@ func matchEmpty() Query {
 	}
 }
 
+// matchEqual matched Equal with given value
+//
+//go:inline
+func matchEqual(fieldName string, value any) Query {
+	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+		filter, err := l(fieldName)
+		if err != nil {
+			return nil, false, err
+		}
+
+		bs, err := filter.Equal(value)
+		return bs, false, err
+	}
+}
+
 // matchOne matched ONE given value
 //
 //go:inline
@@ -39,7 +54,7 @@ func matchOne(fieldName string, op FilterOp, value any) Query {
 		}
 
 		bs, err := filter.Match(op, value)
-		return bs, false, err
+		return bs, true, err
 	}
 }
 
@@ -107,7 +122,7 @@ func matchNotEq(fieldName string, val any) Query {
 			return nil, false, err
 		}
 
-		exclude, err := filter.Match(FOpEq, val)
+		exclude, err := filter.Equal(val)
 		if err != nil {
 			return nil, false, err
 		}

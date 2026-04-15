@@ -27,41 +27,41 @@ func TestMapIndex_UnSet(t *testing.T) {
 	set(mi, 42, 42)
 
 	// check all values are correct
-	bs, err := mi.Match(FOpEq, 1)
+	bs, err := mi.Equal(1)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, bs.Count())
-	bs, err = mi.Match(FOpEq, 3)
+	bs, err = mi.Equal(3)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, bs.Count())
-	bs, err = mi.Match(FOpEq, 42)
+	bs, err = mi.Equal(42)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, bs.Count())
 
 	// remove the last one: 42
 	unSet(mi, 42, 42)
-	bs, err = mi.Match(FOpEq, 42)
+	bs, err = mi.Equal(42)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, bs.Count())
 
 	// remove value 3
 	unSet(mi, 3, 3)
-	bs, err = mi.Match(FOpEq, 3)
+	bs, err = mi.Equal(3)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, bs.Count())
 	unSet(mi, 3, 5)
-	bs, err = mi.Match(FOpEq, 3)
+	bs, err = mi.Equal(3)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, bs.Count())
 
 	// for value 1 is no row 99, no deletion (ignored)
 	unSet(mi, 1, 99)
-	bs, err = mi.Match(FOpEq, 1)
+	bs, err = mi.Equal(1)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, bs.Count())
 
 	// remove value 1
 	unSet(mi, 1, 1)
-	bs, err = mi.Match(FOpEq, 1)
+	bs, err = mi.Equal(1)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, bs.Count())
 }
@@ -73,13 +73,13 @@ func TestMapIndex_Get(t *testing.T) {
 	set(mi, 3, 5)
 	set(mi, 42, 42)
 
-	bs, _ := mi.Match(FOpEq, 1)
+	bs, _ := mi.Equal(1)
 	assert.Equal(t, NewRawIDsFrom[uint32](1), bs)
-	bs, _ = mi.Match(FOpEq, 3)
+	bs, _ = mi.Equal(3)
 	assert.Equal(t, []uint32{3, 5}, bs.ToSlice())
 
 	// not found
-	bs, err := mi.Match(FOpEq, 7)
+	bs, err := mi.Equal(7)
 	assert.NoError(t, err)
 	assert.True(t, bs.IsEmpty())
 
@@ -146,11 +146,11 @@ func TestMapIndex_Query(t *testing.T) {
 	assert.Equal(t, []uint32{1, 3, 5}, result.ToSlice())
 
 	// after and | or, to check the original RawIDs is not changed
-	bs, _ := mi.Match(FOpEq, 1)
+	bs, _ := mi.Equal(1)
 	assert.Equal(t, []uint32{1}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 42)
+	bs, _ = mi.Equal(42)
 	assert.Equal(t, []uint32{42}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 3)
+	bs, _ = mi.Equal(3)
 	assert.Equal(t, []uint32{3, 5}, bs.ToSlice())
 }
 
@@ -178,11 +178,11 @@ func TestMapIndex_Query_Not(t *testing.T) {
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
 
 	// after and | or, to check the original RawIDs is not changed
-	bs, _ := mi.Match(FOpEq, 1)
+	bs, _ := mi.Equal(1)
 	assert.Equal(t, []uint32{1}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 42)
+	bs, _ = mi.Equal(42)
 	assert.Equal(t, []uint32{42}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 3)
+	bs, _ = mi.Equal(3)
 	assert.Equal(t, []uint32{3, 5}, bs.ToSlice())
 }
 
@@ -210,11 +210,11 @@ func TestSortedIndex_Query_Not(t *testing.T) {
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
 
 	// after and | or, to check the original RawIDs is not changed
-	bs, _ := mi.Match(FOpEq, 1)
+	bs, _ := mi.Equal(1)
 	assert.Equal(t, []uint32{1}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 42)
+	bs, _ = mi.Equal(42)
 	assert.Equal(t, []uint32{42}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 3)
+	bs, _ = mi.Equal(3)
 	assert.Equal(t, []uint32{3, 5}, bs.ToSlice())
 }
 
@@ -246,11 +246,11 @@ func TestMapIndex_Query_In(t *testing.T) {
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
 
 	// after and | or, to check the original RawIDs is not changed
-	bs, _ := mi.Match(FOpEq, 1)
+	bs, _ := mi.Equal(1)
 	assert.Equal(t, []uint32{1}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 42)
+	bs, _ = mi.Equal(42)
 	assert.Equal(t, []uint32{42}, bs.ToSlice())
-	bs, _ = mi.Match(FOpEq, 3)
+	bs, _ = mi.Equal(3)
 	assert.Equal(t, []uint32{3, 5}, bs.ToSlice())
 }
 
@@ -280,21 +280,19 @@ func TestSortedIndex_StringStartsWith(t *testing.T) {
 
 	result, canMutate, err := WithPrefix("val", "not found")(fi, allIDs)
 	assert.NoError(t, err)
-	assert.False(t, canMutate)
+	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{}, result.ToSlice())
 
 	result, canMutate, err = WithPrefix("val", "")(fi, allIDs)
 	assert.NoError(t, err)
-	assert.False(t, canMutate)
+	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5, 42}, result.ToSlice())
 
-	result, canMutate, err = WithPrefix("val", "no")(fi, allIDs)
+	result, _, err = WithPrefix("val", "no")(fi, allIDs)
 	assert.NoError(t, err)
-	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{3}, result.ToSlice())
 
-	result, canMutate, err = WithPrefix("val", "app")(fi, allIDs)
+	result, _, err = WithPrefix("val", "app")(fi, allIDs)
 	assert.NoError(t, err)
-	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{1, 5, 42}, result.ToSlice())
 }

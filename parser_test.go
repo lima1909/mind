@@ -506,22 +506,25 @@ func (mi *udfIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
 	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*RawIDs[LI], error) {
+func (mi *udfIndex[OBJ, V, LI]) Equal(value any) (*RawIDs[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
-	}
-
-	if op != udfOp && op.Op != OpEq {
-		return nil, InvalidOperationError{MapIndexName, op.Op}
 	}
 
 	bs, found := mi.data[v]
 	if !found {
 		return NewRawIDs[LI](), nil
 	}
-
 	return bs, nil
+}
+
+func (mi *udfIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*RawIDs[LI], error) {
+	if op != udfOp {
+		return nil, InvalidOperationError{MapIndexName, op.Op}
+	}
+
+	return mi.Equal(value)
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error

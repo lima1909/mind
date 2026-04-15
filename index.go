@@ -149,14 +149,10 @@ func (id *idAutoIncIndex[OBJ]) GetID(*OBJ) (uint64, int, error) {
 	return 0, -1, errors.New("GedID is not supported for this Index")
 }
 
-func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
+func (id *idAutoIncIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
 	i, ok := value.(uint64)
 	if !ok {
 		return nil, InvalidValueTypeError[uint32]{value}
-	}
-
-	if op.Op != OpEq {
-		return nil, InvalidOperationError{IDAutoIncName, op.Op}
 	}
 
 	idx, err := id.GetIndex(i)
@@ -165,7 +161,10 @@ func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) 
 	}
 
 	return NewRawIDsFrom(uint32(idx)), nil
+}
 
+func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
+	return nil, InvalidOperationError{IDAutoIncName, op.Op}
 }
 
 // MatchMany is not supported by idAutoIncIndex, so that always returns an error
@@ -215,14 +214,10 @@ func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, int, error) {
 	return null, 0, ValueNotFoundError{id}
 }
 
-func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*RawIDs32, error) {
+func (mi *idMapIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
 	id, ok := value.(ID)
 	if !ok {
 		return nil, InvalidValueTypeError[ID]{value}
-	}
-
-	if op.Op != OpEq {
-		return nil, InvalidOperationError{IDMapIndexName, op.Op}
 	}
 
 	idx, err := mi.GetIndex(id)
@@ -231,7 +226,10 @@ func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*RawIDs32, error) 
 	}
 
 	return NewRawIDsFrom(uint32(idx)), nil
+}
 
+func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*RawIDs32, error) {
+	return nil, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
 // MatchMany is not supported by idMapIndex, so that always returns an error
@@ -281,6 +279,9 @@ func (f FilterOp) String() string {
 
 // Filter returns the RawIDs or an error by a given Relation and Value
 type Filter interface {
+	// Equal is seperated from Match
+	// because the RawIDs result you can NOT mutable
+	Equal(value any) (*RawIDs32, error)
 	Match(op FilterOp, value any) (*RawIDs32, error)
 	MatchMany(op FilterOp, values ...any) (*RawIDs32, error)
 }
@@ -325,14 +326,10 @@ func (mi *MapIndex[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
 	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
 }
 
-func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
+func (mi *MapIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
-	}
-
-	if op.Op != OpEq {
-		return nil, InvalidOperationError{MapIndexName, op.Op}
 	}
 
 	bs, found := mi.data[v]
@@ -341,6 +338,10 @@ func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	}
 
 	return bs, nil
+}
+
+func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
+	return nil, InvalidOperationError{MapIndexName, op.Op}
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
@@ -438,6 +439,18 @@ func (si *SortedIndex[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
 	return si.fieldGetFn(oldItem) != si.fieldGetFn(newItem)
 }
 
+func (si *SortedIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
+	v, err := ValueFromAny[V](value)
+	if err != nil {
+		return nil, InvalidValueTypeError[V]{value}
+	}
+
+	if bs, found := si.skipList.Get(v); found {
+		return bs, nil
+	}
+	return NewRawIDs[uint32](), nil
+}
+
 func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
@@ -445,11 +458,6 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) 
 	}
 
 	switch op.Op {
-	case OpEq:
-		if bs, found := si.skipList.Get(v); found {
-			return bs, nil
-		}
-		return NewRawIDs[uint32](), nil
 	case OpLt:
 		result := NewRawIDs[uint32]()
 		si.skipList.Less(v, func(_ V, bs *RawIDs32) bool {
@@ -636,6 +644,19 @@ func (ri *RangeIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
 	return ri.fieldGetFn(oldItem) != ri.fieldGetFn(newItem)
 }
 
+func (ri *RangeIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
+	v, err := ValueFromAny[uint8](value)
+	if err != nil {
+		return nil, InvalidValueTypeError[uint8]{value}
+	}
+
+	r := ri.data[v]
+	if r == nil {
+		return NewRawIDs[uint32](), nil
+	}
+	return r, nil
+}
+
 func (ri *RangeIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
@@ -644,14 +665,6 @@ func (ri *RangeIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
 	valInt := int(v)
 
 	switch op.Op {
-	case OpEq:
-		r := ri.data[valInt]
-		if r == nil {
-			return NewRawIDs[uint32](), nil
-		}
-		// CRITICAL: Protect internal memory!
-		return r.Copy(), nil
-
 	case OpLt, OpLe, OpGt, OpGe:
 		start, end := 0, ri.max
 		if op.Op == OpLt {
@@ -732,5 +745,4 @@ func (ri *RangeIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, err
 	default:
 		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
-
 }
