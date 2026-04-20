@@ -2,15 +2,16 @@ package mind
 
 import (
 	"cmp"
-	"errors"
+	"iter"
+	"sync"
 )
 
 const IDIndexFieldName = "id"
 
-// fieldIndexMap maps a given field name to an Index
+// indexMap maps a given field name to an Index
 type indexMap[OBJ any, ID comparable] struct {
-	idIndex idIndex[OBJ, ID]
 	index   map[string]Index[OBJ]
+	idIndex idIndex[OBJ, ID]
 	allIDs  *RawIDs32
 }
 
@@ -38,41 +39,57 @@ func (i indexMap[OBJ, ID]) FilterByName(fieldName string) (Filter, error) {
 	return nil, InvalidNameError{fieldName}
 }
 
-// Set add to all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ, ID]) Set(obj *OBJ, idx int) {
+// insert to all known indexes synchron the new value (including ID-index)
+func (i indexMap[OBJ, ID]) insert(obj *OBJ, idx int) {
+	uidx := uint32(idx)
+
 	if i.idIndex != nil {
-		i.idIndex.Set(obj, idx)
+		i.idIndex.Set(obj, uidx)
 	}
 
-	uidx := uint32(idx)
 	i.allIDs.Set(uidx)
+
 	for _, fieldIndex := range i.index {
 		fieldIndex.Set(obj, uidx)
 	}
 }
 
-// UnSet remove all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ, ID]) UnSet(obj *OBJ, idx int) {
+// bulkInsert creates a go routine for every creating Index
+func (i indexMap[OBJ, ID]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
+	var wg sync.WaitGroup
+
 	if i.idIndex != nil {
-		i.idIndex.UnSet(obj, idx)
+		wg.Go(func() {
+			i.idIndex.BulkSet(objs)
+		})
 	}
 
-	uidx := uint32(idx)
-	i.allIDs.UnSet(uidx)
+	wg.Go(func() {
+		for lidx := range objs {
+			i.allIDs.Set(uint32(lidx))
+		}
+	})
 
 	for _, fieldIndex := range i.index {
-		fieldIndex.UnSet(obj, uidx)
+		wg.Go(func() {
+			fieldIndex.BulkSet(objs)
+		})
 	}
+
+	wg.Wait()
 }
 
-// ReIndex update all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ, ID]) ReIndex(oldObj, newObj *OBJ, idx int) {
+// update update all known indexes synchron the new value (including ID-index)
+func (i indexMap[OBJ, ID]) update(oldObj, newObj *OBJ, idx int) {
+	uidx := uint32(idx)
+
 	if i.idIndex != nil {
-		i.idIndex.UnSet(oldObj, idx)
-		i.idIndex.Set(newObj, idx)
+		if i.idIndex.HasChanged(oldObj, newObj) {
+			i.idIndex.UnSet(oldObj, uidx)
+			i.idIndex.Set(newObj, uidx)
+		}
 	}
 
-	uidx := uint32(idx)
 	i.allIDs.UnSet(uidx)
 	i.allIDs.Set(uidx)
 
@@ -85,7 +102,22 @@ func (i indexMap[OBJ, ID]) ReIndex(oldObj, newObj *OBJ, idx int) {
 	}
 }
 
-func (i indexMap[OBJ, ID]) getIndexByID(id ID) (int, error) {
+// delete remove all known indexes synchron the new value (including ID-index)
+func (i indexMap[OBJ, ID]) delete(obj *OBJ, idx int) {
+	uidx := uint32(idx)
+
+	if i.idIndex != nil {
+		i.idIndex.UnSet(obj, uidx)
+	}
+
+	i.allIDs.UnSet(uidx)
+
+	for _, fieldIndex := range i.index {
+		fieldIndex.UnSet(obj, uidx)
+	}
+}
+
+func (i indexMap[OBJ, ID]) getListIdxByID(id ID) (uint32, error) {
 	if i.idIndex == nil {
 		return 0, NoIdIndexDefinedError{}
 	}
@@ -93,7 +125,7 @@ func (i indexMap[OBJ, ID]) getIndexByID(id ID) (int, error) {
 	return i.idIndex.GetIndex(id)
 }
 
-func (i indexMap[OBJ, ID]) getIDByItem(item *OBJ) (ID, int, error) {
+func (i indexMap[OBJ, ID]) getIDByItem(item *OBJ) (ID, uint32, error) {
 	if i.idIndex == nil {
 		var id ID
 		return id, 0, NoIdIndexDefinedError{}
@@ -103,100 +135,47 @@ func (i indexMap[OBJ, ID]) getIDByItem(item *OBJ) (ID, int, error) {
 }
 
 type idIndex[OBJ any, ID comparable] interface {
-	Set(*OBJ, int)
-	UnSet(*OBJ, int)
-	GetIndex(ID) (int, error)
-	GetID(*OBJ) (ID, int, error)
-	Filter
-}
-
-const IDAutoIncName = "IDAutoIncIndex"
-
-type idAutoIncIndex[OBJ any] struct {
-	idCounter uint64
-	count2idx map[uint64]int
-	idx2count map[int]uint64
-}
-
-func newIDAutoIncIndex[OBJ any]() idIndex[OBJ, uint64] {
-	return &idAutoIncIndex[OBJ]{
-		count2idx: make(map[uint64]int),
-		idx2count: make(map[int]uint64),
-	}
-}
-
-func (id *idAutoIncIndex[OBJ]) Set(_ *OBJ, lidx int) {
-	id.idCounter++
-	id.count2idx[id.idCounter] = lidx
-	id.idx2count[lidx] = id.idCounter
-}
-
-func (id *idAutoIncIndex[OBJ]) UnSet(_ *OBJ, lidx int) {
-	counter := id.idx2count[lidx]
-	id.count2idx[counter] = -1
-	id.idx2count[lidx] = 0
-}
-
-func (id *idAutoIncIndex[OBJ]) GetIndex(i uint64) (int, error) {
-	if lidx, found := id.count2idx[i]; found && lidx >= 0 {
-		return lidx, nil
-	}
-
-	return 0, ValueNotFoundError{i}
-}
-
-func (id *idAutoIncIndex[OBJ]) GetID(*OBJ) (uint64, int, error) {
-	return 0, -1, errors.New("GedID is not supported for this Index")
-}
-
-func (id *idAutoIncIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
-	i, ok := value.(uint64)
-	if !ok {
-		return nil, InvalidValueTypeError[uint32]{value}
-	}
-
-	idx, err := id.GetIndex(i)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRawIDsFrom(uint32(idx)), nil
-}
-
-func (id *idAutoIncIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
-	return nil, InvalidOperationError{IDAutoIncName, op.Op}
-}
-
-// MatchMany is not supported by idAutoIncIndex, so that always returns an error
-func (id *idAutoIncIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
-	return nil, InvalidOperationError{IDAutoIncName, op.Op}
+	Index[OBJ]
+	GetIndex(ID) (uint32, error)
+	GetID(*OBJ) (ID, uint32, error)
 }
 
 const IDMapIndexName = "IDMapIndex"
 
 type idMapIndex[OBJ any, ID comparable] struct {
-	data       map[ID]int
+	data       map[ID]uint32
 	fieldGetFn FromField[OBJ, ID]
 }
 
 func newIDMapIndex[OBJ any, ID comparable](fieldGetFn FromField[OBJ, ID]) idIndex[OBJ, ID] {
 	return &idMapIndex[OBJ, ID]{
-		data:       make(map[ID]int),
+		data:       make(map[ID]uint32),
 		fieldGetFn: fieldGetFn,
 	}
 }
 
-func (mi *idMapIndex[OBJ, ID]) Set(obj *OBJ, lidx int) {
+func (mi *idMapIndex[OBJ, ID]) Set(obj *OBJ, lidx uint32) {
 	id := mi.fieldGetFn(obj)
 	mi.data[id] = lidx
 }
 
-func (mi *idMapIndex[OBJ, ID]) UnSet(obj *OBJ, lidx int) {
+func (mi idMapIndex[OBJ, ID]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	for lidx, obj := range objs {
+		id := mi.fieldGetFn(obj)
+		mi.data[id] = uint32(lidx)
+	}
+}
+
+func (mi *idMapIndex[OBJ, ID]) UnSet(obj *OBJ, lidx uint32) {
 	id := mi.fieldGetFn(obj)
 	delete(mi.data, id)
 }
 
-func (mi *idMapIndex[OBJ, ID]) GetIndex(id ID) (int, error) {
+func (mi *idMapIndex[OBJ, ID]) HasChanged(oldItem, newItem *OBJ) bool {
+	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
+}
+
+func (mi *idMapIndex[OBJ, ID]) GetIndex(id ID) (uint32, error) {
 	if lidx, found := mi.data[id]; found {
 		return lidx, nil
 	}
@@ -204,7 +183,7 @@ func (mi *idMapIndex[OBJ, ID]) GetIndex(id ID) (int, error) {
 	return 0, ValueNotFoundError{id}
 }
 
-func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, int, error) {
+func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, uint32, error) {
 	id := mi.fieldGetFn(item)
 	if lidx, found := mi.data[id]; found {
 		return id, lidx, nil
@@ -244,10 +223,29 @@ func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 // Index is interface for handling the mapping of an Value: V to an List-Index: LI
 // The Value V comes from a func(*OBJ) V
 type Index[OBJ any] interface {
+	// Set insert or update the value of the given OBJ and the associated list index
 	Set(*OBJ, uint32)
+	// BulkSet inserts a bulk of given OBJ and the associated list index
+	BulkSet(iter.Seq2[int, *OBJ])
+	// UnSet remove the list index of the given OBJ
 	UnSet(*OBJ, uint32)
+	// HasChanged check for an old and an new Item OBJ value
 	HasChanged(oldItem, newItem *OBJ) bool
+	// Filter is quering the Index
 	Filter
+}
+
+// Filter returns the RawIDs or an error by a given Relation and Value
+type Filter interface {
+	// Equal is seperated from Match
+	// because the RawIDs result you can NOT mutable
+	Equal(value any) (*RawIDs32, error)
+	// Match execute a query (FilterOP) with one given value
+	// for example: age > 18
+	Match(op FilterOp, value any) (*RawIDs32, error)
+	// MatchMany execute a query (FilterOp) for many given values
+	// for example: age between 18 and 80
+	MatchMany(op FilterOp, values ...any) (*RawIDs32, error)
 }
 
 var (
@@ -277,46 +275,52 @@ func (f FilterOp) String() string {
 
 }
 
-// Filter returns the RawIDs or an error by a given Relation and Value
-type Filter interface {
-	// Equal is seperated from Match
-	// because the RawIDs result you can NOT mutable
-	Equal(value any) (*RawIDs32, error)
-	Match(op FilterOp, value any) (*RawIDs32, error)
-	MatchMany(op FilterOp, values ...any) (*RawIDs32, error)
-}
-
 const MapIndexName = "MapIndex"
 
 // MapIndex is a mapping of any value to the Index in the List.
 // This index only supported Queries with the Equal Ralation!
 type MapIndex[OBJ any, V comparable] struct {
-	data       map[any]*RawIDs32
+	data       map[V]*RawIDs32
 	fieldGetFn FromField[OBJ, V]
 }
 
 func NewMapIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index[OBJ] {
 	return &MapIndex[OBJ, V]{
-		data:       make(map[any]*RawIDs32),
+		data:       make(map[V]*RawIDs32),
 		fieldGetFn: fromField,
 	}
 }
 
 func (mi *MapIndex[OBJ, V]) Set(obj *OBJ, lidx uint32) {
 	value := mi.fieldGetFn(obj)
-	bs, found := mi.data[value]
+	ids, found := mi.data[value]
 	if !found {
-		bs = NewRawIDs[uint32]()
+		ids = NewRawIDs[uint32]()
+		mi.data[value] = ids
 	}
-	bs.Set(lidx)
-	mi.data[value] = bs
+
+	ids.Set(lidx)
+}
+
+func (mi *MapIndex[OBJ, V]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	// group the IDs by their indexed value locally
+	batch := make(map[V][]uint32)
+	for i, obj := range objs {
+		val := mi.fieldGetFn(obj)
+		batch[val] = append(batch[val], uint32(i))
+	}
+
+	// merge the grouped batches into the main index
+	for val, ids := range batch {
+		mi.data[val] = NewRawIDsFrom(ids...)
+	}
 }
 
 func (mi *MapIndex[OBJ, V]) UnSet(obj *OBJ, lidx uint32) {
 	value := mi.fieldGetFn(obj)
-	if bs, found := mi.data[value]; found {
-		bs.UnSet(lidx)
-		if bs.Count() == 0 {
+	if ids, found := mi.data[value]; found {
+		ids.UnSet(lidx)
+		if ids.Count() == 0 {
 			delete(mi.data, value)
 		}
 	}
@@ -332,12 +336,12 @@ func (mi *MapIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
-	bs, found := mi.data[v]
+	ids, found := mi.data[v]
 	if !found {
 		return NewRawIDs[uint32](), nil
 	}
 
-	return bs, nil
+	return ids, nil
 }
 
 func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
@@ -417,19 +421,34 @@ func NewSortedIndex[OBJ any, V cmp.Ordered](fieldGetFn FromField[OBJ, V]) Index[
 
 func (si *SortedIndex[OBJ, V]) Set(obj *OBJ, lidx uint32) {
 	value := si.fieldGetFn(obj)
-	bs, found := si.skipList.Get(value)
+	ids, found := si.skipList.Get(value)
 	if !found {
-		bs = NewRawIDs[uint32]()
+		ids = NewRawIDs[uint32]()
+		si.skipList.Put(value, ids)
 	}
-	bs.Set(lidx)
-	si.skipList.Put(value, bs)
+
+	ids.Set(lidx)
+}
+
+func (si *SortedIndex[OBJ, V]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	// group the IDs locally
+	batch := make(map[V][]uint32)
+	for i, obj := range objs {
+		val := si.fieldGetFn(obj)
+		batch[val] = append(batch[val], uint32(i))
+	}
+
+	// merge into the SkipList
+	for val, ids := range batch {
+		si.skipList.Put(val, NewRawIDsFrom(ids...))
+	}
 }
 
 func (si *SortedIndex[OBJ, V]) UnSet(obj *OBJ, lidx uint32) {
 	value := si.fieldGetFn(obj)
-	if bs, found := si.skipList.Get(value); found {
-		bs.UnSet(lidx)
-		if bs.Count() == 0 {
+	if ids, found := si.skipList.Get(value); found {
+		ids.UnSet(lidx)
+		if ids.Count() == 0 {
 			si.skipList.Delete(value)
 		}
 	}
@@ -445,10 +464,12 @@ func (si *SortedIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
-	if bs, found := si.skipList.Get(v); found {
-		return bs, nil
+	ids, found := si.skipList.Get(v)
+	if !found {
+		return NewRawIDs[uint32](), nil
 	}
-	return NewRawIDs[uint32](), nil
+
+	return ids, nil
 }
 
 func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
@@ -457,42 +478,35 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) 
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
+	result := NewRawIDs[uint32]()
+
 	switch op.Op {
 	case OpLt:
-		result := NewRawIDs[uint32]()
 		si.skipList.Less(v, func(_ V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
-		return result, nil
 	case OpLe:
-		result := NewRawIDs[uint32]()
 		si.skipList.LessEqual(v, func(_ V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
-		return result, nil
 	case OpGt:
-		result := NewRawIDs[uint32]()
 		si.skipList.Greater(v, func(v V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
-		return result, nil
 	case OpGe:
-		result := NewRawIDs[uint32]()
 		si.skipList.GreaterEqual(v, func(_ V, bs *RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
-		return result, nil
 	default:
 		if op.Name == FOpStartsWith.Name {
 			if _, ok := value.(string); !ok {
 				return nil, InvalidValueTypeError[string]{value}
 			}
 
-			result := NewRawIDs[uint32]()
 			si.skipList.StringStartsWith(v, func(_ V, bs *RawIDs32) bool {
 				result.Or(bs)
 				return true
@@ -502,6 +516,8 @@ func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) 
 
 		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
+
+	return result, nil
 }
 
 func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
@@ -601,12 +617,12 @@ func (ri *RangeIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 	value := ri.fieldGetFn(obj)
 	valInt := int(value)
 
-	r := ri.data[valInt]
-	if r == nil {
-		r = NewRawIDs[uint32]()
-		ri.data[valInt] = r
+	ids := ri.data[valInt]
+	if ids == nil {
+		ids = NewRawIDs[uint32]()
+		ri.data[valInt] = ids
 	}
-	r.Set(lidx)
+	ids.Set(lidx)
 
 	// new max value, if value greater the old max value
 	if ri.max < valInt+1 {
@@ -614,17 +630,34 @@ func (ri *RangeIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 	}
 }
 
+func (ri *RangeIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	for lidx, obj := range objs {
+		value := ri.fieldGetFn(obj)
+		ids := ri.data[value]
+		if ids == nil {
+			ids = NewRawIDs[uint32]()
+			ri.data[value] = ids
+		}
+		ids.Set(uint32(lidx))
+
+		// new max value, if value greater the old max value
+		if ri.max < int(value)+1 {
+			ri.max = int(value + 1)
+		}
+	}
+}
+
 func (ri *RangeIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {
 	value := ri.fieldGetFn(obj)
 	valInt := int(value)
 
-	r := ri.data[valInt]
-	if r == nil {
+	ids := ri.data[valInt]
+	if ids == nil {
 		return
 	}
-	r.UnSet(lidx)
+	ids.UnSet(lidx)
 
-	if r.IsEmpty() {
+	if ids.IsEmpty() {
 		ri.data[valInt] = nil
 
 		// if is empty, calculate the new max value
@@ -650,11 +683,12 @@ func (ri *RangeIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
 		return nil, InvalidValueTypeError[uint8]{value}
 	}
 
-	r := ri.data[v]
-	if r == nil {
+	ids := ri.data[v]
+	if ids == nil {
 		return NewRawIDs[uint32](), nil
 	}
-	return r, nil
+
+	return ids, nil
 }
 
 func (ri *RangeIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {

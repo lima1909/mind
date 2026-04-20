@@ -133,11 +133,11 @@ func TestFreeList_Iter(t *testing.T) {
 	for idx, item := range l.Iter() {
 		switch idx {
 		case 0:
-			assert.Equal(t, "a", item)
+			assert.Equal(t, "a", *item)
 		case 1:
-			assert.Equal(t, "b", item)
+			assert.Equal(t, "b", *item)
 		case 2:
-			assert.Equal(t, "c", item)
+			assert.Equal(t, "c", *item)
 		default:
 			assert.Failf(t, "invalid", "idx: %v", idx)
 		}
@@ -148,9 +148,9 @@ func TestFreeList_Iter(t *testing.T) {
 	for idx, item := range l.Iter() {
 		switch idx {
 		case 0:
-			assert.Equal(t, "a", item)
+			assert.Equal(t, "a", *item)
 		case 2:
-			assert.Equal(t, "c", item)
+			assert.Equal(t, "c", *item)
 		default:
 			assert.Failf(t, "invalid", "idx: %v", idx)
 		}

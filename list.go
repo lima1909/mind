@@ -1,6 +1,7 @@
 package mind
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -55,7 +56,7 @@ func (l *List[T, ID]) CreateIndex(fieldName string, index Index[T]) error {
 	}
 
 	for idx, item := range l.list.Iter() {
-		index.Set(&item, uint32(idx))
+		index.Set(item, uint32(idx))
 	}
 
 	l.indexMap.index[fieldName] = index
@@ -80,6 +81,23 @@ func (l *List[T, ID]) RemoveIndex(fieldName string) {
 	delete(l.indexMap.index, fieldName)
 }
 
+// InitialBulkInsert can be used for a more performant inserting of initial values.
+// The List must be empty!
+func (l *List[T, ID]) InitialBulkInsert(values FreeList[T]) error {
+	if l.list.count > 0 {
+		return errors.New("can not execute bulk insert for a non empty list")
+	}
+
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	// update all indexes
+	l.indexMap.bulkInsert(values.Iter())
+	l.list = values
+
+	return nil
+}
+
 // Insert add the given Item to the list,
 // There is NO check, for existing this Item in the list, it will ALWAYS inserting!
 func (l *List[T, ID]) Insert(item T) int {
@@ -87,7 +105,7 @@ func (l *List[T, ID]) Insert(item T) int {
 	defer l.lock.Unlock()
 
 	idx := l.list.Insert(item)
-	l.indexMap.Set(&item, idx)
+	l.indexMap.insert(&item, idx)
 
 	return idx
 }
@@ -103,13 +121,13 @@ func (l *List[T, ID]) Update(item T) error {
 	}
 
 	// overwrite the data in the main list
-	oldItem, ok := l.list.Set(idx, item)
+	oldItem, ok := l.list.Set(int(idx), item)
 	if !ok {
 		return ValueNotFoundError{id}
 	}
 
 	// update all indexes: re-index
-	l.indexMap.ReIndex(&oldItem, &item, idx)
+	l.indexMap.update(&oldItem, &item, int(idx))
 	return nil
 }
 
@@ -123,12 +141,12 @@ func (l *List[T, ID]) Remove(id ID) (bool, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	idx, err := l.indexMap.getIndexByID(id)
+	idx, err := l.indexMap.getListIdxByID(id)
 	if err != nil {
 		return false, err
 	}
 
-	return l.removeByIdxNoLock(idx), nil
+	return l.removeByIdxNoLock(int(idx)), nil
 }
 
 //go:inline
@@ -139,7 +157,7 @@ func (l *List[T, ID]) removeByIdxNoLock(index int) (removed bool) {
 	}
 
 	removed = l.list.Remove(index)
-	l.indexMap.UnSet(&item, index)
+	l.indexMap.delete(&item, index)
 
 	return removed
 }
@@ -154,14 +172,14 @@ func (l *List[T, ID]) Get(id ID) (T, error) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	idx, err := l.indexMap.getIndexByID(id)
+	idx, err := l.indexMap.getListIdxByID(id)
 	if err != nil {
 		var null T
 		return null, err
 	}
 
 	// not found should be possible
-	item, _ := l.list.Get(idx)
+	item, _ := l.list.Get(int(idx))
 	return item, nil
 }
 
@@ -170,7 +188,7 @@ func (l *List[T, ID]) Contains(id ID) bool {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	_, err := l.indexMap.getIndexByID(id)
+	_, err := l.indexMap.getListIdxByID(id)
 	return err == nil
 }
 

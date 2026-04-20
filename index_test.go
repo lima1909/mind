@@ -1,6 +1,7 @@
 package mind
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -393,32 +394,34 @@ func TestSortedIndex_In_Int(t *testing.T) {
 	assert.ErrorIs(t, InvalidValueTypeError[uint8]{"b"}, err)
 }
 
-func TestIdAutoInc(t *testing.T) {
-	obj := struct{}{}
+func TestIndex_BulkSet(t *testing.T) {
 
-	auto := newIDAutoIncIndex[struct{}]()
-	auto.Set(&obj, 1)
-	auto.Set(&obj, 2)
-	auto.Set(&obj, 5)
+	index := []struct {
+		name  string
+		index Index[uint8]
+	}{
+		{"map", NewMapIndex(FromValue[uint8]())},
+		{"sorted", NewSortedIndex(FromValue[uint8]())},
+		{"range", NewRangeIndex(FromValue[uint8]())},
+		{"idMap", newIDMapIndex(FromValue[uint8]())},
+	}
 
-	idx, err := auto.GetIndex(1)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, idx)
+	zero := uint8(0)
+	two := uint8(2)
+	eigth := uint8(8)
+	values := []*uint8{&zero, &two, &eigth}
 
-	idx, err = auto.GetIndex(2)
-	assert.NoError(t, err)
-	assert.Equal(t, 2, idx)
+	for _, tt := range index {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.index.BulkSet(slices.All(values))
 
-	idx, err = auto.GetIndex(3)
-	assert.NoError(t, err)
-	assert.Equal(t, 5, idx)
+			bs, err := tt.index.Equal(zero)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{0}, bs.ToSlice())
 
-	// unset
-	auto.UnSet(&obj, 2)
-	_, err = auto.GetIndex(2)
-	assert.ErrorIs(t, ValueNotFoundError{uint64(2)}, err)
-
-	bs, err := auto.Equal(uint64(3))
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{5}, bs.ToSlice())
+			bs, err = tt.index.Equal(eigth)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{2}, bs.ToSlice())
+		})
+	}
 }

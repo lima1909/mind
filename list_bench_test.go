@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //go:embed testdata/names.txt
@@ -45,7 +45,7 @@ func BenchmarkQueryStr(b *testing.B) {
 	names := strings.Split(names_txt, "\n")
 
 	start := time.Now()
-	il := NewList[person]()
+	fl := NewFreeListWithCapacity[person](ds)
 
 	for i := 1; i <= ds; i++ {
 		if n%6779 == 0 {
@@ -53,19 +53,22 @@ func BenchmarkQueryStr(b *testing.B) {
 		}
 		n++
 
-		il.Insert(person{
+		fl.Insert(person{
 			Name: names[n],
 			Age:  uint8(minV + rand.IntN(maxV-minV+1)),
 		})
 	}
 
-	// create index after insert all data is MUCH faster
+	il := NewList[person]()
 	err := il.CreateIndex("name", NewSortedIndex(FromName[person, string]("Name")))
-	assert.NoError(b, err)
+	require.NoError(b, err)
 	err = il.CreateIndex("age", NewSortedIndex(FromName[person, uint8]("Age")))
-	assert.NoError(b, err)
+	require.NoError(b, err)
 	err = il.CreateIndex("age2", NewRangeIndex(FromName[person, uint8]("Age")))
-	assert.NoError(b, err)
+	require.NoError(b, err)
+
+	err = il.InitialBulkInsert(fl)
+	require.NoError(b, err)
 
 	fmt.Printf("- Count: %d, Time: %s\n", il.Count(), time.Since(start))
 

@@ -24,6 +24,13 @@ func NewFreeList[T any]() FreeList[T] {
 	}
 }
 
+func NewFreeListWithCapacity[T any](capacity int) FreeList[T] {
+	return FreeList[T]{
+		slots:    make([]slot[T], 0, capacity),
+		freeHead: -1, // -1 means "No free slots, append new ones"
+	}
+}
+
 // Insert an Item to the end of the List or use a free slot, to add this item
 func (l *FreeList[T]) Insert(item T) int {
 	l.count++
@@ -105,11 +112,11 @@ func (l *FreeList[T]) Set(index int, newItem T) (T, bool) {
 func (l *FreeList[T]) Count() int { return l.count }
 
 // Iter create an Iterator, to iterate over all saved Indices and Items
-func (l *FreeList[T]) Iter() iter.Seq2[int, T] {
-	return func(yield func(int, T) bool) {
+func (l *FreeList[T]) Iter() iter.Seq2[int, *T] {
+	return func(yield func(int, *T) bool) {
 		for i, item := range l.slots {
 			if item.occupied {
-				if !yield(i, item.value) {
+				if !yield(i, &item.value) {
 					return
 				}
 			}

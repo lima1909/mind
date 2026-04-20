@@ -3,6 +3,7 @@ package mind
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -490,6 +491,10 @@ func (mi *udfIndex[OBJ, V, LI]) Set(obj *OBJ, lidx LI) {
 	}
 	bs.Set(lidx)
 	mi.data[value] = bs
+}
+
+func (*udfIndex[OBJ, V, LI]) BulkSet(iter.Seq2[int, *OBJ]) {
+	panic("udfIndex: NOT IMPLEMENTED YET")
 }
 
 func (mi *udfIndex[OBJ, V, LI]) UnSet(obj *OBJ, lidx LI) {
