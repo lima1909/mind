@@ -207,7 +207,7 @@ func (mi *idMapIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
 	return NewRawIDsFrom(uint32(idx)), nil
 }
 
-func (mi *idMapIndex[OBJ, ID]) Match(op FilterOp, value any) (*RawIDs32, error) {
+func (mi *idMapIndex[OBJ, ID]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, error) {
 	return nil, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
@@ -242,7 +242,7 @@ type Filter interface {
 	Equal(value any) (*RawIDs32, error)
 	// Match execute a query (FilterOP) with one given value
 	// for example: age > 18
-	Match(op FilterOp, value any) (*RawIDs32, error)
+	Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error)
 	// MatchMany execute a query (FilterOp) for many given values
 	// for example: age between 18 and 80
 	MatchMany(op FilterOp, values ...any) (*RawIDs32, error)
@@ -344,7 +344,7 @@ func (mi *MapIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (mi *MapIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
+func (mi *MapIndex[OBJ, V]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, error) {
 	return nil, InvalidOperationError{MapIndexName, op.Op}
 }
 
@@ -472,51 +472,81 @@ func (si *SortedIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (si *SortedIndex[OBJ, V]) Match(op FilterOp, value any) (*RawIDs32, error) {
+func (si *SortedIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
-	result := NewRawIDs[uint32]()
+	var toMerge []*RawIDs32
 
-	switch op.Op {
-	case OpLt:
-		si.skipList.Less(v, func(_ V, bs *RawIDs32) bool {
-			result.Or(bs)
-			return true
-		})
-	case OpLe:
-		si.skipList.LessEqual(v, func(_ V, bs *RawIDs32) bool {
-			result.Or(bs)
-			return true
-		})
-	case OpGt:
-		si.skipList.Greater(v, func(v V, bs *RawIDs32) bool {
-			result.Or(bs)
-			return true
-		})
-	case OpGe:
-		si.skipList.GreaterEqual(v, func(_ V, bs *RawIDs32) bool {
-			result.Or(bs)
-			return true
-		})
-	default:
-		if op.Name == FOpStartsWith.Name {
-			if _, ok := value.(string); !ok {
-				return nil, InvalidValueTypeError[string]{value}
-			}
+	count := 0
+	halfwayMark := si.skipList.Len() / 2
+	abortedForInversion := false
 
-			si.skipList.StringStartsWith(v, func(_ V, bs *RawIDs32) bool {
-				result.Or(bs)
-				return true
-			})
-			return result, nil
+	visitor := func(_ V, bs *RawIDs32) bool {
+		count++
+		if count > halfwayMark {
+			// crossed the 50% threshold! Stop walking the SkipList immediately.
+			abortedForInversion = true
+			return false
 		}
 
+		toMerge = append(toMerge, bs)
+		return true // Keep going
+	}
+
+	var invOp FilterOp
+	switch op.Op {
+	case OpLt:
+		invOp = FilterOp{Op: OpGe}
+		si.skipList.Less(v, visitor)
+	case OpLe:
+		invOp = FilterOp{Op: OpGt}
+		si.skipList.LessEqual(v, visitor)
+	case OpGt:
+		invOp = FilterOp{Op: OpLe}
+		si.skipList.Greater(v, visitor)
+	case OpGe:
+		invOp = FilterOp{Op: OpLt}
+		si.skipList.GreaterEqual(v, visitor)
+	default:
+		//TODO: create an own string index
+		// do not mix this operations
+		//
+		// if op.Name == FOpStartsWith.Name {
+		// 	if _, ok := value.(string); !ok {
+		// 		return nil, InvalidValueTypeError[string]{value}
+		// 	}
+		// 	si.skipList.StringStartsWith(v, visitor)
+		//
+		// 	result := NewRawIDs[uint32]()
+		// 	// Note: Use result.OrMany(toMerge) here if you implemented it!
+		// 	for _, ids := range toMerge {
+		// 		result.Or(ids)
+		// 	}
+		// 	return result, nil
+		// }
 		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
 
+	// query inversion optimization
+	if abortedForInversion {
+		inverseResult, err := si.Match(allIDs, invOp, value)
+		if err != nil {
+			return nil, err
+		}
+
+		// finalResult = allIDs - inverseResult
+		finalResult := allIDs.Copy()
+		finalResult.AndNot(inverseResult)
+		return finalResult, nil
+	}
+
+	result := NewRawIDs[uint32]()
+	for _, ids := range toMerge {
+		result.Or(ids)
+	}
 	return result, nil
 }
 
@@ -691,45 +721,66 @@ func (ri *RangeIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (ri *RangeIndex[OBJ]) Match(op FilterOp, value any) (*RawIDs32, error) {
+func (ri *RangeIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[uint8]{value}
 	}
 	valInt := int(v)
 
+	// Define the Range Bounds
+	start, end := 0, ri.max
+	var invOp FilterOp
+
 	switch op.Op {
-	case OpLt, OpLe, OpGt, OpGe:
-		start, end := 0, ri.max
-		if op.Op == OpLt {
-			end = valInt
-		}
-		if op.Op == OpLe {
-			end = valInt + 1
-		}
-		if op.Op == OpGt {
-			start = valInt + 1
-		}
-		if op.Op == OpGe {
-			start = valInt
-		}
-
-		// Bound checks
-		if end > ri.max {
-			end = ri.max
-		}
-
-		result := NewRawIDs[uint32]()
-		for i := start; i < end; i++ {
-			if ri.data[i] != nil && !ri.data[i].IsEmpty() {
-				result.Or(ri.data[i])
-			}
-		}
-		return result, nil
-
+	case OpLt:
+		end = valInt
+		invOp = FilterOp{Op: OpGe}
+	case OpLe:
+		end = valInt + 1
+		invOp = FilterOp{Op: OpGt}
+	case OpGt:
+		start = valInt + 1
+		invOp = FilterOp{Op: OpLe}
+	case OpGe:
+		start = valInt
+		invOp = FilterOp{Op: OpLt}
 	default:
 		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
+
+	if end > ri.max {
+		end = ri.max
+	}
+	if start >= end {
+		return NewRawIDs[uint32](), nil
+	}
+
+	// Query Inversion Optimization
+	// If the range we are scanning is more than half of our total active data range,
+	// it's cheaper to get the inverse and subtract it from allIDs.
+	if end-start > (ri.max / 2) {
+		// calculate the IDs we DON'T want
+		inverseResult, err := ri.Match(allIDs, invOp, value)
+		if err != nil {
+			return nil, err
+		}
+
+		// result = allIDs - inverseResult
+		finalResult := allIDs.Copy()
+		finalResult.AndNot(inverseResult)
+		return finalResult, nil
+	}
+
+	result := NewRawIDs[uint32]()
+	for i := start; i < end; i++ {
+		data := ri.data[i]
+		if data != nil && !data.IsEmpty() {
+			result.Or(data)
+		}
+	}
+
+	return result, nil
 }
 
 func (ri *RangeIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {

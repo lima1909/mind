@@ -147,6 +147,8 @@ func (s *SliceSet[U]) MaxSetIndex() int {
 // Counts how many values are in the Set, the len of the Set.
 func (s *SliceSet[U]) Count() int { return len(s.data) }
 
+func (s *SliceSet[U]) IsEmpty() bool { return len(s.data) == 0 }
+
 // Len how many values are in the Set, the len of the Set.
 func (s *SliceSet[U]) Len() int { return len(s.data) }
 

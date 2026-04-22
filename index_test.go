@@ -92,25 +92,27 @@ func index() []testIndex {
 }
 
 func TestIndex_Empty(t *testing.T) {
+	allIDs := NewRawIDs[uint32]()
+
 	for _, tt := range index() {
 		t.Run(tt.name, func(t *testing.T) {
 			bs, err := tt.index.Equal(1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-			bs, err = tt.index.Match(FOpLt, 1)
+			bs, err = tt.index.Match(allIDs, FOpLt, 1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-			bs, err = tt.index.Match(FOpLe, 1)
+			bs, err = tt.index.Match(allIDs, FOpLe, 1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-			bs, err = tt.index.Match(FOpGt, 1)
+			bs, err = tt.index.Match(allIDs, FOpGt, 1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-			bs, err = tt.index.Match(FOpGe, 1)
+			bs, err = tt.index.Match(allIDs, FOpGe, 1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 		})
@@ -146,15 +148,17 @@ func TestIndex_Less(t *testing.T) {
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
 
-			bs, _ := tt.index.Match(FOpLt, 0)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+
+			bs, _ := tt.index.Match(allIDs, FOpLt, 0)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLt, 1)
+			bs, _ = tt.index.Match(allIDs, FOpLt, 1)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLt, 2)
+			bs, _ = tt.index.Match(allIDs, FOpLt, 2)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLt, 3)
+			bs, _ = tt.index.Match(allIDs, FOpLt, 3)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLt, 5)
+			bs, _ = tt.index.Match(allIDs, FOpLt, 5)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
 		})
 	}
@@ -167,15 +171,17 @@ func TestIndex_LessEqual(t *testing.T) {
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
 
-			bs, _ := tt.index.Match(FOpLe, 0)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+
+			bs, _ := tt.index.Match(allIDs, FOpLe, 0)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLe, 1)
+			bs, _ = tt.index.Match(allIDs, FOpLe, 1)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLe, 2)
+			bs, _ = tt.index.Match(allIDs, FOpLe, 2)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLe, 3)
+			bs, _ = tt.index.Match(allIDs, FOpLe, 3)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpLe, 5)
+			bs, _ = tt.index.Match(allIDs, FOpLe, 5)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
 		})
 	}
@@ -188,15 +194,17 @@ func TestIndex_Greater(t *testing.T) {
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
 
-			bs, _ := tt.index.Match(FOpGt, 0)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+
+			bs, _ := tt.index.Match(allIDs, FOpGt, 0)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGt, 1)
+			bs, _ = tt.index.Match(allIDs, FOpGt, 1)
 			assert.Equal(t, []uint32{3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGt, 2)
+			bs, _ = tt.index.Match(allIDs, FOpGt, 2)
 			assert.Equal(t, []uint32{3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGt, 3)
+			bs, _ = tt.index.Match(allIDs, FOpGt, 3)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGt, 5)
+			bs, _ = tt.index.Match(allIDs, FOpGt, 5)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 		})
 	}
@@ -209,15 +217,17 @@ func TestIndex_GreaterEqual(t *testing.T) {
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
 
-			bs, _ := tt.index.Match(FOpGe, 0)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+
+			bs, _ := tt.index.Match(allIDs, FOpGe, 0)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGe, 1)
+			bs, _ = tt.index.Match(allIDs, FOpGe, 1)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGe, 2)
+			bs, _ = tt.index.Match(allIDs, FOpGe, 2)
 			assert.Equal(t, []uint32{3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGe, 3)
+			bs, _ = tt.index.Match(allIDs, FOpGe, 3)
 			assert.Equal(t, []uint32{3}, bs.ToSlice())
-			bs, _ = tt.index.Match(FOpGe, 5)
+			bs, _ = tt.index.Match(allIDs, FOpGe, 5)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 		})
 	}
@@ -284,6 +294,8 @@ func TestIDIndex_Filter(t *testing.T) {
 	vw := car{name: "vw", age: 2}
 	mi.Set(&vw, 0)
 
+	allIDS := NewRawIDsFrom[uint32](0)
+
 	bs, err := mi.Equal("vw")
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{0}, bs.ToSlice())
@@ -291,7 +303,7 @@ func TestIDIndex_Filter(t *testing.T) {
 	_, err = mi.Equal(4)
 	assert.ErrorIs(t, InvalidValueTypeError[string]{4}, err)
 
-	_, err = mi.Match(FOpLt, "vw")
+	_, err = mi.Match(allIDS, FOpLt, "vw")
 	assert.ErrorIs(t, InvalidOperationError{IDMapIndexName, OpLt}, err)
 
 	_, err = mi.Equal("opel")
@@ -395,7 +407,6 @@ func TestSortedIndex_In_Int(t *testing.T) {
 }
 
 func TestIndex_BulkSet(t *testing.T) {
-
 	index := []struct {
 		name  string
 		index Index[uint8]
@@ -422,6 +433,44 @@ func TestIndex_BulkSet(t *testing.T) {
 			bs, err = tt.index.Equal(eigth)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{2}, bs.ToSlice())
+		})
+	}
+}
+
+func TestSortedIndex_Inverse(t *testing.T) {
+	index := []struct {
+		name  string
+		index Index[uint8]
+	}{
+		{"sorted", NewSortedIndex(FromValue[uint8]())},
+		{"range", NewRangeIndex(FromValue[uint8]())},
+	}
+
+	for _, tt := range index {
+		t.Run(tt.name, func(t *testing.T) {
+			set(tt.index, 1, 1)
+			set(tt.index, 2, 2)
+			set(tt.index, 3, 3)
+			set(tt.index, 4, 4)
+			set(tt.index, 5, 5)
+
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 4, 5)
+
+			bs, err := tt.index.Match(allIDs, FOpGt, 1)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{2, 3, 4, 5}, bs.ToSlice())
+
+			bs, err = tt.index.Match(allIDs, FOpGe, 1)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{1, 2, 3, 4, 5}, bs.ToSlice())
+
+			bs, err = tt.index.Match(allIDs, FOpLt, 5)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{1, 2, 3, 4}, bs.ToSlice())
+
+			bs, err = tt.index.Match(allIDs, FOpLe, 5)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{1, 2, 3, 4, 5}, bs.ToSlice())
 		})
 	}
 }

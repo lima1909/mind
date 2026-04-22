@@ -47,13 +47,13 @@ func matchEqual(fieldName string, value any) Query {
 //
 //go:inline
 func matchOne(fieldName string, op FilterOp, value any) Query {
-	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
 		}
 
-		bs, err := filter.Match(op, value)
+		bs, err := filter.Match(allIDs, op, value)
 		return bs, true, err
 	}
 }
@@ -159,9 +159,11 @@ func matchNot(q Query) Query {
 	}
 }
 
+//TODO: create an own string index
+//
 // WithPrefix query for string starts with
-func WithPrefix(fieldName string, val string) Query { return matchOne(fieldName, FOpStartsWith, val) }
-
+// func WithPrefix(fieldName string, val string) Query { return matchOne(fieldName, FOpStartsWith, val) }
+//
 // And combines 2 or more queries with an logical And
 func And(left Expr, right Expr) Expr { return AndExpr{left, right} }
 

@@ -32,6 +32,7 @@ type node[K cmp.Ordered, V any] struct {
 type SkipList[K cmp.Ordered, V any] struct {
 	head  *node[K, V]
 	level byte
+	count int
 
 	rnd *rand.Rand
 }
@@ -121,6 +122,7 @@ func (sl *SkipList[K, V]) Put(key K, value V) bool {
 		sl.level = lvl
 	}
 
+	sl.count++
 	return true
 }
 
@@ -153,6 +155,7 @@ func (sl *SkipList[K, V]) Delete(key K) bool {
 		sl.level--
 	}
 
+	sl.count--
 	return true
 }
 
@@ -405,3 +408,5 @@ func (sl *SkipList[K, V]) LastValue() (V, bool) {
 
 	return x.value, true
 }
+
+func (sl *SkipList[K, V]) Len() int { return sl.count }

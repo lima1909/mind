@@ -524,7 +524,7 @@ func (mi *udfIndex[OBJ, V, LI]) Equal(value any) (*RawIDs[LI], error) {
 	return bs, nil
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Match(op FilterOp, value any) (*RawIDs[LI], error) {
+func (mi *udfIndex[OBJ, V, LI]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs[LI], error) {
 	if op != udfOp {
 		return nil, InvalidOperationError{MapIndexName, op.Op}
 	}

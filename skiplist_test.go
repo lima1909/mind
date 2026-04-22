@@ -8,6 +8,8 @@ import (
 
 func TestSplitList_Base(t *testing.T) {
 	sl := NewSkipList[int, string]()
+	assert.Equal(t, 0, sl.Len())
+
 	assert.True(t, sl.Put(1, "a"))
 	assert.True(t, sl.Put(3, "c"))
 	assert.True(t, sl.Put(2, "b"))
@@ -16,13 +18,16 @@ func TestSplitList_Base(t *testing.T) {
 	val, found := sl.Get(2)
 	assert.True(t, found)
 	assert.Equal(t, "b", val)
+	assert.Equal(t, 3, sl.Len())
 
 	assert.True(t, sl.Delete(2))
 	val, found = sl.Get(2)
 	assert.False(t, found)
 	assert.Equal(t, "", val)
+	assert.Equal(t, 2, sl.Len())
 
 	assert.False(t, sl.Delete(2))
+	assert.Equal(t, 2, sl.Len())
 
 	val, found = sl.Get(1)
 	assert.True(t, found)
@@ -36,6 +41,7 @@ func TestSplitList_Base(t *testing.T) {
 func TestSplitList_NilValue(t *testing.T) {
 	sl := NewSkipList[string, *string]()
 	sl.Put("a", nil)
+	assert.Equal(t, 1, sl.Len())
 
 	val, found := sl.Get("a")
 	assert.True(t, found)
@@ -45,6 +51,7 @@ func TestSplitList_NilValue(t *testing.T) {
 func TestSplitList_PutWithZeroValueKey(t *testing.T) {
 	sl1 := NewSkipList[string, string]()
 	sl1.Put("", "---")
+	assert.Equal(t, 1, sl1.Len())
 	result1, found1 := sl1.Get("")
 	assert.True(t, found1)
 	assert.Equal(t, "---", result1)
@@ -55,11 +62,13 @@ func TestSplitList_PutWithZeroValueKey(t *testing.T) {
 	result2, found2 := sl2.Get(0)
 	assert.True(t, found2)
 	assert.Equal(t, "---", result2)
+	assert.Equal(t, 2, sl2.Len())
 }
 
 func TestSplitList_DeleteAndGetTheZeroValueKey(t *testing.T) {
 	sl := NewSkipList[string, string]()
 	assert.False(t, sl.Delete(""))
+	assert.Equal(t, 0, sl.Len())
 
 	val, found := sl.Get("")
 	assert.False(t, found)
@@ -73,6 +82,7 @@ func TestSplitList_Traverse(t *testing.T) {
 	for i := 1; i <= count; i++ {
 		sl.Put(uint32(i), uint32(i))
 	}
+	assert.Equal(t, count, sl.Len())
 
 	c := 0
 	toTheEnd := sl.Traverse(func(key, val uint32) bool {
