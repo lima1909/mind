@@ -37,8 +37,8 @@ func TestLexer_OneOpen(t *testing.T) {
 		{query: `betWeen`, expected: OpBetween},
 		{query: `In`, expected: OpIn},
 		{query: ` - `, expected: OpUndefined},
-
-		{query: `startswith`, expected: OpIdent},
+		{query: `conTAins`, expected: OpContains},
+		{query: `startswith`, expected: OpStartsWith},
 		{query: `ancestors_1`, expected: OpIdent},
 	}
 
@@ -91,6 +91,20 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpBool,
 			OpRParen,
 		}},
+		{query: `!(ok = true)`, expected: []Op{
+			OpNot,
+			OpLParen,
+			OpIdent,
+			OpEq,
+			OpBool,
+			OpRParen,
+		}},
+		{query: `!ok = true`, expected: []Op{
+			OpNot,
+			OpIdent,
+			OpEq,
+			OpBool,
+		}},
 		{query: `ok != true`, expected: []Op{
 			OpIdent,
 			OpNeq,
@@ -114,17 +128,6 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpEq,
 			OpNumberInt,
 		}},
-
-		{query: `name startswith "Ma"`, expected: []Op{
-			OpIdent,
-			OpIdent,
-			OpString,
-		}},
-		{query: `name startswith "Ma"`, expected: []Op{
-			OpIdent,
-			OpIdent,
-			OpString,
-		}},
 		{query: `name between("a", "x")`, expected: []Op{
 			OpIdent,
 			OpBetween,
@@ -133,6 +136,16 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpComma,
 			OpString,
 			OpRParen,
+		}},
+		{query: `name contains "ax"`, expected: []Op{
+			OpIdent,
+			OpContains,
+			OpString,
+		}},
+		{query: `name startswith "Ma"`, expected: []Op{
+			OpIdent,
+			OpStartsWith,
+			OpString,
 		}},
 		{query: `name IN("a", "x")`, expected: []Op{
 			OpIdent,

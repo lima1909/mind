@@ -109,6 +109,15 @@ func (p *parser) parseCondition() (Expr, error) {
 			return nil, err
 		}
 		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
+	case OpContains, OpStartsWith:
+		// contains only support String
+		if p.cur.Op != OpString {
+			return nil, p.unexpectedWithMsg(fmt.Sprintf("only string are supported for '%s'", tokenOp))
+		}
+
+		val := p.input[p.cur.Start:p.cur.End]
+		p.next()
+		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
 	case OpBetween, OpIn:
 		values, err := p.parseValueList()
 		if err != nil {

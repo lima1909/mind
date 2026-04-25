@@ -27,7 +27,7 @@ func TestParser_Base(t *testing.T) {
 	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
 	indexMap.idIndex.Set(&User{ID: 40}, 0)
 	indexMap.idIndex.Set(&User{ID: 42}, 1)
-	indexMap.index["name"] = NewSortedIndex((*User).Name)
+	indexMap.index["name"] = NewStringIndex((*User).Name)
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
 	indexMap.index["role"].Set(&User{role: "developer"}, 0)
@@ -56,6 +56,10 @@ func TestParser_Base(t *testing.T) {
 		{query: `price <= 3.0`, expected: []uint32{0, 1}},
 		{query: `price > 1.2`, expected: []uint32{0}},
 		{query: `price >= 1.2`, expected: []uint32{0, 1}},
+
+		{query: `!(role = "admin")`, expected: []uint32{0}},
+		{query: `!role = "admin"`, expected: []uint32{0}},
+		{query: `! role = "admin"`, expected: []uint32{0}},
 
 		{query: `NOT(role = "admin")`, expected: []uint32{0}},
 		// RULE: Not(Not(A)) -> A (Double Negative)
@@ -95,6 +99,13 @@ func TestParser_Base(t *testing.T) {
 		{query: `price between(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price between(3.0, 1.2)`, expected: []uint32{}},
 
+		{query: `name contains "lic"`, expected: []uint32{1}},
+		{query: `name contains "Alice"`, expected: []uint32{1}},
+		{query: `name contains "nix"`, expected: []uint32{}},
+
+		{query: `name startswith "Al"`, expected: []uint32{1}},
+		{query: `name startswith "al"`, expected: []uint32{}},
+
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price in(3.0, 1.2)`, expected: []uint32{0, 1}},
 		{query: `role in("developer", "admin")`, expected: []uint32{0, 1}},
@@ -121,87 +132,59 @@ func TestParser_Base(t *testing.T) {
 
 }
 
-func TestParser_Cast(t *testing.T) {
-	type data struct {
-		U   uint
-		U8  uint8
-		U16 uint32
-		U32 uint32
-		U64 uint64
-
-		I   int
-		I8  int8
-		I16 int16
-		I32 int32
-		I64 int64
-
-		F32 float32
-		F64 float64
-	}
-
-	indexMap := newIndexMap[data, struct{}](nil)
-	indexMap.index["u"] = NewSortedIndex(FromName[data, uint]("U"))
-	indexMap.index["u"].Set(&data{U: 42}, 1)
-	indexMap.index["u8"] = NewSortedIndex(FromName[data, uint8]("U8"))
-	indexMap.index["u8"].Set(&data{U8: 5}, 1)
-	indexMap.index["u16"] = NewSortedIndex(FromName[data, uint16]("U16"))
-	indexMap.index["u16"].Set(&data{U16: 16}, 1)
-	indexMap.index["u32"] = NewSortedIndex(FromName[data, uint32]("U32"))
-	indexMap.index["u32"].Set(&data{U32: 32}, 1)
-	indexMap.index["u64"] = NewSortedIndex(FromName[data, uint64]("U64"))
-	indexMap.index["u64"].Set(&data{U64: 64}, 1)
-
-	indexMap.index["i"] = NewSortedIndex(FromName[data, int]("I"))
-	indexMap.index["i"].Set(&data{I: -42}, 1)
-	indexMap.index["i8"] = NewSortedIndex(FromName[data, int8]("I8"))
-	indexMap.index["i8"].Set(&data{I8: -8}, 1)
-	indexMap.index["i16"] = NewSortedIndex(FromName[data, int16]("I16"))
-	indexMap.index["i16"].Set(&data{I16: -16}, 1)
-	indexMap.index["i32"] = NewSortedIndex(FromName[data, int32]("I32"))
-	indexMap.index["i32"].Set(&data{I32: -32}, 1)
-	indexMap.index["i64"] = NewSortedIndex(FromName[data, int64]("I64"))
-	indexMap.index["i64"].Set(&data{I64: -64}, 1)
-
-	indexMap.index["f32"] = NewSortedIndex(FromName[data, float32]("F32"))
-	indexMap.index["f32"].Set(&data{F32: -3.2}, 1)
-	indexMap.index["f64"] = NewSortedIndex(FromName[data, float64]("F64"))
-	indexMap.index["f64"].Set(&data{F64: -6.4}, 1)
+func TestParser_Error(t *testing.T) {
 
 	tests := []struct {
-		query    string
-		expected []uint32
+		query string
+		err   error
 	}{
-		{query: `u   = 42`, expected: []uint32{1}},
-		{query: `u8  = 5`, expected: []uint32{1}},
-		{query: `u16 = 16`, expected: []uint32{1}},
-		{query: `u32 = 32`, expected: []uint32{1}},
-		{query: `u64 = 64`, expected: []uint32{1}},
-
-		{query: `i   = -42`, expected: []uint32{1}},
-		{query: `i8  = -8`, expected: []uint32{1}},
-		{query: `i16 = -16`, expected: []uint32{1}},
-		{query: `i32 = -32`, expected: []uint32{1}},
-		{query: `i64 = -64`, expected: []uint32{1}},
-
-		{query: `f32 = -3.2`, expected: []uint32{1}},
-		{query: `f64 = -6.4`, expected: []uint32{1}},
+		{
+			query: `name contains 2`,
+			err: UnexpectedTokenError{
+				input:    "name contains 2",
+				msg:      "only string are supported for 'CONTAINS'",
+				token:    token{Start: 14, End: 15, Op: OpNumberInt},
+				expected: OpUndefined,
+			},
+		},
+		{
+			query: `name contains true`,
+			err: UnexpectedTokenError{
+				input:    "name contains true",
+				msg:      "only string are supported for 'CONTAINS'",
+				token:    token{Start: 14, End: 18, Op: OpBool},
+				expected: OpUndefined,
+			},
+		},
+		{
+			query: `name startswith 2`,
+			err: UnexpectedTokenError{
+				input:    "name startswith 2",
+				msg:      "only string are supported for 'STARTSWITH'",
+				token:    token{Start: 16, End: 17, Op: OpNumberInt},
+				expected: OpUndefined,
+			},
+		},
+		{
+			query: `name startswith true`,
+			err: UnexpectedTokenError{
+				input:    "name startswith true",
+				msg:      "only string are supported for 'STARTSWITH'",
+				token:    token{Start: 16, End: 20, Op: OpBool},
+				expected: OpUndefined,
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			ast, err := Parse(tt.query)
-			require.NoError(t, err)
-			ast = ast.Optimize()
-			query := ast.Compile(nil)
-
-			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, bs.ToSlice())
+			_, err := Parse(tt.query)
+			assert.ErrorIs(t, err, tt.err)
 		})
 	}
 }
 
-func TestParser_Error(t *testing.T) {
+func TestParser_Op_Error(t *testing.T) {
 
 	tests := []struct {
 		query       string
@@ -281,6 +264,86 @@ func TestParser_Error(t *testing.T) {
 				tt.expected_op, parseErr.expected,
 				fmt.Sprintf("%q != %q", tt.expected_op, parseErr.expected),
 			)
+		})
+	}
+}
+
+func TestParser_Cast(t *testing.T) {
+	type data struct {
+		U   uint
+		U8  uint8
+		U16 uint32
+		U32 uint32
+		U64 uint64
+
+		I   int
+		I8  int8
+		I16 int16
+		I32 int32
+		I64 int64
+
+		F32 float32
+		F64 float64
+	}
+
+	indexMap := newIndexMap[data, struct{}](nil)
+	indexMap.index["u"] = NewSortedIndex(FromName[data, uint]("U"))
+	indexMap.index["u"].Set(&data{U: 42}, 1)
+	indexMap.index["u8"] = NewSortedIndex(FromName[data, uint8]("U8"))
+	indexMap.index["u8"].Set(&data{U8: 5}, 1)
+	indexMap.index["u16"] = NewSortedIndex(FromName[data, uint16]("U16"))
+	indexMap.index["u16"].Set(&data{U16: 16}, 1)
+	indexMap.index["u32"] = NewSortedIndex(FromName[data, uint32]("U32"))
+	indexMap.index["u32"].Set(&data{U32: 32}, 1)
+	indexMap.index["u64"] = NewSortedIndex(FromName[data, uint64]("U64"))
+	indexMap.index["u64"].Set(&data{U64: 64}, 1)
+
+	indexMap.index["i"] = NewSortedIndex(FromName[data, int]("I"))
+	indexMap.index["i"].Set(&data{I: -42}, 1)
+	indexMap.index["i8"] = NewSortedIndex(FromName[data, int8]("I8"))
+	indexMap.index["i8"].Set(&data{I8: -8}, 1)
+	indexMap.index["i16"] = NewSortedIndex(FromName[data, int16]("I16"))
+	indexMap.index["i16"].Set(&data{I16: -16}, 1)
+	indexMap.index["i32"] = NewSortedIndex(FromName[data, int32]("I32"))
+	indexMap.index["i32"].Set(&data{I32: -32}, 1)
+	indexMap.index["i64"] = NewSortedIndex(FromName[data, int64]("I64"))
+	indexMap.index["i64"].Set(&data{I64: -64}, 1)
+
+	indexMap.index["f32"] = NewSortedIndex(FromName[data, float32]("F32"))
+	indexMap.index["f32"].Set(&data{F32: -3.2}, 1)
+	indexMap.index["f64"] = NewSortedIndex(FromName[data, float64]("F64"))
+	indexMap.index["f64"].Set(&data{F64: -6.4}, 1)
+
+	tests := []struct {
+		query    string
+		expected []uint32
+	}{
+		{query: `u   = 42`, expected: []uint32{1}},
+		{query: `u8  = 5`, expected: []uint32{1}},
+		{query: `u16 = 16`, expected: []uint32{1}},
+		{query: `u32 = 32`, expected: []uint32{1}},
+		{query: `u64 = 64`, expected: []uint32{1}},
+
+		{query: `i   = -42`, expected: []uint32{1}},
+		{query: `i8  = -8`, expected: []uint32{1}},
+		{query: `i16 = -16`, expected: []uint32{1}},
+		{query: `i32 = -32`, expected: []uint32{1}},
+		{query: `i64 = -64`, expected: []uint32{1}},
+
+		{query: `f32 = -3.2`, expected: []uint32{1}},
+		{query: `f64 = -6.4`, expected: []uint32{1}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			ast, err := Parse(tt.query)
+			require.NoError(t, err)
+			ast = ast.Optimize()
+			query := ast.Compile(nil)
+
+			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, bs.ToSlice())
 		})
 	}
 }

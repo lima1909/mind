@@ -257,7 +257,8 @@ var (
 	FOpGt         = FilterOp{Op: OpGt}
 	FOpIn         = FilterOp{Op: OpIn}
 	FOpBetween    = FilterOp{Op: OpBetween}
-	FOpStartsWith = FilterOp{Name: "startswith"}
+	FOpContains   = FilterOp{Op: OpContains}
+	FOpStartsWith = FilterOp{Op: OpStartsWith}
 )
 
 // FilterOp is a wrapper over the Op, which contains the Op and a String.
@@ -511,22 +512,6 @@ func (si *SortedIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) (
 		invOp = FilterOp{Op: OpLt}
 		si.skipList.GreaterEqual(v, visitor)
 	default:
-		//TODO: create an own string index
-		// do not mix this operations
-		//
-		// if op.Name == FOpStartsWith.Name {
-		// 	if _, ok := value.(string); !ok {
-		// 		return nil, InvalidValueTypeError[string]{value}
-		// 	}
-		// 	si.skipList.StringStartsWith(v, visitor)
-		//
-		// 	result := NewRawIDs[uint32]()
-		// 	// Note: Use result.OrMany(toMerge) here if you implemented it!
-		// 	for _, ids := range toMerge {
-		// 		result.Or(ids)
-		// 	}
-		// 	return result, nil
-		// }
 		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
 
@@ -830,4 +815,73 @@ func (ri *RangeIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, err
 	default:
 		return nil, InvalidOperationError{SortedIndexName, op.Op}
 	}
+}
+
+const StringIndexName = "StringIndex"
+
+type StringIndex[OBJ any] struct {
+	trigram     TrigramIndex
+	sortedIndex SortedIndex[OBJ, string]
+}
+
+func NewStringIndex[OBJ any](fromField FromField[OBJ, string]) Index[OBJ] {
+	return &StringIndex[OBJ]{
+		trigram:     NewTrigramIndex(),
+		sortedIndex: *NewSortedIndex[OBJ, string](fromField).(*SortedIndex[OBJ, string]),
+	}
+}
+
+func (ti *StringIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
+	ti.sortedIndex.Set(obj, lidx)
+	ti.trigram.Put(ti.sortedIndex.fieldGetFn(obj), int(lidx))
+}
+
+func (ti *StringIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	ti.sortedIndex.BulkSet(objs)
+	TrigramIndexBulkPut(&ti.trigram, ti.sortedIndex.fieldGetFn, objs)
+}
+
+func (ti *StringIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {
+	ti.sortedIndex.UnSet(obj, lidx)
+	ti.trigram.Delete(int(lidx))
+}
+
+func (ti *StringIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
+	return ti.sortedIndex.HasChanged(oldItem, newItem)
+}
+
+func (ti *StringIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
+	return ti.sortedIndex.Equal(value)
+}
+
+func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+
+	switch op.Op {
+	case OpLt, OpLe, OpGt, OpGe:
+		return ti.sortedIndex.Match(allIDs, op, value)
+	}
+
+	s, err := ValueFromAny[string](value)
+	if err != nil {
+		return nil, InvalidValueTypeError[string]{value}
+	}
+
+	switch op.Op {
+	case OpStartsWith:
+		result := NewRawIDs[uint32]()
+		ti.sortedIndex.skipList.StringStartsWith(s, func(_ string, ids *RawIDs32) bool {
+			result.Or(ids)
+			return true
+		})
+		return result, nil
+	case OpContains:
+		return ti.trigram.Get(s).Copy(), nil
+
+	default:
+		return nil, InvalidOperationError{StringIndexName, op.Op}
+	}
+}
+
+func (ti *StringIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+	return ti.sortedIndex.MatchMany(op, values...)
 }

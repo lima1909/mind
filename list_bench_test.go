@@ -60,7 +60,7 @@ func BenchmarkQueryStr(b *testing.B) {
 	}
 
 	il := NewList[person]()
-	err := il.CreateIndex("name", NewSortedIndex(FromName[person, string]("Name")))
+	err := il.CreateIndex("name", NewStringIndex(FromName[person, string]("Name")))
 	require.NoError(b, err)
 	err = il.CreateIndex("age", NewSortedIndex(FromName[person, uint8]("Age")))
 	require.NoError(b, err)
@@ -105,6 +105,24 @@ func BenchmarkQueryStr(b *testing.B) {
 				return count
 			},
 		},
+		// {
+		// 	name: "Contains",
+		// 	bmark: func() int {
+		// 		count, _ := il.QueryStr(
+		// 			`name contains "ule" or name contains "agan"`,
+		// 		).Count()
+		// 		return count
+		// 	},
+		// },
+		// {
+		// 	name: "Startswith",
+		// 	bmark: func() int {
+		// 		count, _ := il.QueryStr(
+		// 			`name startswith "Jul" or name startswith "Maga"`,
+		// 		).Count()
+		// 		return count
+		// 	},
+		// },
 	}
 
 	for _, bench := range bmarks {

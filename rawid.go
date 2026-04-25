@@ -340,6 +340,13 @@ func (s *RawIDs[U]) Values(yield func(U) bool) {
 	}
 }
 
+// Shrink is only executed on BitSet
+func (s *RawIDs[U]) Shrink() {
+	if s.bits != nil {
+		s.bits.Shrink()
+	}
+}
+
 // ToSlice returns all values as a sorted slice.
 func (s *RawIDs[U]) ToSlice() []U {
 	if s.IsSlice() {

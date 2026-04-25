@@ -1,6 +1,7 @@
 package mind
 
 import (
+	"iter"
 	"strings"
 )
 
@@ -10,16 +11,22 @@ type sbucket struct {
 }
 
 type TrigramIndex struct {
-	index   map[uint32]BitSet[uint32]
+	index   map[uint32]*RawIDs32
 	buckets []sbucket
 	len     int
 }
 
-func NewTrigramIndex(s ...string) TrigramIndex {
-	ti := TrigramIndex{
-		index:   make(map[uint32]BitSet[uint32], len(s)),
-		buckets: make([]sbucket, 0, len(s)),
+func NewTrigramIndex() TrigramIndex { return NewTrigramIndexWithCapacity(0) }
+
+func NewTrigramIndexWithCapacity(size int) TrigramIndex {
+	return TrigramIndex{
+		index:   make(map[uint32]*RawIDs32, size),
+		buckets: make([]sbucket, 0, size),
 	}
+}
+
+func NewTrigramIndexFrom(s ...string) TrigramIndex {
+	ti := NewTrigramIndexWithCapacity(len(s))
 
 	for i, el := range s {
 		ti.Put(el, i)
@@ -28,17 +35,17 @@ func NewTrigramIndex(s ...string) TrigramIndex {
 	return ti
 }
 
-func (ti *TrigramIndex) Get(query string) *BitSet[uint32] {
-	resultBS := NewBitSet[uint32]()
+func (ti *TrigramIndex) Get(query string) *RawIDs32 {
+	result := NewRawIDs[uint32]()
 
 	if len(query) < 3 {
 		// full table scan
 		for i, b := range ti.buckets {
 			if b.occupied && strings.Contains(b.s, query) {
-				resultBS.Set(uint32(i))
+				result.Set(uint32(i))
 			}
 		}
-		return resultBS
+		return result
 	}
 
 	// generate trigrams for the query
@@ -48,27 +55,27 @@ func (ti *TrigramIndex) Get(query string) *BitSet[uint32] {
 		bs, ok := ti.index[tri]
 		if !ok {
 			// If any trigram doesn't exist, the whole substring can't exist
-			return NewEmptyBitSet[uint32]()
+			return NewRawIDs[uint32]()
 		}
 		if first {
-			resultBS.Or(&bs) // seed with first trigram's candidates
+			result.Or(bs) // seed with first trigram's candidates
 			first = false
 		} else {
-			resultBS.And(&bs) // intersect to narrow down
+			result.And(bs) // intersect to narrow down
 		}
 	}
 
 	// verification (False Positive Check)
 	// Trigrams only prove the characters exist; we must verify the order/presence
-	resultBS.Values(func(i uint32) bool {
+	result.Values(func(i uint32) bool {
 		b := ti.buckets[i]
 		if b.occupied && !strings.Contains(b.s, query) {
-			resultBS.UnSet(i)
+			result.UnSet(i)
 		}
 		return true
 	})
 
-	return resultBS
+	return result
 }
 
 func (ti *TrigramIndex) Put(s string, li int) {
@@ -88,7 +95,7 @@ func (ti *TrigramIndex) Put(s string, li int) {
 		tri := pack(s[j], s[j+1], s[j+2])
 		bs, found := ti.index[tri]
 		if !found {
-			bs = *NewEmptyBitSet[uint32]()
+			bs = NewRawIDs[uint32]()
 		}
 		bs.Set(uint32(li))
 		ti.index[tri] = bs
@@ -122,3 +129,43 @@ func (ti *TrigramIndex) Len() int { return ti.len }
 //
 //go:inline
 func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c) }
+
+func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, mapFn func(*OBJ) string, objs iter.Seq2[int, *OBJ]) {
+	if len(ti.index) == 0 {
+		ti.index = make(map[uint32]*RawIDs32, 1024)
+	}
+
+	for id, o := range objs {
+		// expand buckets on the fly
+		if id >= len(ti.buckets) {
+			newSize := id + 1
+			if newSize < len(ti.buckets)*2 {
+				newSize = len(ti.buckets) * 2 // Exponential growth
+			}
+			nb := make([]sbucket, newSize)
+			copy(nb, ti.buckets)
+			ti.buckets = nb
+		}
+
+		s := mapFn(o)
+		ti.buckets[id] = sbucket{s: s, occupied: true}
+		if id >= ti.len {
+			ti.len = id + 1
+		}
+
+		// build Index (No "seen" check, no temp slices)
+		// Just straight map access. The CPU is very good at this.
+		uID := uint32(id)
+		sLen := len(s)
+		for j := 0; j < sLen-2; j++ {
+			tri := pack(s[j], s[j+1], s[j+2])
+
+			bs := ti.index[tri]
+			if bs == nil {
+				bs = NewRawIDs[uint32]()
+				ti.index[tri] = bs
+			}
+			bs.Set(uID)
+		}
+	}
+}

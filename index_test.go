@@ -14,6 +14,7 @@ func TestIndex_EquaString(t *testing.T) {
 	}{
 		{"map", NewMapIndex(FromValue[string]())},
 		{"sorted", NewSortedIndex(FromValue[string]())},
+		{"string", NewStringIndex(FromValue[string]())},
 	}
 
 	for _, tt := range index {
@@ -311,42 +312,53 @@ func TestIDIndex_Filter(t *testing.T) {
 }
 
 func TestSortedIndex_Between_String(t *testing.T) {
-	si := NewSortedIndex(FromValue[string]())
-	set(si, "a", 1)
-	set(si, "a", 2)
-	set(si, "b", 3)
-	set(si, "c", 4)
-	set(si, "x", 5)
+	index := []struct {
+		name  string
+		index Index[string]
+	}{
+		{"sorted", NewSortedIndex(FromValue[string]())},
+		{"string", NewStringIndex(FromValue[string]())},
+	}
 
-	bs, err := si.MatchMany(FOpBetween, "b", "c")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{3, 4}, bs.ToSlice())
+	for _, tt := range index {
+		t.Run(tt.name, func(t *testing.T) {
+			set(tt.index, "a", 1)
+			set(tt.index, "a", 2)
+			set(tt.index, "b", 3)
+			set(tt.index, "c", 4)
+			set(tt.index, "x", 5)
 
-	bs, err = si.MatchMany(FOpBetween, "d", "f")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{}, bs.ToSlice())
+			bs, err := tt.index.MatchMany(FOpBetween, "b", "c")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{3, 4}, bs.ToSlice())
 
-	bs, err = si.MatchMany(FOpBetween, "x", "z")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{5}, bs.ToSlice())
+			bs, err = tt.index.MatchMany(FOpBetween, "d", "f")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-	bs, err = si.MatchMany(FOpBetween, "a", "a")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
+			bs, err = tt.index.MatchMany(FOpBetween, "x", "z")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{5}, bs.ToSlice())
 
-	// from > to
-	bs, err = si.MatchMany(FOpBetween, "c", "b")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{}, bs.ToSlice())
+			bs, err = tt.index.MatchMany(FOpBetween, "a", "a")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
 
-	// "1" is not in the index
-	bs, err = si.MatchMany(FOpBetween, "b", "1")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{}, bs.ToSlice())
+			// from > to
+			bs, err = tt.index.MatchMany(FOpBetween, "c", "b")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-	// errors
-	_, err = si.MatchMany(FOpBetween, "b")
-	assert.ErrorIs(t, InvalidArgsLenError{Defined: "2", Got: 1}, err)
+			// "1" is not in the index
+			bs, err = tt.index.MatchMany(FOpBetween, "b", "1")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
+
+			// errors
+			_, err = tt.index.MatchMany(FOpBetween, "b")
+			assert.ErrorIs(t, InvalidArgsLenError{Defined: "2", Got: 1}, err)
+		})
+	}
 }
 
 func TestSortedIndex_Between_Error(t *testing.T) {
@@ -360,39 +372,50 @@ func TestSortedIndex_Between_Error(t *testing.T) {
 	assert.ErrorIs(t, InvalidValueTypeError[uint8]{"b"}, err)
 }
 
-func TestSortedIndex_In_String(t *testing.T) {
-	si := NewSortedIndex(FromValue[string]())
-	set(si, "a", 1)
-	set(si, "a", 2)
-	set(si, "b", 3)
-	set(si, "c", 4)
-	set(si, "x", 5)
+func TestIndex_In_String(t *testing.T) {
+	index := []struct {
+		name  string
+		index Index[string]
+	}{
+		{"sorted", NewSortedIndex(FromValue[string]())},
+		{"string", NewStringIndex(FromValue[string]())},
+	}
 
-	bs, err := si.MatchMany(FOpIn, "b", "c")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{3, 4}, bs.ToSlice())
+	for _, tt := range index {
+		t.Run(tt.name, func(t *testing.T) {
+			set(tt.index, "a", 1)
+			set(tt.index, "a", 2)
+			set(tt.index, "b", 3)
+			set(tt.index, "c", 4)
+			set(tt.index, "x", 5)
 
-	bs, err = si.MatchMany(FOpIn, "c", "z")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{4}, bs.ToSlice())
+			bs, err := tt.index.MatchMany(FOpIn, "b", "c")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{3, 4}, bs.ToSlice())
 
-	// not sorted
-	bs, err = si.MatchMany(FOpIn, "c", "a")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{1, 2, 4}, bs.ToSlice())
+			bs, err = tt.index.MatchMany(FOpIn, "c", "z")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{4}, bs.ToSlice())
 
-	bs, err = si.MatchMany(FOpIn, "z")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{}, bs.ToSlice())
+			// not sorted
+			bs, err = tt.index.MatchMany(FOpIn, "c", "a")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{1, 2, 4}, bs.ToSlice())
 
-	bs, err = si.MatchMany(FOpIn)
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{}, bs.ToSlice())
+			bs, err = tt.index.MatchMany(FOpIn, "z")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-	// empty, because "1" doesn't work
-	_, err = si.MatchMany(FOpIn, "b", "1")
-	assert.NoError(t, err)
-	assert.Equal(t, []uint32{}, bs.ToSlice())
+			bs, err = tt.index.MatchMany(FOpIn)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
+
+			// empty, because "1" doesn't work
+			_, err = tt.index.MatchMany(FOpIn, "b", "1")
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
+		})
+	}
 }
 
 func TestSortedIndex_In_Int(t *testing.T) {
@@ -473,4 +496,35 @@ func TestSortedIndex_Inverse(t *testing.T) {
 			assert.Equal(t, []uint32{1, 2, 3, 4, 5}, bs.ToSlice())
 		})
 	}
+}
+
+func TestStringIndex(t *testing.T) {
+	ti := NewStringIndex(FromValue[string]())
+
+	set(ti, "abba", 1)
+	set(ti, "acca", 2)
+	set(ti, "bbba", 3)
+	set(ti, "abxy", 4)
+
+	allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+
+	// contains
+	bs, _ := ti.Match(allIDs, FOpContains, "bb")
+	assert.Equal(t, []uint32{1, 3}, bs.ToSlice())
+
+	bs, _ = ti.Match(allIDs, FOpContains, "nix")
+	assert.Equal(t, []uint32{}, bs.ToSlice())
+
+	bs, _ = ti.Match(allIDs, FOpContains, "acca")
+	assert.Equal(t, []uint32{2}, bs.ToSlice())
+
+	// startsWith
+	bs, _ = ti.Match(allIDs, FOpStartsWith, "ab")
+	assert.Equal(t, []uint32{1, 4}, bs.ToSlice())
+
+	// remove abba
+	unSet(ti, "abba", 1)
+	bs, _ = ti.Match(allIDs, FOpContains, "bb")
+	assert.Equal(t, []uint32{3}, bs.ToSlice())
+
 }

@@ -159,11 +159,6 @@ func matchNot(q Query) Query {
 	}
 }
 
-//TODO: create an own string index
-//
-// WithPrefix query for string starts with
-// func WithPrefix(fieldName string, val string) Query { return matchOne(fieldName, FOpStartsWith, val) }
-//
 // And combines 2 or more queries with an logical And
 func And(left Expr, right Expr) Expr { return AndExpr{left, right} }
 

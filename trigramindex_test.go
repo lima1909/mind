@@ -1,13 +1,14 @@
 package mind
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTrigram_Base(t *testing.T) {
-	ti := NewTrigramIndex("apple", "apply", "ban", "banana", "xapp")
+	ti := NewTrigramIndexFrom("apple", "apply", "ban", "banana", "xapp")
 	assert.Equal(t, 5, ti.Len())
 	assert.Equal(t, []uint32{0, 1, 4}, ti.Get("app").ToSlice())
 	assert.Equal(t, []uint32{2, 3}, ti.Get("an").ToSlice())
@@ -30,7 +31,7 @@ func TestTrigram_Base(t *testing.T) {
 	assert.Equal(t, []uint32{0, 1, 2, 4}, ti.Get("app").ToSlice())
 
 	// checks the false positive: ABCD and BCDE matching {0, 2}
-	ti = NewTrigramIndex("ABCD", "ZZZ", "BCDE")
+	ti = NewTrigramIndexFrom("ABCD", "ZZZ", "BCDE")
 	assert.Equal(t, []uint32{}, ti.Get("ABCDE").ToSlice())
 
 	// empty init
@@ -41,4 +42,21 @@ func TestTrigram_Base(t *testing.T) {
 	ti.Put("üöß€ä@", 2)
 	assert.Equal(t, 1, ti.Len())
 	assert.Equal(t, []uint32{2}, ti.Get("öß€ä").ToSlice())
+}
+
+func TestTrigram_BulkPut(t *testing.T) {
+	apple := "apple"
+	apply := "apply"
+	ban := "ban"
+	banana := "banana"
+	xapp := "xapp"
+	data := slices.All([]*string{&apple, &apply, &ban, &banana, &xapp})
+	ti := NewTrigramIndex()
+	TrigramIndexBulkPut(&ti, func(s *string) string { return *s }, data)
+
+	assert.Equal(t, 5, ti.Len())
+	assert.Equal(t, []uint32{0, 1, 4}, ti.Get("app").ToSlice())
+	assert.Equal(t, []uint32{2, 3}, ti.Get("an").ToSlice())
+	// not found
+	assert.Equal(t, []uint32{}, ti.Get("nix").ToSlice())
 }
