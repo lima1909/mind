@@ -354,14 +354,35 @@ func (l *lexer) readNumber() token {
 }
 
 func (l *lexer) readString(quote byte) token {
-	l.pos++ // Skip open quote
+	l.pos++ // skip the opening quote
 	start := l.pos
-	for l.pos < len(l.input) && l.input[l.pos] != quote {
+
+	for l.pos < len(l.input) {
+		ch := l.input[l.pos]
+
+		if ch == '\\' {
+			// skip the backslash and the escaped character
+			if l.pos+1 < len(l.input) {
+				l.pos += 2
+				continue
+			}
+			// input ends with a trailing backslash (invalid string)
+			l.pos++
+			break
+		}
+
+		if ch == quote {
+			break // found the closing quote
+		}
 		l.pos++
 	}
+
 	end := l.pos
 	if l.pos < len(l.input) {
-		l.pos++ // Skip close quote
+		l.pos++ // skip the closing quote
 	}
+
+	// input[start:end] will still contain the backslashes.
+	// the parser will "Unescape" the string
 	return token{Op: OpString, Start: start, End: end}
 }

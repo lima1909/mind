@@ -3,6 +3,7 @@ package mind
 import (
 	"fmt"
 	"strings"
+	"unsafe"
 )
 
 func Parse(input string) (Expr, error) {
@@ -110,12 +111,12 @@ func (p *parser) parseCondition() (Expr, error) {
 		}
 		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
 	case OpContains, OpStartsWith:
-		// contains only support String
+		// contains and startswith only support String
 		if p.cur.Op != OpString {
 			return nil, p.unexpectedWithMsg(fmt.Sprintf("only string are supported for '%s'", tokenOp))
 		}
 
-		val := p.input[p.cur.Start:p.cur.End]
+		val := parseString(p.input[p.cur.Start:p.cur.End])
 		p.next()
 		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
 	case OpBetween, OpIn:
@@ -149,15 +150,12 @@ func (p *parser) parseValueList() ([]any, error) {
 	}
 	p.next()
 
-	expectedOpValue := OpEOF
-	values := make([]any, 0, 10)
+	values := make([]any, 0, 8)
+	firstOp := p.cur.Op
 
 	for {
-		// all list values should have the same type
-		if expectedOpValue == OpEOF {
-			expectedOpValue = p.cur.Op
-		} else if expectedOpValue != p.cur.Op {
-			return nil, p.unexpected(expectedOpValue)
+		if p.cur.Op != firstOp {
+			return nil, p.unexpected(firstOp)
 		}
 
 		val, err := p.parseValue()
@@ -184,7 +182,7 @@ func (p *parser) parseValue() (any, error) {
 	var val any
 	switch p.cur.Op {
 	case OpString:
-		val = p.input[p.cur.Start:p.cur.End]
+		val = parseString(p.input[p.cur.Start:p.cur.End])
 	case OpNumberInt:
 		val = parseInt(p.input[p.cur.Start:p.cur.End])
 	case OpNumberFloat:
@@ -196,6 +194,47 @@ func (p *parser) parseValue() (any, error) {
 	}
 	p.next()
 	return val, nil
+}
+
+// parseString will if necessary unescape the given string
+func parseString(s string) string {
+	first := strings.IndexByte(s, '\\')
+	if first == -1 {
+		return s
+	}
+
+	out := make([]byte, len(s))
+	copy(out, s[:first])
+	outPos := first
+
+	for i := first; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			i++ // skip the backslash
+			switch s[i] {
+			case 'n':
+				out[outPos] = '\n'
+			case 't':
+				out[outPos] = '\t'
+			case 'r':
+				out[outPos] = '\r'
+			case '\\':
+				out[outPos] = '\\'
+			case '"':
+				out[outPos] = '"'
+			case '\'':
+				out[outPos] = '\''
+			default:
+				out[outPos] = s[i] // literal escape
+			}
+			outPos++
+		} else {
+			out[outPos] = s[i]
+			outPos++
+		}
+	}
+
+	// magic: zero-copy conversion
+	return unsafe.String(unsafe.SliceData(out), outPos)
 }
 
 func parseBool(s string) bool {
@@ -223,6 +262,9 @@ func parseBool(s string) bool {
 //go:inline
 func parseUint(s string) uint64 {
 	var n uint64
+	if len(s) == 0 {
+		return 0
+	}
 
 	// BCE (Bounds Check Elimination):
 	// By checking the length once at the start, the Go compiler

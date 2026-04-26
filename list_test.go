@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type car struct {
@@ -559,4 +560,38 @@ func TestList_QueryStr(t *testing.T) {
 		{name: "Dacia", age: 22},
 		{name: "Opel", age: 5},
 	}, result)
+}
+
+func TestList_EscapedString(t *testing.T) {
+	il := NewList[car]()
+
+	err := il.CreateIndex("name", NewStringIndex((*car).Name))
+	require.NoError(t, err)
+
+	il.Insert(car{name: "Opel 1", age: 22})
+	il.Insert(car{name: "Opel 2", age: 5})
+	il.Insert(car{name: "Dacia\\'s", age: 22})
+	il.Insert(car{name: "\"Dacia\"", age: 22})
+
+	result, err := il.QueryStr(`name contains "pel"`).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel 1", age: 22},
+		{name: "Opel 2", age: 5},
+	}, result)
+
+	result, err = il.QueryStr(`name startswith "Op"`).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []car{
+		{name: "Opel 1", age: 22},
+		{name: "Opel 2", age: 5},
+	}, result)
+
+	result, err = il.QueryStr(`name = "Dacia\\'s"`).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []car{{name: "Dacia\\'s", age: 22}}, result)
+
+	result, err = il.QueryStr(`name = "\"Dacia\""`).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []car{{name: "\"Dacia\"", age: 22}}, result)
 }

@@ -28,6 +28,7 @@ func TestParser_Base(t *testing.T) {
 	indexMap.idIndex.Set(&User{ID: 40}, 0)
 	indexMap.idIndex.Set(&User{ID: 42}, 1)
 	indexMap.index["name"] = NewStringIndex((*User).Name)
+	indexMap.index["name"].Set(&User{name: "Paul\\'s"}, 0)
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
 	indexMap.index["role"].Set(&User{role: "developer"}, 0)
@@ -101,9 +102,11 @@ func TestParser_Base(t *testing.T) {
 
 		{query: `name contains "lic"`, expected: []uint32{1}},
 		{query: `name contains "Alice"`, expected: []uint32{1}},
+		{query: `name contains "l\\'s"`, expected: []uint32{0}},
 		{query: `name contains "nix"`, expected: []uint32{}},
 
 		{query: `name startswith "Al"`, expected: []uint32{1}},
+		{query: `name startswith "Paul\\'"`, expected: []uint32{0}},
 		{query: `name startswith "al"`, expected: []uint32{}},
 
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
@@ -120,16 +123,39 @@ func TestParser_Base(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
 			ast, err := Parse(tt.query)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			ast = ast.Optimize()
 			query := ast.Compile(nil)
 
 			bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, bs.ToSlice())
 		})
 	}
+}
 
+func TestParser_String(t *testing.T) {
+	tests := []struct {
+		query string
+		ast   Expr
+	}{
+
+		{query: `name = "Paul"`, ast: TermExpr{"name", FOpEq, "Paul"}},
+		{query: `name = "Pa\"ul"`, ast: TermExpr{"name", FOpEq, "Pa\"ul"}},
+		{query: `name = "Pa\\ul"`, ast: TermExpr{"name", FOpEq, "Pa\\ul"}},
+		{query: `name = "Pa\"u\"l"`, ast: TermExpr{"name", FOpEq, "Pa\"u\"l"}},
+
+		// all possible escapes in one string
+		{query: `name = "\\\"\t\r\n\\'"`, ast: TermExpr{"name", FOpEq, "\\\"\t\r\n\\'"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			ast, err := Parse(tt.query)
+			require.NoError(t, err)
+			assert.Equal(t, ast, tt.ast)
+		})
+	}
 }
 
 func TestParser_Error(t *testing.T) {

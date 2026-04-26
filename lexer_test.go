@@ -22,6 +22,9 @@ func TestLexer_OneOpen(t *testing.T) {
 		{query: `0.9`, expected: OpNumberFloat},
 		{query: `-0.9`, expected: OpNumberFloat},
 		{query: `"false"`, expected: OpString},
+		{query: `"ab\nc"`, expected: OpString},
+		{query: `"ab\\c"`, expected: OpString},
+		{query: `"ab\\'c"`, expected: OpString},
 		{query: `Or`, expected: OpOr},
 		{query: `aND`, expected: OpAnd},
 		{query: ` noT `, expected: OpNot},
@@ -76,6 +79,16 @@ func TestLexer_ManyOpen(t *testing.T) {
 			OpIdent,
 			OpEq,
 			OpNumberFloat,
+		}},
+		{query: `name = "Paul"`, expected: []Op{
+			OpIdent,
+			OpEq,
+			OpString,
+		}},
+		{query: `name = "Pa\"ul"`, expected: []Op{
+			OpIdent,
+			OpEq,
+			OpString,
 		}},
 		{query: `float32(-5)`, expected: []Op{
 			OpIdent,
