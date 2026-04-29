@@ -731,7 +731,7 @@ func (ri *RangeIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Raw
 		start = valInt
 		invOp = FilterOp{Op: OpLt}
 	default:
-		return nil, InvalidOperationError{SortedIndexName, op.Op}
+		return nil, InvalidOperationError{RangeIndexName, op.Op}
 	}
 
 	if end > ri.max {
@@ -813,7 +813,7 @@ func (ri *RangeIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, err
 		return result, nil
 
 	default:
-		return nil, InvalidOperationError{SortedIndexName, op.Op}
+		return nil, InvalidOperationError{RangeIndexName, op.Op}
 	}
 }
 
@@ -884,4 +884,52 @@ func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Ra
 
 func (ti *StringIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	return ti.sortedIndex.MatchMany(op, values...)
+}
+
+// ParserExt is a FIlter/Index extension for parsing the given string to an from Filter useable value.
+// For example for a given date-string to an unix-second-time
+// Or to convert a given Enum to an int Value
+type ParserExt[OBJ any] struct {
+	inner Index[OBJ]
+	parse func(string) any
+}
+
+func NewParserExt[OBJ any](index Index[OBJ], parse func(string) any) Index[OBJ] {
+	return &ParserExt[OBJ]{inner: index, parse: parse}
+}
+
+func (p *ParserExt[OBJ]) Set(obj *OBJ, lidx uint32)         { p.inner.Set(obj, lidx) }
+func (p *ParserExt[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) { p.inner.BulkSet(objs) }
+func (p *ParserExt[OBJ]) UnSet(obj *OBJ, lidx uint32)       { p.inner.UnSet(obj, lidx) }
+func (p *ParserExt[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
+	return p.inner.HasChanged(oldItem, newItem)
+}
+
+func (p *ParserExt[OBJ]) Equal(value any) (*RawIDs32, error) {
+	if s, ok := value.(string); ok {
+		return p.inner.Equal(p.parse(s))
+	}
+
+	return nil, InvalidValueTypeError[string]{value}
+}
+
+func (p *ParserExt[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+	if s, ok := value.(string); ok {
+		return p.inner.Match(allIDs, op, p.parse(s))
+	}
+
+	return nil, InvalidValueTypeError[string]{value}
+}
+
+func (p *ParserExt[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+	pvalues := make([]any, len(values))
+	for i, v := range values {
+		s, ok := v.(string)
+		if !ok {
+			return nil, InvalidValueTypeError[string]{v}
+		}
+		pvalues[i] = p.parse(s)
+
+	}
+	return p.inner.MatchMany(op, pvalues...)
 }

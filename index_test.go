@@ -528,3 +528,42 @@ func TestStringIndex(t *testing.T) {
 	assert.Equal(t, []uint32{3}, bs.ToSlice())
 
 }
+
+func TestParserExt(t *testing.T) {
+	fi := NewParserExt(
+		NewRangeIndex(FromValue[uint8]()), func(s string) any {
+			switch s {
+			case "a":
+				return 1
+			case "b":
+				return 2
+			case "c":
+				return 3
+			case "d":
+				return 4
+			default:
+				return 99
+			}
+		})
+
+	set(fi, 1, 1)
+	set(fi, 2, 2)
+	set(fi, 3, 3)
+	set(fi, 4, 4)
+
+	rids, _ := fi.Equal("a")
+	assert.Equal(t, []uint32{1}, rids.ToSlice())
+
+	allIDs := NewRawIDsFrom[uint32](1, 2, 3, 4)
+	rids, _ = fi.Match(allIDs, FOpGt, "a")
+	assert.Equal(t, []uint32{2, 3, 4}, rids.ToSlice())
+
+	rids, _ = fi.Match(allIDs, FOpGe, "d")
+	assert.Equal(t, []uint32{4}, rids.ToSlice())
+
+	rids, _ = fi.MatchMany(FOpIn, "a", "d")
+	assert.Equal(t, []uint32{1, 4}, rids.ToSlice())
+
+	rids, _ = fi.MatchMany(FOpBetween, "a", "d")
+	assert.Equal(t, []uint32{1, 2, 3, 4}, rids.ToSlice())
+}

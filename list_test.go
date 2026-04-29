@@ -9,17 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type car struct {
-	name  string
-	color string
-	age   uint8
-	isNew bool
-}
-
-func (c *car) Name() string { return c.name }
-func (c *car) Age() uint8   { return c.age }
-func (c *car) IsNew() bool  { return c.isNew }
-
 func TestList_Base(t *testing.T) {
 	il := NewList[car]()
 
