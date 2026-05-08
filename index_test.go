@@ -311,7 +311,7 @@ func TestIDIndex_Filter(t *testing.T) {
 	assert.ErrorIs(t, ValueNotFoundError{"opel"}, err)
 }
 
-func TestSortedIndex_Between_String(t *testing.T) {
+func TestIndex_Between_String(t *testing.T) {
 	index := []struct {
 		name  string
 		index Index[string]
@@ -460,7 +460,7 @@ func TestIndex_BulkSet(t *testing.T) {
 	}
 }
 
-func TestSortedIndex_Inverse(t *testing.T) {
+func TestIndex_Inverse(t *testing.T) {
 	index := []struct {
 		name  string
 		index Index[uint8]

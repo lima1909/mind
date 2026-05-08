@@ -44,6 +44,26 @@ func TestTrigram_Base(t *testing.T) {
 	assert.Equal(t, []uint32{2}, ti.Get("öß€ä").ToSlice())
 }
 
+func TestTrigram_abc(t *testing.T) {
+	ti := NewTrigramIndex()
+	ti.Put("abc---bcd", 0)
+	assert.Equal(t, 1, ti.Len())
+
+	r := ti.Get("abcd")
+	assert.Equal(t, 0, r.Count())
+
+	r = ti.Get("abc")
+	assert.Equal(t, 1, r.Count())
+	r = ti.Get("bcd")
+	assert.Equal(t, 1, r.Count())
+
+	ti.Put("abc---abc", 1)
+	assert.Equal(t, 2, ti.Len())
+
+	assert.Equal(t, []uint32{0, 1}, ti.Get("abc").ToSlice())
+	assert.Equal(t, []uint32{1}, ti.Get("--ab").ToSlice())
+}
+
 func TestTrigram_BulkPut(t *testing.T) {
 	apple := "apple"
 	apply := "apply"

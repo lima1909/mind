@@ -65,3 +65,56 @@ func BenchmarkTrigramIndex_BulkPut_vs_Put(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkTrigramIndex_Get(b *testing.B) {
+	ds := 3_000_000
+	n := 0
+	names := strings.Split(names_txt, "\n")
+
+	ti := NewTrigramIndexWithCapacity(ds)
+
+	for i := 0; i < ds; i++ {
+		if n%6770 == 0 {
+			n = 0
+		}
+		n++
+
+		ti.Put(names[n], i)
+	}
+
+	b.ResetTimer()
+
+	bmarks := []struct {
+		name  string
+		bmark func() int
+		count int
+	}{
+		{
+			"Get_ana",
+			func() int {
+				ids := ti.Get("ana")
+				return ids.Count()
+			},
+			35_007,
+		},
+		{
+			"Get_bel",
+			func() int {
+				ids := ti.Get("bel")
+				return ids.Count()
+			},
+			14_629,
+		},
+	}
+
+	for _, bench := range bmarks {
+		b.Run(bench.name, func(b *testing.B) {
+			for b.Loop() {
+				count := bench.bmark()
+				if count != bench.count {
+					b.Fatalf("expected: %d, got: %d", ds, count)
+				}
+			}
+		})
+	}
+}
