@@ -152,7 +152,7 @@ func (ti *TrigramIndex) Len() int { return ti.len }
 //go:inline
 func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c) }
 
-func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, mapFn func(*OBJ) string, objs iter.Seq2[int, *OBJ]) {
+func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[OBJ, string], objs iter.Seq2[int, *OBJ]) {
 	if len(ti.rawIDs) == 0 {
 		ti.rawIDs = make(map[uint32]*RawIDs32, 1024)
 	}
@@ -169,25 +169,26 @@ func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, mapFn func(*OBJ) string, obj
 			ti.buckets = nb
 		}
 
-		s := mapFn(o)
-		ti.buckets[id] = strBucket{str: s, occupied: true}
-		if id >= ti.len {
-			ti.len = id + 1
-		}
-
-		// build Index (No "seen" check, no temp slices)
-		// Just straight map access. The CPU is very good at this.
-		uID := uint32(id)
-		sLen := len(s)
-		for j := 0; j < sLen-2; j++ {
-			tri := pack(s[j], s[j+1], s[j+2])
-
-			bs := ti.rawIDs[tri]
-			if bs == nil {
-				bs = NewRawIDs[uint32]()
-				ti.rawIDs[tri] = bs
+		vhandler.Handle(o, func(s string) {
+			ti.buckets[id] = strBucket{str: s, occupied: true}
+			if id >= ti.len {
+				ti.len = id + 1
 			}
-			bs.Set(uID)
-		}
+
+			// build Index (No "seen" check, no temp slices)
+			// Just straight map access. The CPU is very good at this.
+			uID := uint32(id)
+			sLen := len(s)
+			for j := 0; j < sLen-2; j++ {
+				tri := pack(s[j], s[j+1], s[j+2])
+
+				bs := ti.rawIDs[tri]
+				if bs == nil {
+					bs = NewRawIDs[uint32]()
+					ti.rawIDs[tri] = bs
+				}
+				bs.Set(uID)
+			}
+		})
 	}
 }

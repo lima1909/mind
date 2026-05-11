@@ -67,6 +67,10 @@ func FromName[OBJ any, V any](fieldName string) FromField[OBJ, V] {
 	}
 }
 
+type FromFieldSlice[OBJ any, V any] = func(*OBJ) []V
+
+func FromValueSlice[V any]() FromFieldSlice[[]V, V] { return func(v *[]V) []V { return *v } }
+
 func ValueFromAny[T any](value any) (T, error) {
 	if v, ok := value.(T); ok {
 		return v, nil

@@ -46,7 +46,7 @@ func TestRangeIndex_Delete(t *testing.T) {
 	set(i, 2, 2)
 	set(i, 9, 9)
 
-	ri := i.(*RangeIndex[uint8])
+	ri := i.(*RangeIndex[uint8, SingleValueHandler[uint8, uint8]])
 	assert.Equal(t, 10, ri.max)
 
 	var del uint8 = 9
@@ -566,4 +566,83 @@ func TestParserExt(t *testing.T) {
 
 	rids, _ = fi.MatchMany(FOpBetween, "a", "d")
 	assert.Equal(t, []uint32{1, 2, 3, 4}, rids.ToSlice())
+}
+
+func TestIndex_SliceValues(t *testing.T) {
+	index := []struct {
+		name  string
+		index Index[[]uint8]
+	}{
+		{"range", NewRangeIndexSlice(FromValueSlice[uint8]())},
+		{"map", NewMapIndexSlice(FromValueSlice[uint8]())},
+		{"sorted", NewSortedIndexSlice(FromValueSlice[uint8]())},
+	}
+
+	for _, tt := range index {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.index.Set(&[]uint8{0, 3}, 0)
+			tt.index.Set(&[]uint8{2, 3, 4}, 1)
+			tt.index.Set(&[]uint8{2, 5}, 2)
+
+			rids, _ := tt.index.Equal(0)
+			assert.Equal(t, []uint32{0}, rids.ToSlice())
+
+			rids, _ = tt.index.Equal(3)
+			assert.Equal(t, []uint32{0, 1}, rids.ToSlice())
+
+			rids, _ = tt.index.Equal(4)
+			assert.Equal(t, []uint32{1}, rids.ToSlice())
+
+			// not found
+			rids, _ = tt.index.Equal(100)
+			assert.Equal(t, []uint32{}, rids.ToSlice())
+
+			rids, _ = tt.index.MatchMany(FOpIn, 3, 4)
+			assert.Equal(t, []uint32{0, 1}, rids.ToSlice())
+
+			rids, _ = tt.index.MatchMany(FOpIn, 6, 5)
+			assert.Equal(t, []uint32{2}, rids.ToSlice())
+
+			// not found
+			rids, _ = tt.index.MatchMany(FOpIn, 100, 99)
+			assert.Equal(t, []uint32{}, rids.ToSlice())
+		})
+	}
+}
+
+func TestIndex_SliceValues_More(t *testing.T) {
+	index := []struct {
+		name  string
+		index Index[[]uint8]
+	}{
+		{"range", NewRangeIndexSlice(FromValueSlice[uint8]())},
+		{"sorted", NewSortedIndexSlice(FromValueSlice[uint8]())},
+	}
+
+	for _, tt := range index {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.index.Set(&[]uint8{0, 3}, 0)
+			tt.index.Set(&[]uint8{2, 3, 4}, 1)
+			tt.index.Set(&[]uint8{2, 5}, 2)
+
+			allIDs := NewRawIDsFrom[uint32](0, 1, 2)
+
+			rids, _ := tt.index.Match(allIDs, FOpGe, 2)
+			assert.Equal(t, []uint32{0, 1, 2}, rids.ToSlice())
+
+			rids, _ = tt.index.Match(allIDs, FOpLt, 4)
+			assert.Equal(t, []uint32{0, 1, 2}, rids.ToSlice())
+
+			// MatchMany
+			rids, _ = tt.index.MatchMany(FOpBetween, 3, 4)
+			assert.Equal(t, []uint32{0, 1}, rids.ToSlice())
+
+			rids, _ = tt.index.MatchMany(FOpBetween, 5, 9)
+			assert.Equal(t, []uint32{2}, rids.ToSlice())
+
+			// not found
+			rids, _ = tt.index.MatchMany(FOpBetween, 99, 102)
+			assert.Equal(t, []uint32{}, rids.ToSlice())
+		})
+	}
 }

@@ -261,6 +261,58 @@ var (
 	FOpStartsWith = FilterOp{Op: OpStartsWith}
 )
 
+// ValueHandler is a Strategy Pattern implementation that acts as an abstraction layer
+// between your Index and your Objects
+
+// Its primary purpose is to decouple the index logic from the structure of the fields it is indexing.
+// It allows one single index implementation to support both single-value fields (like Age int) and
+// multi-value fields (like Tags []string) without changing the index's internal code.
+type ValueHandler[OBJ any, V any] interface {
+	Handle(obj *OBJ, exec func(value V))
+	HasChanged(oldItem, newItem *OBJ) bool
+	CanInvert() bool
+}
+
+type SingleValueHandler[OBJ any, V comparable] struct {
+	fieldGetFn FromField[OBJ, V]
+}
+
+func (h SingleValueHandler[OBJ, V]) Handle(obj *OBJ, exec func(V)) { exec(h.fieldGetFn(obj)) }
+func (h SingleValueHandler[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
+	return h.fieldGetFn(oldItem) != h.fieldGetFn(newItem)
+}
+func (h SingleValueHandler[OBJ, V]) CanInvert() bool { return true }
+
+type MultiValueHandler[OBJ any, V comparable] struct {
+	fieldGetFn FromFieldSlice[OBJ, V]
+}
+
+func (h MultiValueHandler[OBJ, V]) Handle(obj *OBJ, exec func(V)) {
+	values := h.fieldGetFn(obj)
+	for _, value := range values {
+		exec(value)
+	}
+}
+
+func (h MultiValueHandler[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
+	ov := h.fieldGetFn(oldItem)
+	nv := h.fieldGetFn(newItem)
+
+	if len(ov) != len(nv) {
+		return true
+	}
+
+	// ignored the order of old and new items
+	for i, v := range ov {
+		if v != nv[i] {
+			return true
+		}
+	}
+
+	return false
+}
+func (h MultiValueHandler[OBJ, V]) CanInvert() bool { return false }
+
 // FilterOp is a wrapper over the Op, which contains the Op and a String.
 // For User defined FilterOp is no Op defined, so the User defined Index can use the String.
 type FilterOp struct {
@@ -280,35 +332,44 @@ const MapIndexName = "MapIndex"
 
 // MapIndex is a mapping of any value to the Index in the List.
 // This index only supported Queries with the Equal Ralation!
-type MapIndex[OBJ any, V comparable] struct {
-	data       map[V]*RawIDs32
-	fieldGetFn FromField[OBJ, V]
+type MapIndex[OBJ any, V comparable, H ValueHandler[OBJ, V]] struct {
+	data         map[V]*RawIDs32
+	valueHandler H
 }
 
-func NewMapIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index[OBJ] {
-	return &MapIndex[OBJ, V]{
-		data:       make(map[V]*RawIDs32),
-		fieldGetFn: fromField,
+func NewMapIndex[OBJ any, V comparable](fieldGetFn FromField[OBJ, V]) Index[OBJ] {
+	return &MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]{
+		data:         make(map[V]*RawIDs32),
+		valueHandler: SingleValueHandler[OBJ, V]{fieldGetFn},
 	}
 }
 
-func (mi *MapIndex[OBJ, V]) Set(obj *OBJ, lidx uint32) {
-	value := mi.fieldGetFn(obj)
-	ids, found := mi.data[value]
-	if !found {
-		ids = NewRawIDs[uint32]()
-		mi.data[value] = ids
+func NewMapIndexSlice[OBJ any, V comparable](fieldGetFn FromFieldSlice[OBJ, V]) Index[OBJ] {
+	return &MapIndex[OBJ, V, MultiValueHandler[OBJ, V]]{
+		data:         make(map[V]*RawIDs32),
+		valueHandler: MultiValueHandler[OBJ, V]{fieldGetFn},
 	}
-
-	ids.Set(lidx)
 }
 
-func (mi *MapIndex[OBJ, V]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+func (mi *MapIndex[OBJ, V, H]) Set(obj *OBJ, lidx uint32) {
+	mi.valueHandler.Handle(obj, func(value V) {
+		ids, found := mi.data[value]
+		if !found {
+			ids = NewRawIDs[uint32]()
+			mi.data[value] = ids
+		}
+
+		ids.Set(lidx)
+	})
+}
+
+func (mi *MapIndex[OBJ, V, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	// group the IDs by their indexed value locally
 	batch := make(map[V][]uint32)
 	for i, obj := range objs {
-		val := mi.fieldGetFn(obj)
-		batch[val] = append(batch[val], uint32(i))
+		mi.valueHandler.Handle(obj, func(value V) {
+			batch[value] = append(batch[value], uint32(i))
+		})
 	}
 
 	// merge the grouped batches into the main index
@@ -317,21 +378,22 @@ func (mi *MapIndex[OBJ, V]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	}
 }
 
-func (mi *MapIndex[OBJ, V]) UnSet(obj *OBJ, lidx uint32) {
-	value := mi.fieldGetFn(obj)
-	if ids, found := mi.data[value]; found {
-		ids.UnSet(lidx)
-		if ids.Count() == 0 {
-			delete(mi.data, value)
+func (mi *MapIndex[OBJ, V, H]) UnSet(obj *OBJ, lidx uint32) {
+	mi.valueHandler.Handle(obj, func(value V) {
+		if ids, found := mi.data[value]; found {
+			ids.UnSet(lidx)
+			if ids.Count() == 0 {
+				delete(mi.data, value)
+			}
 		}
-	}
+	})
 }
 
-func (mi *MapIndex[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
-	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
+func (mi *MapIndex[OBJ, V, H]) HasChanged(oldItem, newItem *OBJ) bool {
+	return mi.valueHandler.HasChanged(oldItem, newItem)
 }
 
-func (mi *MapIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
+func (mi *MapIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -345,12 +407,12 @@ func (mi *MapIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (mi *MapIndex[OBJ, V]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, error) {
+func (mi *MapIndex[OBJ, V, H]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, error) {
 	return nil, InvalidOperationError{MapIndexName, op.Op}
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *MapIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	switch op.Op {
 	case OpIn:
 		// fast path for 0 or 1 values
@@ -408,35 +470,44 @@ func (mi *MapIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, er
 const SortedIndexName = "SortedIndex"
 
 // SortedIndex is well suited for Queries with: Range, Min, Max, Greater and Less
-type SortedIndex[OBJ any, V cmp.Ordered] struct {
-	skipList   SkipList[V, *RawIDs32]
-	fieldGetFn FromField[OBJ, V]
+type SortedIndex[OBJ any, V cmp.Ordered, H ValueHandler[OBJ, V]] struct {
+	skipList     SkipList[V, *RawIDs32]
+	valueHandler H
 }
 
 func NewSortedIndex[OBJ any, V cmp.Ordered](fieldGetFn FromField[OBJ, V]) Index[OBJ] {
-	return &SortedIndex[OBJ, V]{
-		skipList:   NewSkipList[V, *RawIDs32](),
-		fieldGetFn: fieldGetFn,
+	return &SortedIndex[OBJ, V, SingleValueHandler[OBJ, V]]{
+		skipList:     NewSkipList[V, *RawIDs32](),
+		valueHandler: SingleValueHandler[OBJ, V]{fieldGetFn},
 	}
 }
 
-func (si *SortedIndex[OBJ, V]) Set(obj *OBJ, lidx uint32) {
-	value := si.fieldGetFn(obj)
-	ids, found := si.skipList.Get(value)
-	if !found {
-		ids = NewRawIDs[uint32]()
-		si.skipList.Put(value, ids)
+func NewSortedIndexSlice[OBJ any, V cmp.Ordered](fieldGetFn FromFieldSlice[OBJ, V]) Index[OBJ] {
+	return &SortedIndex[OBJ, V, MultiValueHandler[OBJ, V]]{
+		skipList:     NewSkipList[V, *RawIDs32](),
+		valueHandler: MultiValueHandler[OBJ, V]{fieldGetFn},
 	}
-
-	ids.Set(lidx)
 }
 
-func (si *SortedIndex[OBJ, V]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+func (si *SortedIndex[OBJ, V, H]) Set(obj *OBJ, lidx uint32) {
+	si.valueHandler.Handle(obj, func(value V) {
+		ids, found := si.skipList.Get(value)
+		if !found {
+			ids = NewRawIDs[uint32]()
+			si.skipList.Put(value, ids)
+		}
+
+		ids.Set(lidx)
+	})
+}
+
+func (si *SortedIndex[OBJ, V, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	// group the IDs locally
 	batch := make(map[V][]uint32)
 	for i, obj := range objs {
-		val := si.fieldGetFn(obj)
-		batch[val] = append(batch[val], uint32(i))
+		si.valueHandler.Handle(obj, func(value V) {
+			batch[value] = append(batch[value], uint32(i))
+		})
 	}
 
 	// merge into the SkipList
@@ -445,21 +516,22 @@ func (si *SortedIndex[OBJ, V]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	}
 }
 
-func (si *SortedIndex[OBJ, V]) UnSet(obj *OBJ, lidx uint32) {
-	value := si.fieldGetFn(obj)
-	if ids, found := si.skipList.Get(value); found {
-		ids.UnSet(lidx)
-		if ids.Count() == 0 {
-			si.skipList.Delete(value)
+func (si *SortedIndex[OBJ, V, H]) UnSet(obj *OBJ, lidx uint32) {
+	si.valueHandler.Handle(obj, func(value V) {
+		if ids, found := si.skipList.Get(value); found {
+			ids.UnSet(lidx)
+			if ids.Count() == 0 {
+				si.skipList.Delete(value)
+			}
 		}
-	}
+	})
 }
 
-func (si *SortedIndex[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
-	return si.fieldGetFn(oldItem) != si.fieldGetFn(newItem)
+func (si *SortedIndex[OBJ, V, H]) HasChanged(oldItem, newItem *OBJ) bool {
+	return si.valueHandler.HasChanged(oldItem, newItem)
 }
 
-func (si *SortedIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
+func (si *SortedIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -473,28 +545,36 @@ func (si *SortedIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (si *SortedIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
 	}
 
 	var toMerge []*RawIDs32
-
-	count := 0
-	halfwayMark := si.skipList.Len() / 2
+	var visitor func(V, *RawIDs32) bool
 	abortedForInversion := false
 
-	visitor := func(_ V, bs *RawIDs32) bool {
-		count++
-		if count > halfwayMark {
-			// crossed the 50% threshold! Stop walking the SkipList immediately.
-			abortedForInversion = true
-			return false
-		}
+	if si.valueHandler.CanInvert() {
+		// The Invertible Visitor (Counts and aborts)
+		count := 0
+		halfwayMark := si.skipList.Len() / 2
 
-		toMerge = append(toMerge, bs)
-		return true // Keep going
+		visitor = func(_ V, bs *RawIDs32) bool {
+			count++
+			if count > halfwayMark {
+				abortedForInversion = true
+				return false // Abort traversal
+			}
+			toMerge = append(toMerge, bs)
+			return true
+		}
+	} else {
+		// The Lean & Mean Visitor (No counting, no branching!)
+		visitor = func(_ V, bs *RawIDs32) bool {
+			toMerge = append(toMerge, bs)
+			return true // Always keep going
+		}
 	}
 
 	var invOp FilterOp
@@ -535,7 +615,7 @@ func (si *SortedIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) (
 	return result, nil
 }
 
-func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
@@ -612,87 +692,99 @@ func (si *SortedIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 
 const RangeIndexName = "RangeIndex"
 
-type RangeIndex[OBJ any] struct {
+type RangeIndex[OBJ any, H ValueHandler[OBJ, uint8]] struct {
 	data [256]*RawIDs32
 	// the length of the data (the max value)
 	// max can be: 256 if the data is full from 0-255
-	max        int
-	fieldGetFn FromField[OBJ, uint8]
+	max          int
+	valueHandler H
 }
 
 func NewRangeIndex[OBJ any](fieldGetFn FromField[OBJ, uint8]) Index[OBJ] {
-	return &RangeIndex[OBJ]{
+	return &RangeIndex[OBJ, SingleValueHandler[OBJ, uint8]]{
 		// Array size must be 256 to cover indices 0-255
-		data:       [256]*RawIDs32{},
-		fieldGetFn: fieldGetFn,
+		data:         [256]*RawIDs32{},
+		valueHandler: SingleValueHandler[OBJ, uint8]{fieldGetFn},
 	}
 }
 
-func (ri *RangeIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
-	value := ri.fieldGetFn(obj)
-	valInt := int(value)
-
-	ids := ri.data[valInt]
-	if ids == nil {
-		ids = NewRawIDs[uint32]()
-		ri.data[valInt] = ids
-	}
-	ids.Set(lidx)
-
-	// new max value, if value greater the old max value
-	if ri.max < valInt+1 {
-		ri.max = valInt + 1
+func NewRangeIndexSlice[OBJ any](fieldGetFn FromFieldSlice[OBJ, uint8]) Index[OBJ] {
+	return &RangeIndex[OBJ, MultiValueHandler[OBJ, uint8]]{
+		// Array size must be 256 to cover indices 0-255
+		data:         [256]*RawIDs32{},
+		valueHandler: MultiValueHandler[OBJ, uint8]{fieldGetFn},
 	}
 }
 
-func (ri *RangeIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
-	for lidx, obj := range objs {
-		value := ri.fieldGetFn(obj)
-		ids := ri.data[value]
+func (ri *RangeIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
+	ri.valueHandler.Handle(obj, func(value uint8) {
+		valInt := int(value)
+
+		ids := ri.data[valInt]
 		if ids == nil {
 			ids = NewRawIDs[uint32]()
-			ri.data[value] = ids
+			ri.data[valInt] = ids
 		}
-		ids.Set(uint32(lidx))
+		ids.Set(lidx)
 
 		// new max value, if value greater the old max value
-		if ri.max < int(value)+1 {
-			ri.max = int(value + 1)
+		if ri.max < valInt+1 {
+			ri.max = valInt + 1
 		}
+	})
+}
+
+func (ri *RangeIndex[OBJ, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	for i, obj := range objs {
+		lidx := uint32(i)
+		ri.valueHandler.Handle(obj, func(value uint8) {
+			ids := ri.data[value]
+			if ids == nil {
+				ids = NewRawIDs[uint32]()
+				ri.data[value] = ids
+			}
+			ids.Set(lidx)
+
+			// new max value, if value greater the old max value
+			if ri.max < int(value)+1 {
+				ri.max = int(value + 1)
+			}
+		})
 	}
 }
 
-func (ri *RangeIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {
-	value := ri.fieldGetFn(obj)
-	valInt := int(value)
+func (ri *RangeIndex[OBJ, H]) UnSet(obj *OBJ, lidx uint32) {
+	ri.valueHandler.Handle(obj, func(value uint8) {
+		valInt := int(value)
 
-	ids := ri.data[valInt]
-	if ids == nil {
-		return
-	}
-	ids.UnSet(lidx)
+		ids := ri.data[valInt]
+		if ids == nil {
+			return
+		}
+		ids.UnSet(lidx)
 
-	if ids.IsEmpty() {
-		ri.data[valInt] = nil
+		if ids.IsEmpty() {
+			ri.data[valInt] = nil
 
-		// if is empty, calculate the new max value
-		if ri.max == valInt+1 {
-			ri.max = 0 // default fallback
-			for i := valInt - 1; i >= 0; i-- {
-				if ri.data[i] != nil && !ri.data[i].IsEmpty() {
-					ri.max = i + 1
-					break
+			// if is empty, calculate the new max value
+			if ri.max == valInt+1 {
+				ri.max = 0 // default fallback
+				for i := valInt - 1; i >= 0; i-- {
+					if ri.data[i] != nil && !ri.data[i].IsEmpty() {
+						ri.max = i + 1
+						break
+					}
 				}
 			}
 		}
-	}
+	})
 }
 
-func (ri *RangeIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
-	return ri.fieldGetFn(oldItem) != ri.fieldGetFn(newItem)
+func (ri *RangeIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
+	return ri.valueHandler.HasChanged(oldItem, newItem)
 }
 
-func (ri *RangeIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
+func (ri *RangeIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[uint8]{value}
@@ -706,7 +798,7 @@ func (ri *RangeIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (ri *RangeIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[uint8]{value}
@@ -744,7 +836,7 @@ func (ri *RangeIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Raw
 	// Query Inversion Optimization
 	// If the range we are scanning is more than half of our total active data range,
 	// it's cheaper to get the inverse and subtract it from allIDs.
-	if end-start > (ri.max / 2) {
+	if ri.valueHandler.CanInvert() && end-start > (ri.max/2) {
 		// calculate the IDs we DON'T want
 		inverseResult, err := ri.Match(allIDs, invOp, value)
 		if err != nil {
@@ -768,7 +860,7 @@ func (ri *RangeIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Raw
 	return result, nil
 }
 
-func (ri *RangeIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
@@ -821,24 +913,26 @@ const StringIndexName = "StringIndex"
 
 type StringIndex[OBJ any] struct {
 	trigram     TrigramIndex
-	sortedIndex SortedIndex[OBJ, string]
+	sortedIndex SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]
 }
 
 func NewStringIndex[OBJ any](fromField FromField[OBJ, string]) Index[OBJ] {
 	return &StringIndex[OBJ]{
 		trigram:     NewTrigramIndex(),
-		sortedIndex: *NewSortedIndex[OBJ, string](fromField).(*SortedIndex[OBJ, string]),
+		sortedIndex: *NewSortedIndex[OBJ, string](fromField).(*SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
 	}
 }
 
 func (ti *StringIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 	ti.sortedIndex.Set(obj, lidx)
-	ti.trigram.Put(ti.sortedIndex.fieldGetFn(obj), int(lidx))
+	ti.sortedIndex.valueHandler.Handle(obj, func(value string) {
+		ti.trigram.Put(value, int(lidx))
+	})
 }
 
 func (ti *StringIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	ti.sortedIndex.BulkSet(objs)
-	TrigramIndexBulkPut(&ti.trigram, ti.sortedIndex.fieldGetFn, objs)
+	TrigramIndexBulkPut(&ti.trigram, ti.sortedIndex.valueHandler, objs)
 }
 
 func (ti *StringIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {

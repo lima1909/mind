@@ -72,7 +72,8 @@ func TestTrigram_BulkPut(t *testing.T) {
 	xapp := "xapp"
 	data := slices.All([]*string{&apple, &apply, &ban, &banana, &xapp})
 	ti := NewTrigramIndex()
-	TrigramIndexBulkPut(&ti, func(s *string) string { return *s }, data)
+	handler := SingleValueHandler[string, string]{func(s *string) string { return *s }}
+	TrigramIndexBulkPut(&ti, handler, data)
 
 	assert.Equal(t, 5, ti.Len())
 	assert.Equal(t, []uint32{0, 1, 4}, ti.Get("app").ToSlice())
