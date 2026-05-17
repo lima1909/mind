@@ -32,6 +32,9 @@ var names_txt string
 // go test -blockprofile=block.prof
 // go tool pprof block.prof
 
+// Update: https://pkg.go.dev/github.com/lima1909/mind
+// https://proxy.golang.org/github.com/lima1909/mind/@v/list
+
 func BenchmarkQueryStr(b *testing.B) {
 	type person struct {
 		Name string
@@ -105,24 +108,24 @@ func BenchmarkQueryStr(b *testing.B) {
 				return count
 			},
 		},
-		// {
-		// 	name: "Contains",
-		// 	bmark: func() int {
-		// 		count, _ := il.QueryStr(
-		// 			`name contains "ule" or name contains "agan"`,
-		// 		).Count()
-		// 		return count
-		// 	},
-		// },
-		// {
-		// 	name: "Startswith",
-		// 	bmark: func() int {
-		// 		count, _ := il.QueryStr(
-		// 			`name startswith "Jul" or name startswith "Maga"`,
-		// 		).Count()
-		// 		return count
-		// 	},
-		// },
+		{
+			name: "Contains",
+			bmark: func() int {
+				count, _ := il.QueryStr(
+					`name contains "ule" or name contains "agan"`,
+				).Count()
+				return count
+			},
+		},
+		{
+			name: "Startswith",
+			bmark: func() int {
+				count, _ := il.QueryStr(
+					`name startswith "Jul" or name startswith "Maga"`,
+				).Count()
+				return count
+			},
+		},
 	}
 
 	for _, bench := range bmarks {

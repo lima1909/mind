@@ -96,7 +96,8 @@ func main() {
 	t := &mind.Tracer{}
 	values, err := l.QueryStr(
 		`(name = "Opel" or name = "Dacia") and age >= 2 and tag = "old"`,
-		mind.WithTracer(t)).Values()
+		mind.WithTracer(t),
+	).Values()
 	if err != nil {
 		panic(err)
 	}

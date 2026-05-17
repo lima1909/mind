@@ -69,53 +69,59 @@ func BenchmarkTrigramIndex_BulkPut_vs_Put(b *testing.B) {
 
 func BenchmarkTrigramIndex_Get(b *testing.B) {
 	ds := 3_000_000
-	n := 0
 	names := strings.Split(names_txt, "\n")
 
-	ti := NewTrigramIndexWithCapacity(ds)
-
-	for i := 0; i < ds; i++ {
-		if n%6770 == 0 {
-			n = 0
+	// Clean out empty lines to avoid indexing garbage data
+	var validNames []string
+	for _, name := range names {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			validNames = append(validNames, trimmed)
 		}
-		n++
-
-		ti.Put(names[n], i)
 	}
 
-	b.ResetTimer()
+	if len(validNames) == 0 {
+		b.Fatal("names_txt contains no valid data to index")
+	}
+
+	// 1. Bulk setup phase
+	ti := NewTrigramIndexWithCapacity(ds)
+	for i := 0; i < ds; i++ {
+		// Clean, allocation-free round-robin data selection
+		ti.Put(validNames[i%len(validNames)], i)
+	}
 
 	bmarks := []struct {
 		name  string
-		bmark func() int
+		query string
 		count int
 	}{
-		{
-			"Get_ana",
-			func() int {
-				ids := ti.Get("ana")
-				return ids.Count()
-			},
-			35_007,
-		},
-		{
-			"Get_bel",
-			func() int {
-				ids := ti.Get("bel")
-				return ids.Count()
-			},
-			14_629,
-		},
+		{"Get___na", "na", 200_027},
+		{"Get__ana", "ana", 34_958},
+		{"Get_anai", "anai", 442},
 	}
+
+	// Global variable assignment target to prevent
+	// aggressive compiler Dead Code Elimination (DCE)
+	var globalCount int
 
 	for _, bench := range bmarks {
 		b.Run(bench.name, func(b *testing.B) {
+			// If you had setup work *inside* the sub-benchmark loop,
+			// you would call b.ResetTimer() right here.
+
 			for b.Loop() {
-				count := bench.bmark()
+				ids := ti.Get(bench.query)
+				count := ids.Count()
+
 				if count != bench.count {
-					b.Fatalf("expected: %d, got: %d", ds, count)
+					b.Fatalf("%s: expected count %d, got %d", bench.name, bench.count, count)
 				}
+
+				globalCount = count // Avoid compiler optimizations safely
 			}
 		})
 	}
+
+	// Reference global count outside to ensure it's never optimized out
+	_ = globalCount
 }

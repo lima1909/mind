@@ -5,82 +5,111 @@ import (
 	"strings"
 )
 
+// FuzzyGet exmaple:
+// Stephen
+// Steve
+// Seven
+
 type strBucket struct {
 	str      string
 	occupied bool
 }
 
 type TrigramIndex struct {
-	rawIDs  map[uint32]*RawIDs32
+	rawIDs map[uint32]*RawIDs32 // trigrams
+	// biRawIDs map[uint16]*RawIDs32 // bigrams
 	buckets []strBucket
 	len     int
 }
 
-func NewTrigramIndex() TrigramIndex { return NewTrigramIndexWithCapacity(0) }
-
-func NewTrigramIndexWithCapacity(size int) TrigramIndex {
-	return TrigramIndex{
-		rawIDs:  make(map[uint32]*RawIDs32, size),
-		buckets: make([]strBucket, 0, size),
-	}
+func NewTrigramIndex() TrigramIndex {
+	return NewTrigramIndexWithCapacity(0)
 }
 
 func NewTrigramIndexFrom(s ...string) TrigramIndex {
 	ti := NewTrigramIndexWithCapacity(len(s))
-
 	for i, el := range s {
 		ti.Put(el, i)
 	}
-
 	return ti
+}
+
+func NewTrigramIndexWithCapacity(size int) TrigramIndex {
+	return TrigramIndex{
+		rawIDs: make(map[uint32]*RawIDs32, size),
+		// biRawIDs: make(map[uint16]*RawIDs32, size),
+		buckets: make([]strBucket, 0, size),
+	}
 }
 
 func (ti *TrigramIndex) Get(s string) *RawIDs32 {
 	result := NewRawIDs[uint32]()
 
-	if len(s) < 3 {
+	slen := len(s)
+
+	switch slen {
+	case 0:
+		return result
+	case 1, 2:
 		// full table scan
 		for i, b := range ti.buckets {
-			if b.occupied && strings.Contains(b.str, s) {
+			if strings.Contains(b.str, s) {
 				result.Set(uint32(i))
 			}
 		}
 		return result
-	}
+	// case 2:
+	// 	if bs, ok := ti.biRawIDs[pack2(s[0], s[1])]; ok {
+	// 		return bs
+	// 	}
+	// 	return result
 
-	// generate trigrams for the query
-	first := true
-	for i := 0; i < len(s)-2; i++ {
-		tri := pack(s[i], s[i+1], s[i+2])
-		bs, ok := ti.rawIDs[tri]
+	case 3:
+		// Optimization for 3 letters
+		bs, ok := ti.rawIDs[pack(s[0], s[1], s[2])]
 		if !ok {
-			// If any trigram doesn't exist, the whole substring can't exist
-			return NewRawIDs[uint32]()
+			return result
 		}
-		if first {
-			result.Or(bs) // seed with first trigram's candidates
-			first = false
-		} else {
-			result.And(bs) // intersect to narrow down
-		}
-	}
+		return bs
 
-	// fast path: Skip verification if length is exactly 3!
-	if len(s) == 3 {
+	default:
+		var allIDs []*RawIDs32
+		// collect all raw IDs
+		for i := 0; i < slen-2; i++ {
+			tri := pack(s[i], s[i+1], s[i+2])
+			entry, ok := ti.rawIDs[tri]
+			if !ok {
+				return result
+			}
+			allIDs = append(allIDs, entry)
+		}
+
+		// smallest first
+		minIdx := 0
+		for i := 1; i < len(allIDs); i++ {
+			if allIDs[i].Count() < allIDs[minIdx].Count() {
+				minIdx = i
+			}
+		}
+
+		result := allIDs[minIdx].Copy()
+		for i, entry := range allIDs {
+			if i == minIdx {
+				continue
+			}
+			result.And(entry)
+		}
+
+		// false‑positive filter
+		result.Values(func(id uint32) bool {
+			str := ti.buckets[id].str
+			if len(str) < slen || !strings.Contains(str, s) {
+				result.UnSet(id)
+			}
+			return true
+		})
 		return result
 	}
-
-	// verification (False Positive Check)
-	// Trigrams only prove the characters exist; we must verify the order/presence
-	result.Values(func(i uint32) bool {
-		b := ti.buckets[i]
-		if b.occupied && !strings.Contains(b.str, s) {
-			result.UnSet(i)
-		}
-		return true
-	})
-
-	return result
 }
 
 func (ti *TrigramIndex) Put(s string, li int) {
@@ -102,13 +131,30 @@ func (ti *TrigramIndex) Put(s string, li int) {
 		ti.len++
 	}
 
-	// Bounds Check Elimination hint
-	if len(s) < 3 {
+	slen := len(s)
+	if slen < 3 {
 		return // nothing to pack
 	}
-	_ = s[len(s)-1]
 
-	for j := 0; j < len(s)-2; j++ {
+	// Bounds Check Elimination hint
+	_ = s[slen-1]
+
+	// Index bigrams (if string length >= 2)
+	// if slen >= 2 {
+	// 	for j := 0; j < slen-1; j++ {
+	// 		bi := pack2(s[j], s[j+1])
+	// 		bs, found := ti.biRawIDs[bi]
+	// 		if !found {
+	// 			bs = NewRawIDs[uint32]()
+	// 			ti.biRawIDs[bi] = bs
+	// 		}
+	// 		bs.Set(uint32(li))
+	// 	}
+	// }
+
+	// Index trigrams
+	// if slen >= 3 {
+	for j := 0; j < slen-2; j++ {
 		tri := pack(s[j], s[j+1], s[j+2])
 		bs, found := ti.rawIDs[tri]
 		if !found {
@@ -117,6 +163,7 @@ func (ti *TrigramIndex) Put(s string, li int) {
 		}
 		bs.Set(uint32(li))
 	}
+	// }
 }
 
 func (ti *TrigramIndex) Delete(li int) bool {
@@ -125,8 +172,26 @@ func (ti *TrigramIndex) Delete(li int) bool {
 	}
 
 	s := ti.buckets[li].str
+	slen := len(s)
 
-	for j := 0; j < len(s)-2; j++ {
+	// Remove from bigrams
+	// if slen >= 2 {
+	// 	for j := 0; j < len(s)-1; j++ {
+	// 		bi := pack2(s[j], s[j+1])
+	// 		if bs, found := ti.biRawIDs[bi]; found {
+	// 			bs.UnSet(uint32(li))
+	// 			if bs.Count() == 0 {
+	// 				delete(ti.biRawIDs, bi)
+	// 			} else {
+	// 				bs.Shrink()
+	// 			}
+	// 		}
+	// 	}
+	// }
+	//
+	// // Remove from trigrams
+	// if len(s) >= 3 {
+	for j := 0; j < slen-2; j++ {
 		tri := pack(s[j], s[j+1], s[j+2])
 		if bs, found := ti.rawIDs[tri]; found {
 			bs.UnSet(uint32(li))
@@ -138,6 +203,7 @@ func (ti *TrigramIndex) Delete(li int) bool {
 			}
 		}
 	}
+	// }
 
 	ti.buckets[li] = strBucket{str: "", occupied: false}
 	ti.len--
@@ -152,17 +218,19 @@ func (ti *TrigramIndex) Len() int { return ti.len }
 //go:inline
 func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c) }
 
-func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[OBJ, string], objs iter.Seq2[int, *OBJ]) {
-	if len(ti.rawIDs) == 0 {
-		ti.rawIDs = make(map[uint32]*RawIDs32, 1024)
-	}
+// pack2 converts two bytes into a uint16 for bigram lookup.
+// max 65 536 strings
+//
+//go:inline
+// func pack2(a, b byte) uint16 { return uint16(a)<<8 | uint16(b) }
 
+func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[OBJ, string], objs iter.Seq2[int, *OBJ]) {
 	for id, o := range objs {
-		// expand buckets on the fly
+		// Expand bucket slice on the fly (unchanged)
 		if id >= len(ti.buckets) {
 			newSize := id + 1
 			if newSize < len(ti.buckets)*2 {
-				newSize = len(ti.buckets) * 2 // Exponential growth
+				newSize = len(ti.buckets) * 2
 			}
 			nb := make([]strBucket, newSize)
 			copy(nb, ti.buckets)
@@ -175,13 +243,12 @@ func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[
 				ti.len = id + 1
 			}
 
-			// build Index (No "seen" check, no temp slices)
-			// Just straight map access. The CPU is very good at this.
 			uID := uint32(id)
 			sLen := len(s)
+
+			// Index trigrams (original)
 			for j := 0; j < sLen-2; j++ {
 				tri := pack(s[j], s[j+1], s[j+2])
-
 				bs := ti.rawIDs[tri]
 				if bs == nil {
 					bs = NewRawIDs[uint32]()
@@ -189,6 +256,17 @@ func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[
 				}
 				bs.Set(uID)
 			}
+
+			// Index bigrams (new)
+			// for j := 0; j < sLen-1; j++ {
+			// 	bi := pack2(s[j], s[j+1])
+			// 	bs := ti.biRawIDs[bi]
+			// 	if bs == nil {
+			// 		bs = NewRawIDs[uint32]()
+			// 		ti.biRawIDs[bi] = bs
+			// 	}
+			// 	bs.Set(uID)
+			// }
 		})
 	}
 }
