@@ -62,6 +62,15 @@ func TestTrigram_abc(t *testing.T) {
 
 	assert.Equal(t, []uint32{0, 1}, ti.Get("abc").ToSlice())
 	assert.Equal(t, []uint32{1}, ti.Get("--ab").ToSlice())
+
+	ti = NewTrigramIndexFrom("abcd", "bcde")
+	assert.Equal(t, []uint32{0, 1}, ti.Get("bcd").ToSlice())
+	assert.Equal(t, []uint32{0, 1}, ti.Get("bc").ToSlice())
+	assert.Equal(t, []uint32{0, 1}, ti.Get("cd").ToSlice())
+
+	assert.Equal(t, []uint32{0}, ti.Get("a").ToSlice())
+	assert.Equal(t, []uint32{1}, ti.Get("e").ToSlice())
+	assert.Equal(t, []uint32{0, 1}, ti.Get("c").ToSlice())
 }
 
 func TestNewTrigram_Initializers(t *testing.T) {
@@ -106,13 +115,23 @@ func TestTrigram_Put_EdgeCases(t *testing.T) {
 	t.Run("String Length Limits", func(t *testing.T) {
 		ti := NewTrigramIndex()
 
-		// Strings < 3 characters shouldn't be packed into maps
+		// 2-char strings index one null-padded pseudo-trigram
 		ti.Put("go", 0)
-		assert.Equal(t, 0, len(ti.rawIDs))
+		assert.Equal(t, 3, len(ti.rawIDs))
+		assert.Equal(t, 1, ti.Len())
+		assert.Equal(t, []uint32{0}, ti.Get("go").ToSlice())
 
 		// Empty string handling
 		ti.Put("", 1)
+		assert.Equal(t, 3, len(ti.rawIDs))
 		assert.Equal(t, 2, ti.Len())
+
+		// 1-char strings index two null-padded pseudo-trigram
+		ti.Put("g", 2)
+		assert.Equal(t, 3, len(ti.rawIDs))
+		assert.Equal(t, 3, ti.Len())
+		assert.Equal(t, []uint32{0, 2}, ti.Get("g").ToSlice())
+		assert.Equal(t, []uint32{0}, ti.Get("go").ToSlice())
 	})
 }
 
@@ -132,13 +151,19 @@ func TestTrigram_Get_AllBranches(t *testing.T) {
 			wantIDs:   []uint32{},
 		},
 		{
-			name:      "Short Query < 3 Chars Full Scan Match",
+			name:      "Short Query = 1 Char",
+			query:     "c",
+			wantCount: 2, // cabana, abc
+			wantIDs:   []uint32{1, 4},
+		},
+		{
+			name:      "Short Query = 2 Chars",
 			query:     "an",
 			wantCount: 4, // banana, cabana, bandana, an
 			wantIDs:   []uint32{0, 1, 2, 3},
 		},
 		{
-			name:      "Short Query < 3 Chars Full Scan Miss",
+			name:      "Short Query = 3 Chars NOT found",
 			query:     "xyz",
 			wantCount: 0,
 			wantIDs:   []uint32{},
@@ -146,7 +171,7 @@ func TestTrigram_Get_AllBranches(t *testing.T) {
 		{
 			name:      "Exact Length 3 Match (No Verification Loop)",
 			query:     "abc",
-			wantCount: 1,
+			wantCount: 1, // abc
 			wantIDs:   []uint32{4},
 		},
 		{

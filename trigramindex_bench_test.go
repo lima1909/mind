@@ -95,6 +95,7 @@ func BenchmarkTrigramIndex_Get(b *testing.B) {
 		query string
 		count int
 	}{
+		{"Get____y", "y", 523_516},
 		{"Get___na", "na", 200_027},
 		{"Get__ana", "ana", 34_958},
 		{"Get_anai", "anai", 442},
