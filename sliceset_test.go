@@ -258,3 +258,12 @@ func TestSliceSet_ValueOnIndex(t *testing.T) {
 		})
 	}
 }
+
+// slice‑shift bug
+// when Values removes two consecutive false positives.
+func TestSliceSet_ValuesUnSetIter(t *testing.T) {
+	ss := NewSliceSetFrom[uint32](0, 1, 2)
+	// Remove the first two IDs (adjacent) during Values iteration.
+	ss.Removes(func(id uint32) bool { return id == 0 || id == 1 })
+	assert.Equal(t, []uint32{2}, ss.ToSlice())
+}

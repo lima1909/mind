@@ -471,3 +471,10 @@ func TestBitSet_ClearAndEmpty(t *testing.T) {
 	assert.True(t, b.IsEmpty())
 	assert.Equal(t, 0, len(b.data))
 }
+
+func TestBitSet_ValuesUnSetIter(t *testing.T) {
+	bs := NewBitSetFrom[uint32](0, 1, 2)
+	// Remove the first two IDs (adjacent) during Values iteration.
+	bs.Removes(func(id uint32) bool { return id == 0 || id == 1 })
+	assert.Equal(t, []uint32{2}, bs.ToSlice())
+}

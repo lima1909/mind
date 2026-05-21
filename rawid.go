@@ -331,12 +331,22 @@ func (s *RawIDs[U]) AndNot(other *RawIDs[U]) {
 	}
 }
 
-// UInts iterates over all values in the set.
+// Values iterates over all values in the set.
 func (s *RawIDs[U]) Values(yield func(U) bool) {
 	if s.IsSlice() {
 		s.slice.Values(yield)
 	} else {
 		s.bits.Values(yield)
+	}
+}
+
+// Removes iterates over all values in the set.
+// If check returns true, the values will be deleted
+func (s *RawIDs[U]) Removes(check func(U) bool) {
+	if s.IsSlice() {
+		s.slice.Removes(check)
+	} else {
+		s.bits.Removes(check)
 	}
 }
 

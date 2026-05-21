@@ -464,6 +464,21 @@ func (b *BitSet[U]) Values(yield func(U) bool) {
 	}
 }
 
+// Removes iterate over the complete BitSet and call the check function,
+// for every value, if check returns true, the Bit are UnSet
+func (b *BitSet[U]) Removes(check func(U) bool) {
+	for i, w := range b.data {
+		for w != 0 {
+			t := bits.TrailingZeros64(w)
+			val := (i << 6) + t
+			if check(U(val)) {
+				b.UnSet(U(val))
+			}
+			w &= (w - 1)
+		}
+	}
+}
+
 func (b *BitSet[U]) ValuesBatch(yield func([]U) bool) {
 	const batchSize = 256
 	buffer := make([]U, batchSize)

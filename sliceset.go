@@ -314,11 +314,29 @@ func (s *SliceSet[U]) AndNot(other *SliceSet[U]) {
 }
 
 func (s *SliceSet[U]) Values(yield func(U) bool) {
-	sa := s.data
-	for _, v := range sa {
+	for _, v := range s.data {
 		if !yield(v) {
 			return
 		}
+	}
+}
+
+// Removes iterate over the complete SliceStet and call the check function,
+// If check returns true, the Value will be UnSet
+//
+// collect first, then remove to avoid slice-shift
+// corruption when UnSet shifts the backing array during Values iteration.
+func (s *SliceSet[U]) Removes(check func(U) bool) {
+	var toRemove []U
+
+	for _, v := range s.data {
+		if check(v) {
+			toRemove = append(toRemove, v)
+		}
+	}
+
+	for _, id := range toRemove {
+		s.UnSet(id)
 	}
 }
 

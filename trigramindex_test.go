@@ -233,6 +233,24 @@ func TestTrigram_Get_AllBranches(t *testing.T) {
 	}
 }
 
+// TestTrigram_Get_AdjacentFalsePositives triggers the slice‑shift bug
+// when Values removes two consecutive false positives.
+//
+// Query "abcd" has trigrams "abc" and "bcd".
+// "abcbcd" and "bcdabc" both contain both trigrams, so they survive
+// the trigram intersection, but neither string contains "abcd" as a
+// substring.  They are placed at consecutive IDs 0 and 1.
+// The true match "abcd" is at ID 2.
+//
+// If RawIDs32.UnSet shifts the underlying slice during Values iteration,
+// the removal of ID 0 will cause ID 1 to be skipped, leaving it as a
+// phantom positive in the result.
+func TestTrigram_Get_AdjacentFalsePositives(t *testing.T) {
+	ti := NewTrigramIndexFrom("abcbcd", "bcdabc", "abcd")
+	res, _ := ti.Get("abcd")
+	assert.Equal(t, []uint32{2}, res.ToSlice())
+}
+
 func TestTrigram_Delete(t *testing.T) {
 	ti := NewTrigramIndexFrom("testing", "tester")
 

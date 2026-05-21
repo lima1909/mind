@@ -97,14 +97,12 @@ func (ti *TrigramIndex) Get(s string) (*RawIDs32, bool) {
 			result.And(entry)
 		}
 
-		// false‑positive filter
-		result.Values(func(id uint32) bool {
+		// false-positive filter —
+		result.Removes(func(id uint32) bool {
 			str := ti.buckets[id].str
-			if len(str) < slen || !strings.Contains(str, s) {
-				result.UnSet(id)
-			}
-			return true
+			return len(str) < slen || !strings.Contains(str, s)
 		})
+
 		return result, true
 	}
 }
