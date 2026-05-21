@@ -43,30 +43,30 @@ func NewTrigramIndexWithCapacity(size int) TrigramIndex {
 	}
 }
 
-func (ti *TrigramIndex) Get(s string) *RawIDs32 {
+func (ti *TrigramIndex) Get(s string) (*RawIDs32, bool) {
 	slen := len(s)
 
 	switch len(s) {
 	case 0:
-		return NewRawIDs[uint32]()
+		return NewRawIDs[uint32](), true
 	case 1:
 		bs, ok := ti.rawIDs[pack(0, 0, s[0])]
 		if !ok {
-			return NewRawIDs[uint32]()
+			return NewRawIDs[uint32](), true
 		}
-		return bs
+		return bs, false
 	case 2:
 		bs, ok := ti.rawIDs[pack(0, s[0], s[1])]
 		if !ok {
-			return NewRawIDs[uint32]()
+			return NewRawIDs[uint32](), true
 		}
-		return bs
+		return bs, false
 	case 3:
 		bs, ok := ti.rawIDs[pack(s[0], s[1], s[2])]
 		if !ok {
-			return NewRawIDs[uint32]()
+			return NewRawIDs[uint32](), true
 		}
-		return bs
+		return bs, false
 
 	default:
 		var allIDs []*RawIDs32
@@ -76,7 +76,7 @@ func (ti *TrigramIndex) Get(s string) *RawIDs32 {
 			entry, ok := ti.rawIDs[tri]
 			if !ok {
 				// break, is NOT a substring
-				return NewRawIDs[uint32]()
+				return NewRawIDs[uint32](), true
 			}
 			allIDs = append(allIDs, entry)
 		}
@@ -105,7 +105,7 @@ func (ti *TrigramIndex) Get(s string) *RawIDs32 {
 			}
 			return true
 		})
-		return result
+		return result, true
 	}
 }
 

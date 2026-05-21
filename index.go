@@ -207,13 +207,13 @@ func (mi *idMapIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
 	return NewRawIDsFrom(uint32(idx)), nil
 }
 
-func (mi *idMapIndex[OBJ, ID]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, error) {
-	return nil, InvalidOperationError{IDMapIndexName, op.Op}
+func (mi *idMapIndex[OBJ, ID]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, bool, error) {
+	return nil, false, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
 // MatchMany is not supported by idMapIndex, so that always returns an error
-func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
-	return nil, InvalidOperationError{IDMapIndexName, op.Op}
+func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+	return nil, false, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
 // ------------------------------------------
@@ -242,10 +242,10 @@ type Filter interface {
 	Equal(value any) (*RawIDs32, error)
 	// Match execute a query (FilterOP) with one given value
 	// for example: age > 18
-	Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error)
+	Match(allIDs *RawIDs32, op FilterOp, value any) (ids *RawIDs32, canMutate bool, err error)
 	// MatchMany execute a query (FilterOp) for many given values
 	// for example: age between 18 and 80
-	MatchMany(op FilterOp, values ...any) (*RawIDs32, error)
+	MatchMany(op FilterOp, values ...any) (ids *RawIDs32, canMutate bool, err error)
 }
 
 var (
@@ -407,27 +407,28 @@ func (mi *MapIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (mi *MapIndex[OBJ, V, H]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, error) {
-	return nil, InvalidOperationError{MapIndexName, op.Op}
+func (mi *MapIndex[OBJ, V, H]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, bool, error) {
+	return nil, false, InvalidOperationError{MapIndexName, op.Op}
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
 	switch op.Op {
 	case OpIn:
 		// fast path for 0 or 1 values
 		switch len(values) {
 		case 0:
-			return NewRawIDs[uint32](), nil
+			return NewRawIDs[uint32](), true, nil
 		case 1:
 			key, err := ValueFromAny[V](values[0])
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if rid, found := mi.data[key]; found {
-				return rid.Copy(), nil
+				// not copied
+				return rid, false, nil
 			}
-			return NewRawIDs[uint32](), nil
+			return NewRawIDs[uint32](), true, nil
 		}
 
 		matched := make([]*RawIDs32, 0, len(values))
@@ -436,7 +437,7 @@ func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 		for _, v := range values {
 			key, err := ValueFromAny[V](v)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
 			if rid, found := mi.data[key]; found {
@@ -451,9 +452,10 @@ func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 		// fast path for 0 or 1 matches
 		switch len(matched) {
 		case 0:
-			return NewRawIDs[uint32](), nil
+			return NewRawIDs[uint32](), true, nil
 		case 1:
-			return matched[0].Copy(), nil
+			// not copied
+			return matched[0], false, nil
 		}
 
 		result := NewRawIDsWithCapacity[uint32](maxLen)
@@ -461,9 +463,9 @@ func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 			result.Or(bs)
 		}
 
-		return result, nil
+		return result, true, nil
 	default:
-		return nil, InvalidOperationError{MapIndexName, op.Op}
+		return nil, false, InvalidOperationError{MapIndexName, op.Op}
 	}
 }
 
@@ -545,10 +547,10 @@ func (si *SortedIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
-		return nil, InvalidValueTypeError[V]{value}
+		return nil, false, InvalidValueTypeError[V]{value}
 	}
 
 	var toMerge []*RawIDs32
@@ -592,43 +594,43 @@ func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any
 		invOp = FilterOp{Op: OpLt}
 		si.skipList.GreaterEqual(v, visitor)
 	default:
-		return nil, InvalidOperationError{SortedIndexName, op.Op}
+		return nil, false, InvalidOperationError{SortedIndexName, op.Op}
 	}
 
 	// query inversion optimization
 	if abortedForInversion {
-		inverseResult, err := si.Match(allIDs, invOp, value)
+		inverseResult, _, err := si.Match(allIDs, invOp, value)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		// finalResult = allIDs - inverseResult
 		finalResult := allIDs.Copy()
 		finalResult.AndNot(inverseResult)
-		return finalResult, nil
+		return finalResult, true, nil
 	}
 
 	result := NewRawIDs[uint32]()
 	for _, ids := range toMerge {
 		result.Or(ids)
 	}
-	return result, nil
+	return result, true, nil
 }
 
-func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
-			return nil, InvalidArgsLenError{Defined: "2", Got: len(values)}
+			return nil, false, InvalidArgsLenError{Defined: "2", Got: len(values)}
 		}
 
 		min, err := ValueFromAny[V](values[0])
 		if err != nil {
-			return nil, InvalidValueTypeError[V]{values[0]}
+			return nil, false, InvalidValueTypeError[V]{values[0]}
 		}
 		max, err := ValueFromAny[V](values[1])
 		if err != nil {
-			return nil, InvalidValueTypeError[V]{values[1]}
+			return nil, false, InvalidValueTypeError[V]{values[1]}
 		}
 
 		result := NewRawIDs[uint32]()
@@ -636,21 +638,22 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 			result.Or(bs)
 			return true
 		})
-		return result, nil
+		return result, true, nil
 	case OpIn:
 		// fast path for 0 or 1 values
 		switch len(values) {
 		case 0:
-			return NewRawIDs[uint32](), nil
+			return NewRawIDs[uint32](), true, nil
 		case 1:
 			key, err := ValueFromAny[V](values[0])
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			if rid, found := si.skipList.Get(key); found {
-				return rid.Copy(), nil
+				// not copied
+				return rid, false, nil
 			}
-			return NewRawIDs[uint32](), nil
+			return NewRawIDs[uint32](), true, nil
 		}
 
 		matched := make([]*RawIDs32, 0, len(values))
@@ -659,7 +662,7 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 		for _, v := range values {
 			key, err := ValueFromAny[V](v)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
 			if rid, found := si.skipList.Get(key); found {
@@ -674,9 +677,10 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 		// fast path for 0 or 1 matches
 		switch len(matched) {
 		case 0:
-			return NewRawIDs[uint32](), nil
+			return NewRawIDs[uint32](), true, nil
 		case 1:
-			return matched[0].Copy(), nil
+			// not copied
+			return matched[0], false, nil
 		}
 
 		result := NewRawIDsWithCapacity[uint32](maxLen)
@@ -684,9 +688,9 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 			result.Or(bs)
 		}
 
-		return result, nil
+		return result, true, nil
 	default:
-		return nil, InvalidOperationError{SortedIndexName, op.Op}
+		return nil, false, InvalidOperationError{SortedIndexName, op.Op}
 	}
 }
 
@@ -798,10 +802,10 @@ func (ri *RangeIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
 	return ids, nil
 }
 
-func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
-		return nil, InvalidValueTypeError[uint8]{value}
+		return nil, false, InvalidValueTypeError[uint8]{value}
 	}
 	valInt := int(v)
 
@@ -823,14 +827,14 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*
 		start = valInt
 		invOp = FilterOp{Op: OpLt}
 	default:
-		return nil, InvalidOperationError{RangeIndexName, op.Op}
+		return nil, false, InvalidOperationError{RangeIndexName, op.Op}
 	}
 
 	if end > ri.max {
 		end = ri.max
 	}
 	if start >= end {
-		return NewRawIDs[uint32](), nil
+		return NewRawIDs[uint32](), true, nil
 	}
 
 	// Query Inversion Optimization
@@ -838,15 +842,15 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*
 	// it's cheaper to get the inverse and subtract it from allIDs.
 	if ri.valueHandler.CanInvert() && end-start > (ri.max/2) {
 		// calculate the IDs we DON'T want
-		inverseResult, err := ri.Match(allIDs, invOp, value)
+		inverseResult, _, err := ri.Match(allIDs, invOp, value)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		// result = allIDs - inverseResult
 		finalResult := allIDs.Copy()
 		finalResult.AndNot(inverseResult)
-		return finalResult, nil
+		return finalResult, true, nil
 	}
 
 	result := NewRawIDs[uint32]()
@@ -857,23 +861,23 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*
 		}
 	}
 
-	return result, nil
+	return result, true, nil
 }
 
-func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
-			return nil, InvalidArgsLenError{Defined: "2", Got: len(values)}
+			return nil, false, InvalidArgsLenError{Defined: "2", Got: len(values)}
 		}
 
 		minVal, err := ValueFromAny[uint8](values[0])
 		if err != nil {
-			return nil, InvalidValueTypeError[uint8]{values[0]}
+			return nil, false, InvalidValueTypeError[uint8]{values[0]}
 		}
 		maxVal, err := ValueFromAny[uint8](values[1])
 		if err != nil {
-			return nil, InvalidValueTypeError[uint8]{values[1]}
+			return nil, false, InvalidValueTypeError[uint8]{values[1]}
 		}
 
 		// Use ints to prevent infinite loop on maxVal == 255
@@ -888,13 +892,13 @@ func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, 
 				result.Or(ri.data[i])
 			}
 		}
-		return result, nil
+		return result, true, nil
 	case OpIn:
 		result := NewRawIDs[uint32]()
 		for _, v := range values {
 			i, err := ValueFromAny[uint8](v)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
 			valInt := int(i)
@@ -902,10 +906,10 @@ func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, 
 				result.Or(ri.data[i])
 			}
 		}
-		return result, nil
+		return result, true, nil
 
 	default:
-		return nil, InvalidOperationError{RangeIndexName, op.Op}
+		return nil, false, InvalidOperationError{RangeIndexName, op.Op}
 	}
 }
 
@@ -948,7 +952,7 @@ func (ti *StringIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
 	return ti.sortedIndex.Equal(value)
 }
 
-func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
 
 	switch op.Op {
 	case OpLt, OpLe, OpGt, OpGe:
@@ -957,7 +961,7 @@ func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Ra
 
 	s, err := ValueFromAny[string](value)
 	if err != nil {
-		return nil, InvalidValueTypeError[string]{value}
+		return nil, false, InvalidValueTypeError[string]{value}
 	}
 
 	switch op.Op {
@@ -967,16 +971,18 @@ func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Ra
 			result.Or(ids)
 			return true
 		})
-		return result, nil
+		return result, true, nil
 	case OpContains:
-		return ti.trigram.Get(s).Copy(), nil
+		result, canMutate := ti.trigram.Get(s)
+		// not copied
+		return result, canMutate, nil
 
 	default:
-		return nil, InvalidOperationError{StringIndexName, op.Op}
+		return nil, false, InvalidOperationError{StringIndexName, op.Op}
 	}
 }
 
-func (ti *StringIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (ti *StringIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
 	return ti.sortedIndex.MatchMany(op, values...)
 }
 
@@ -1007,20 +1013,20 @@ func (p *ParserExt[OBJ]) Equal(value any) (*RawIDs32, error) {
 	return nil, InvalidValueTypeError[string]{value}
 }
 
-func (p *ParserExt[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, error) {
+func (p *ParserExt[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
 	if s, ok := value.(string); ok {
 		return p.inner.Match(allIDs, op, p.parse(s))
 	}
 
-	return nil, InvalidValueTypeError[string]{value}
+	return nil, false, InvalidValueTypeError[string]{value}
 }
 
-func (p *ParserExt[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, error) {
+func (p *ParserExt[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
 	pvalues := make([]any, len(values))
 	for i, v := range values {
 		s, ok := v.(string)
 		if !ok {
-			return nil, InvalidValueTypeError[string]{v}
+			return nil, false, InvalidValueTypeError[string]{v}
 		}
 		pvalues[i] = p.parse(s)
 

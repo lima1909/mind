@@ -84,7 +84,7 @@ func TestMapIndex_Get(t *testing.T) {
 	assert.True(t, bs.IsEmpty())
 
 	// invalid relation
-	_, err = mi.Match(nil, FOpGt, 1)
+	_, _, err = mi.Match(nil, FOpGt, 1)
 	assert.ErrorIs(t, InvalidOperationError{MapIndexName, OpGt}, err)
 }
 
@@ -236,7 +236,7 @@ func TestMapIndex_Query_In(t *testing.T) {
 	// In one
 	result, canMutate, err = In("val", 1).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
-	assert.True(t, canMutate)
+	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{1}, result.ToSlice())
 
 	// In many

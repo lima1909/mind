@@ -111,7 +111,7 @@ func BenchmarkTrigramIndex_Get(b *testing.B) {
 			// you would call b.ResetTimer() right here.
 
 			for b.Loop() {
-				ids := ti.Get(bench.query)
+				ids, _ := ti.Get(bench.query)
 				count := ids.Count()
 
 				if count != bench.count {

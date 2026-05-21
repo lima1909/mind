@@ -53,8 +53,7 @@ func matchOne(fieldName string, op FilterOp, value any) Query {
 			return nil, false, err
 		}
 
-		bs, err := filter.Match(allIDs, op, value)
-		return bs, true, err
+		return filter.Match(allIDs, op, value)
 	}
 }
 
@@ -68,8 +67,7 @@ func matchMany(fieldName string, op FilterOp, values ...any) Query {
 			return nil, false, err
 		}
 
-		bs, err := filter.MatchMany(op, values...)
-		return bs, true, err
+		return filter.MatchMany(op, values...)
 	}
 }
 

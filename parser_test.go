@@ -613,20 +613,21 @@ func (mi *udfIndex[OBJ, V, LI]) Equal(value any) (*RawIDs[LI], error) {
 	return bs, nil
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs[LI], error) {
+func (mi *udfIndex[OBJ, V, LI]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs[LI], bool, error) {
 	if op != udfOp {
-		return nil, InvalidOperationError{MapIndexName, op.Op}
+		return nil, false, InvalidOperationError{MapIndexName, op.Op}
 	}
 
-	return mi.Equal(value)
+	ids, err := mi.Equal(value)
+	return ids, false, err
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[LI], error) {
+func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[LI], bool, error) {
 	switch op {
 	case udfOp, FOpIn:
 		if len(values) == 0 {
-			return NewRawIDs[LI](), nil
+			return NewRawIDs[LI](), true, nil
 		}
 
 		matched := make([]*RawIDs[LI], 0, len(values))
@@ -635,7 +636,7 @@ func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[L
 		for _, v := range values {
 			key, err := ValueFromAny[V](v)
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
 
 			if rid, found := mi.data[key]; found {
@@ -648,7 +649,7 @@ func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[L
 		}
 
 		if len(matched) == 0 {
-			return NewRawIDs[LI](), nil
+			return NewRawIDs[LI](), true, nil
 		}
 
 		result := NewRawIDsWithCapacity[LI](maxLen)
@@ -656,8 +657,8 @@ func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[L
 			result.Or(bs)
 		}
 
-		return result, nil
+		return result, true, nil
 	default:
-		return nil, InvalidOperationError{MapIndexName, op.Op}
+		return nil, false, InvalidOperationError{MapIndexName, op.Op}
 	}
 }

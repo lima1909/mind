@@ -10,38 +10,47 @@ import (
 func TestTrigram_Base(t *testing.T) {
 	ti := NewTrigramIndexFrom("apple", "apply", "ban", "banana", "xapp")
 	assert.Equal(t, 5, ti.Len())
-	assert.Equal(t, []uint32{0, 1, 4}, ti.Get("app").ToSlice())
-	assert.Equal(t, []uint32{2, 3}, ti.Get("an").ToSlice())
+	r, _ := ti.Get("app")
+	assert.Equal(t, []uint32{0, 1, 4}, r.ToSlice())
+	r, _ = ti.Get("an")
+	assert.Equal(t, []uint32{2, 3}, r.ToSlice())
 	// not found
-	assert.Equal(t, []uint32{}, ti.Get("nix").ToSlice())
+	r, _ = ti.Get("nix")
+	assert.Equal(t, []uint32{}, r.ToSlice())
 
 	assert.True(t, ti.Delete(2))
 	assert.Equal(t, 4, ti.Len())
 	// search with 2 letters
-	assert.Equal(t, []uint32{3}, ti.Get("an").ToSlice())
+	r, _ = ti.Get("an")
+	assert.Equal(t, []uint32{3}, r.ToSlice())
 
 	// grow the bucket list
 	ti.Put("xban", 20)
 	assert.Equal(t, 5, ti.Len())
-	assert.Equal(t, []uint32{3, 20}, ti.Get("ban").ToSlice())
+	r, _ = ti.Get("ban")
+	assert.Equal(t, []uint32{3, 20}, r.ToSlice())
 
 	// reuse index 2
 	ti.Put("xappx", 2)
 	assert.Equal(t, 6, ti.Len())
-	assert.Equal(t, []uint32{0, 1, 2, 4}, ti.Get("app").ToSlice())
+	r, _ = ti.Get("app")
+	assert.Equal(t, []uint32{0, 1, 2, 4}, r.ToSlice())
 
 	// checks the false positive: ABCD and BCDE matching {0, 2}
 	ti = NewTrigramIndexFrom("ABCD", "ZZZ", "BCDE")
-	assert.Equal(t, []uint32{}, ti.Get("ABCDE").ToSlice())
+	r, _ = ti.Get("ABCDE")
+	assert.Equal(t, []uint32{}, r.ToSlice())
 
 	// empty init
 	ti = NewTrigramIndex()
 	assert.Equal(t, 0, ti.Len())
-	assert.Equal(t, []uint32{}, ti.Get("nix").ToSlice())
+	r, _ = ti.Get("nix")
+	assert.Equal(t, []uint32{}, r.ToSlice())
 
 	ti.Put("üöß€ä@", 2)
 	assert.Equal(t, 1, ti.Len())
-	assert.Equal(t, []uint32{2}, ti.Get("öß€ä").ToSlice())
+	r, _ = ti.Get("öß€ä")
+	assert.Equal(t, []uint32{2}, r.ToSlice())
 }
 
 func TestTrigram_abc(t *testing.T) {
@@ -49,28 +58,36 @@ func TestTrigram_abc(t *testing.T) {
 	ti.Put("abc---bcd", 0)
 	assert.Equal(t, 1, ti.Len())
 
-	r := ti.Get("abcd")
+	r, _ := ti.Get("abcd")
 	assert.Equal(t, 0, r.Count())
 
-	r = ti.Get("abc")
+	r, _ = ti.Get("abc")
 	assert.Equal(t, 1, r.Count())
-	r = ti.Get("bcd")
+	r, _ = ti.Get("bcd")
 	assert.Equal(t, 1, r.Count())
 
 	ti.Put("abc---abc", 1)
 	assert.Equal(t, 2, ti.Len())
 
-	assert.Equal(t, []uint32{0, 1}, ti.Get("abc").ToSlice())
-	assert.Equal(t, []uint32{1}, ti.Get("--ab").ToSlice())
+	r, _ = ti.Get("abc")
+	assert.Equal(t, []uint32{0, 1}, r.ToSlice())
+	r, _ = ti.Get("--ab")
+	assert.Equal(t, []uint32{1}, r.ToSlice())
 
 	ti = NewTrigramIndexFrom("abcd", "bcde")
-	assert.Equal(t, []uint32{0, 1}, ti.Get("bcd").ToSlice())
-	assert.Equal(t, []uint32{0, 1}, ti.Get("bc").ToSlice())
-	assert.Equal(t, []uint32{0, 1}, ti.Get("cd").ToSlice())
+	r, _ = ti.Get("bcd")
+	assert.Equal(t, []uint32{0, 1}, r.ToSlice())
+	r, _ = ti.Get("bc")
+	assert.Equal(t, []uint32{0, 1}, r.ToSlice())
+	r, _ = ti.Get("cd")
+	assert.Equal(t, []uint32{0, 1}, r.ToSlice())
 
-	assert.Equal(t, []uint32{0}, ti.Get("a").ToSlice())
-	assert.Equal(t, []uint32{1}, ti.Get("e").ToSlice())
-	assert.Equal(t, []uint32{0, 1}, ti.Get("c").ToSlice())
+	r, _ = ti.Get("a")
+	assert.Equal(t, []uint32{0}, r.ToSlice())
+	r, _ = ti.Get("e")
+	assert.Equal(t, []uint32{1}, r.ToSlice())
+	r, _ = ti.Get("c")
+	assert.Equal(t, []uint32{0, 1}, r.ToSlice())
 }
 
 func TestNewTrigram_Initializers(t *testing.T) {
@@ -119,7 +136,8 @@ func TestTrigram_Put_EdgeCases(t *testing.T) {
 		ti.Put("go", 0)
 		assert.Equal(t, 3, len(ti.rawIDs))
 		assert.Equal(t, 1, ti.Len())
-		assert.Equal(t, []uint32{0}, ti.Get("go").ToSlice())
+		r, _ := ti.Get("go")
+		assert.Equal(t, []uint32{0}, r.ToSlice())
 
 		// Empty string handling
 		ti.Put("", 1)
@@ -130,8 +148,10 @@ func TestTrigram_Put_EdgeCases(t *testing.T) {
 		ti.Put("g", 2)
 		assert.Equal(t, 3, len(ti.rawIDs))
 		assert.Equal(t, 3, ti.Len())
-		assert.Equal(t, []uint32{0, 2}, ti.Get("g").ToSlice())
-		assert.Equal(t, []uint32{0}, ti.Get("go").ToSlice())
+		r, _ = ti.Get("g")
+		assert.Equal(t, []uint32{0, 2}, r.ToSlice())
+		r, _ = ti.Get("go")
+		assert.Equal(t, []uint32{0}, r.ToSlice())
 	})
 }
 
@@ -202,7 +222,7 @@ func TestTrigram_Get_AllBranches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := ti.Get(tt.query)
+			res, _ := ti.Get(tt.query)
 			slice := res.ToSlice()
 			assert.Equal(t, tt.wantCount, len(slice))
 
@@ -260,12 +280,12 @@ func TestTrigram_Delete(t *testing.T) {
 func TestTrigram_Len3Immunity(t *testing.T) {
 	ti := NewTrigramIndexFrom("axbxc", "ab c", "abc")
 	// This will lookup exactly one key. It will ONLY find ID 2 ("abc").
-	res := ti.Get("abc")
+	res, _ := ti.Get("abc")
 	assert.Equal(t, []uint32{2}, res.ToSlice())
 	assert.Equal(t, ti.buckets[2].str, "abc")
 
 	ti = NewTrigramIndexFrom("cats", "catmats")
-	res = ti.Get("cats")
+	res, _ = ti.Get("cats")
 	assert.Equal(t, []uint32{0}, res.ToSlice())
 }
 
@@ -324,7 +344,7 @@ func TestTrigram_UnicodeAndUTF8(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res := ti.Get(tt.query)
+			res, _ := ti.Get(tt.query)
 			assert.Equal(t, tt.wantCount, res.Count())
 			assert.Equal(t, tt.wantIDs, res.ToSlice())
 		})
@@ -338,10 +358,13 @@ func TestTrigram_BulkPut(t *testing.T) {
 	TrigramIndexBulkPut(&ti, handler, data)
 
 	assert.Equal(t, 5, ti.Len())
-	assert.Equal(t, []uint32{0, 1, 4}, ti.Get("app").ToSlice())
-	assert.Equal(t, []uint32{2, 3}, ti.Get("an").ToSlice())
+	r, _ := ti.Get("app")
+	assert.Equal(t, []uint32{0, 1, 4}, r.ToSlice())
+	r, _ = ti.Get("an")
+	assert.Equal(t, []uint32{2, 3}, r.ToSlice())
 	// not found
-	assert.Equal(t, []uint32{}, ti.Get("nix").ToSlice())
+	r, _ = ti.Get("nix")
+	assert.Equal(t, []uint32{}, r.ToSlice())
 }
 
 func TestTrigram_BulkPut2(t *testing.T) {
@@ -367,7 +390,8 @@ func TestTrigram_BulkPut2(t *testing.T) {
 	TrigramIndexBulkPut(&ti, handler, seq)
 
 	assert.Equal(t, 11, ti.Len())
-	assert.Equal(t, []uint32{1}, ti.Get("bet").ToSlice())
+	r, _ := ti.Get("bet")
+	assert.Equal(t, []uint32{1}, r.ToSlice())
 
 }
 
