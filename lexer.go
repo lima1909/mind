@@ -42,16 +42,15 @@ const (
 
 // Relation (Payloads can now safely use bits 0 through 15)
 const (
-	OpEq         Op = opRelational | (1 << 0)
-	OpNeq           = opRelational | (1 << 1)
-	OpLt            = opRelational | (1 << 2)
-	OpLe            = opRelational | (1 << 3)
-	OpGt            = opRelational | (1 << 4)
-	OpGe            = opRelational | (1 << 5)
-	OpIn            = opRelational | (1 << 6)
-	OpBetween       = opRelational | (1 << 7)
-	OpContains      = opRelational | (1 << 8)
-	OpStartsWith    = opRelational | (1 << 9)
+	OpEq      Op = opRelational | (1 << 0)
+	OpNeq        = opRelational | (1 << 1)
+	OpLt         = opRelational | (1 << 2)
+	OpLe         = opRelational | (1 << 3)
+	OpGt         = opRelational | (1 << 4)
+	OpGe         = opRelational | (1 << 5)
+	OpLike       = opRelational | (1 << 6)
+	OpIn         = opRelational | (1 << 7)
+	OpBetween    = opRelational | (1 << 8)
 )
 
 func (o Op) IsRelational() bool { return o&opCategoryMaskOp == opRelational }
@@ -96,10 +95,8 @@ func (o Op) String() string {
 		return "IN"
 	case OpBetween:
 		return "BETWEEN"
-	case OpContains:
-		return "CONTAINS"
-	case OpStartsWith:
-		return "STARTSWITH"
+	case OpLike:
+		return "LIKE"
 	case OpAnd:
 		return "AND"
 	case OpOr:
@@ -249,11 +246,12 @@ func (l *lexer) readKeyword() token {
 		}
 	case 4:
 		// TRUE
-		if b[0]|0x20 == 't' &&
-			b[1]|0x20 == 'r' &&
-			b[2]|0x20 == 'u' &&
-			b[3]|0x20 == 'e' {
+		if b[0]|0x20 == 't' && b[1]|0x20 == 'r' && b[2]|0x20 == 'u' && b[3]|0x20 == 'e' {
 			return token{Op: OpBool, Start: start, End: l.pos}
+		}
+		// LIKE
+		if b[0]|0x20 == 'l' && b[1]|0x20 == 'i' && b[2]|0x20 == 'k' && b[3]|0x20 == 'e' {
+			return token{Op: OpLike, Start: start, End: l.pos}
 		}
 	case 5:
 		// FALSE
@@ -274,32 +272,6 @@ func (l *lexer) readKeyword() token {
 			b[5]|0x20 == 'e' &&
 			b[6]|0x20 == 'n' {
 			return token{Op: OpBetween, Start: start, End: l.pos}
-		}
-	case 8:
-		// CONTAINS
-		if b[0]|0x20 == 'c' &&
-			b[1]|0x20 == 'o' &&
-			b[2]|0x20 == 'n' &&
-			b[3]|0x20 == 't' &&
-			b[4]|0x20 == 'a' &&
-			b[5]|0x20 == 'i' &&
-			b[6]|0x20 == 'n' &&
-			b[7]|0x20 == 's' {
-			return token{Op: OpContains, Start: start, End: l.pos}
-		}
-	case 10:
-		// STARTSWITH
-		if b[0]|0x20 == 's' &&
-			b[1]|0x20 == 't' &&
-			b[2]|0x20 == 'a' &&
-			b[3]|0x20 == 'r' &&
-			b[4]|0x20 == 't' &&
-			b[5]|0x20 == 's' &&
-			b[6]|0x20 == 'w' &&
-			b[7]|0x20 == 'i' &&
-			b[8]|0x20 == 't' &&
-			b[9]|0x20 == 'h' {
-			return token{Op: OpStartsWith, Start: start, End: l.pos}
 		}
 	}
 

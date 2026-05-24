@@ -26,14 +26,22 @@ go get github.com/lima1909/mind
 
 ### Index Types
 
-| Index         | Backed by                                           | Supported operations                                                        |
-|---------------|-----------------------------------------------------|-----------------------------------------------------------------------------|
-| `MapIndex`    | Hash map                                            | `=`, `!=`, `In`                                                             |
-| `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`                           |
-| `RangeIndex`  | uint8 slice                                         | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`                           |
-| `StringIndex` | SkipList and TrigramIndex                           | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`, `contains`, `startswith` |
+| Index         | Backed by                                           | Supported operations                                      |
+|---------------|-----------------------------------------------------|-----------------------------------------------------------|
+| `MapIndex`    | Hash map                                            | `=`, `!=`, `In`                                           |
+| `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
+| `RangeIndex`  | uint8 slice                                         | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
+| `StringIndex` | SkipList and TrigramIndex                           | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`, `like` |
 
 **All operations** can be combined with `AND`, `OR` and `NOT`.
+
+`like` means:
+  - '%' or '%%' => all
+  - 'ab%'     => startsWith (prefix): 'ab'
+  - '%ab'     => endsWith (suffix): 'ab'
+  - '%ab%'    => contains: 'ab'
+  - 'abc'     => equals
+  - '%ab%cd%' => contains: 'ab' and 'cd', in this order
 
 ## Trade-offs
 

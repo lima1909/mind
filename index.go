@@ -249,16 +249,15 @@ type Filter interface {
 }
 
 var (
-	FOpEq         = FilterOp{Op: OpEq}
-	FOpNeq        = FilterOp{Op: OpNeq}
-	FOpLe         = FilterOp{Op: OpLe}
-	FOpLt         = FilterOp{Op: OpLt}
-	FOpGe         = FilterOp{Op: OpGe}
-	FOpGt         = FilterOp{Op: OpGt}
-	FOpIn         = FilterOp{Op: OpIn}
-	FOpBetween    = FilterOp{Op: OpBetween}
-	FOpContains   = FilterOp{Op: OpContains}
-	FOpStartsWith = FilterOp{Op: OpStartsWith}
+	FOpEq      = FilterOp{Op: OpEq}
+	FOpNeq     = FilterOp{Op: OpNeq}
+	FOpLe      = FilterOp{Op: OpLe}
+	FOpLt      = FilterOp{Op: OpLt}
+	FOpGe      = FilterOp{Op: OpGe}
+	FOpGt      = FilterOp{Op: OpGt}
+	FOpLike    = FilterOp{Op: OpLike}
+	FOpIn      = FilterOp{Op: OpIn}
+	FOpBetween = FilterOp{Op: OpBetween}
 )
 
 // ValueHandler is a Strategy Pattern implementation that acts as an abstraction layer
@@ -965,16 +964,8 @@ func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Ra
 	}
 
 	switch op.Op {
-	case OpStartsWith:
-		result := NewRawIDs[uint32]()
-		ti.sortedIndex.skipList.StringStartsWith(s, func(_ string, ids *RawIDs32) bool {
-			result.Or(ids)
-			return true
-		})
-		return result, true, nil
-	case OpContains:
-		result, canMutate := ti.trigram.Get(s)
-		// not copied
+	case OpLike:
+		result, canMutate := ti.trigram.Like(s)
 		return result, canMutate, nil
 
 	default:

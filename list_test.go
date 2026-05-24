@@ -562,14 +562,14 @@ func TestList_EscapedString(t *testing.T) {
 	il.Insert(car{name: "Dacia\\'s", age: 22})
 	il.Insert(car{name: "\"Dacia\"", age: 22})
 
-	result, err := il.QueryStr(`name contains "pel"`).Values()
+	result, err := il.QueryStr(`name like "%pel%"`).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel 1", age: 22},
 		{name: "Opel 2", age: 5},
 	}, result)
 
-	result, err = il.QueryStr(`name startswith "Op"`).Values()
+	result, err = il.QueryStr(`name like "Op%"`).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel 1", age: 22},

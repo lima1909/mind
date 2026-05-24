@@ -100,14 +100,14 @@ func TestParser_Base(t *testing.T) {
 		{query: `price between(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price between(3.0, 1.2)`, expected: []uint32{}},
 
-		{query: `name contains "lic"`, expected: []uint32{1}},
-		{query: `name contains "Alice"`, expected: []uint32{1}},
-		{query: `name contains "l\\'s"`, expected: []uint32{0}},
-		{query: `name contains "nix"`, expected: []uint32{}},
+		{query: `name like "%lic%"`, expected: []uint32{1}},
+		{query: `name like "%Alice%"`, expected: []uint32{1}},
+		{query: `name like "%l\\'s%"`, expected: []uint32{0}},
+		{query: `name like "%nix%"`, expected: []uint32{}},
 
-		{query: `name startswith "Al"`, expected: []uint32{1}},
-		{query: `name startswith "Paul\\'"`, expected: []uint32{0}},
-		{query: `name startswith "al"`, expected: []uint32{}},
+		{query: `name like "Al%"`, expected: []uint32{1}},
+		{query: `name like "Paul\\'%"`, expected: []uint32{0}},
+		{query: `name like "al%"`, expected: []uint32{}},
 
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price in(3.0, 1.2)`, expected: []uint32{0, 1}},
@@ -165,38 +165,20 @@ func TestParser_Error(t *testing.T) {
 		err   error
 	}{
 		{
-			query: `name contains 2`,
+			query: `name like 2`,
 			err: UnexpectedTokenError{
-				input:    "name contains 2",
-				msg:      "only string are supported for 'CONTAINS'",
-				token:    token{Start: 14, End: 15, Op: OpNumberInt},
+				input:    "name like 2",
+				msg:      "only string are supported for 'LIKE'",
+				token:    token{Start: 10, End: 11, Op: OpNumberInt},
 				expected: OpUndefined,
 			},
 		},
 		{
-			query: `name contains true`,
+			query: `name like true`,
 			err: UnexpectedTokenError{
-				input:    "name contains true",
-				msg:      "only string are supported for 'CONTAINS'",
-				token:    token{Start: 14, End: 18, Op: OpBool},
-				expected: OpUndefined,
-			},
-		},
-		{
-			query: `name startswith 2`,
-			err: UnexpectedTokenError{
-				input:    "name startswith 2",
-				msg:      "only string are supported for 'STARTSWITH'",
-				token:    token{Start: 16, End: 17, Op: OpNumberInt},
-				expected: OpUndefined,
-			},
-		},
-		{
-			query: `name startswith true`,
-			err: UnexpectedTokenError{
-				input:    "name startswith true",
-				msg:      "only string are supported for 'STARTSWITH'",
-				token:    token{Start: 16, End: 20, Op: OpBool},
+				input:    "name like true",
+				msg:      "only string are supported for 'LIKE'",
+				token:    token{Start: 10, End: 14, Op: OpBool},
 				expected: OpUndefined,
 			},
 		},

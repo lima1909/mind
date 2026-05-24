@@ -4,7 +4,6 @@ import (
 	_ "embed"
 
 	"fmt"
-	"math/rand/v2"
 	"strings"
 	"testing"
 	"time"
@@ -41,8 +40,6 @@ func BenchmarkQueryStr(b *testing.B) {
 		Age  uint8
 	}
 
-	minV := 10
-	maxV := 100
 	ds := 3_000_000
 	n := 0
 	names := strings.Split(names_txt, "\n")
@@ -58,7 +55,7 @@ func BenchmarkQueryStr(b *testing.B) {
 
 		fl.Insert(person{
 			Name: names[n],
-			Age:  uint8(minV + rand.IntN(maxV-minV+1)),
+			Age:  uint8(i % 100),
 		})
 	}
 
@@ -80,62 +77,78 @@ func BenchmarkQueryStr(b *testing.B) {
 	bmarks := []struct {
 		name  string
 		bmark func() int
+		count int
 	}{
 		{
 			name: "List-Or",
 			bmark: func() int {
-				count, _ := il.QueryStr(
+				result := il.QueryStr(
 					`name = "Jule" or name = "Magan" or age > 80`,
-				).Count()
+				)
+				count, err := result.Count()
+				require.NoError(b, err)
 				return count
 			},
+			count: 570_716,
 		},
 		{
 			name: "List-OrRg",
 			bmark: func() int {
-				count, _ := il.QueryStr(
+				result := il.QueryStr(
 					`name = "Jule" or name = "Magan" or age2 > 80`,
-				).Count()
+				)
+				count, err := result.Count()
+				require.NoError(b, err)
 				return count
 			},
+			count: 570_716,
 		},
 		{
 			name: "List-In",
 			bmark: func() int {
-				count, _ := il.QueryStr(
+				result := il.QueryStr(
 					`name IN("Jule", "Magan") or age > 80`,
-				).Count()
+				)
+				count, err := result.Count()
+				require.NoError(b, err)
 				return count
 			},
+			count: 570_716,
 		},
 		{
 			name: "Contains",
 			bmark: func() int {
-				count, _ := il.QueryStr(
-					`name contains "ule" or name contains "agan"`,
-				).Count()
+				result := il.QueryStr(
+					`name like "%ule%" or name like "%agan%"`,
+				)
+				count, err := result.Count()
+				require.NoError(b, err)
 				return count
 			},
+			count: 3981,
 		},
 		{
 			name: "Startswith",
 			bmark: func() int {
-				count, _ := il.QueryStr(
-					`name startswith "Jul" or name startswith "Maga"`,
-				).Count()
+				result := il.QueryStr(
+					`name like "Jul%" or name like "Magai%"`,
+				)
+				count, err := result.Count()
+				require.NoError(b, err)
 				return count
 			},
+			count: 8417,
 		},
 	}
 
 	for _, bench := range bmarks {
 		b.Run(bench.name, func(b *testing.B) {
-			count := 0
 			for b.Loop() {
-				count = max(count, bench.bmark())
+				count := bench.bmark()
+				if count != bench.count {
+					b.Fatalf("%s: expected count %d, got %d", bench.name, bench.count, count)
+				}
 			}
-			// fmt.Printf("---%s: %d \n", bench.name, count)
-
 		})
 	}
 }

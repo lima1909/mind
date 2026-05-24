@@ -553,3 +553,27 @@ func TestTrigram_Like_LongStrings(t *testing.T) {
 	res, _ = ti.Like("%abcdeabcdexyz%abcdeabcde%")
 	assert.Equal(t, []uint32{}, res.ToSlice())
 }
+
+func TestTrigram_Like_SpecialChar(t *testing.T) {
+	ti := NewTrigramIndexFrom("Paul's", "näß")
+
+	// Paul's
+	res, _ := ti.Like("Pau%")
+	assert.Equal(t, []uint32{0}, res.ToSlice())
+
+	res, _ = ti.Like("Paul's")
+	assert.Equal(t, []uint32{0}, res.ToSlice())
+
+	res, _ = ti.Like("%'%")
+	assert.Equal(t, []uint32{0}, res.ToSlice())
+
+	// näß
+	res, _ = ti.Like("%ä%")
+	assert.Equal(t, []uint32{1}, res.ToSlice())
+
+	res, _ = ti.Like("%ß%")
+	assert.Equal(t, []uint32{1}, res.ToSlice())
+
+	res, _ = ti.Like("%ß")
+	assert.Equal(t, []uint32{1}, res.ToSlice())
+}

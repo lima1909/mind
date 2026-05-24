@@ -516,24 +516,36 @@ func TestStringIndex(t *testing.T) {
 	allIDs := NewRawIDsFrom[uint32](1, 2, 3)
 
 	// contains
-	bs, _, _ := ti.Match(allIDs, FOpContains, "bb")
+	bs, _, _ := ti.Match(allIDs, FOpLike, "%bb%")
 	assert.Equal(t, []uint32{1, 3}, bs.ToSlice())
 
-	bs, _, _ = ti.Match(allIDs, FOpContains, "nix")
+	bs, _, _ = ti.Match(allIDs, FOpLike, "%nix%")
 	assert.Equal(t, []uint32{}, bs.ToSlice())
 
-	bs, _, _ = ti.Match(allIDs, FOpContains, "acca")
+	bs, _, _ = ti.Match(allIDs, FOpLike, "%acca%")
 	assert.Equal(t, []uint32{2}, bs.ToSlice())
 
 	// startsWith
-	bs, _, _ = ti.Match(allIDs, FOpStartsWith, "ab")
+	bs, _, _ = ti.Match(allIDs, FOpLike, "ab%")
 	assert.Equal(t, []uint32{1, 4}, bs.ToSlice())
 
 	// remove abba
 	unSet(ti, "abba", 1)
-	bs, _, _ = ti.Match(allIDs, FOpContains, "bb")
+	bs, _, _ = ti.Match(allIDs, FOpLike, "%bb%")
 	assert.Equal(t, []uint32{3}, bs.ToSlice())
+}
 
+func TestStringIndex_Error(t *testing.T) {
+	ti := NewStringIndex(FromValue[string]())
+	allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+
+	// contains
+	_, _, err := ti.Match(allIDs, FilterOp{Name: "contains"}, "%bb%")
+	assert.ErrorIs(t, InvalidOperationError{StringIndexName, 0}, err)
+
+	// startsWith
+	_, _, err = ti.Match(allIDs, FilterOp{Name: "startswith"}, "bb%")
+	assert.ErrorIs(t, InvalidOperationError{StringIndexName, 0}, err)
 }
 
 func TestParserExt(t *testing.T) {

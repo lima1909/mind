@@ -442,7 +442,7 @@ func (ti *TrigramIndex) Like(pattern string) (*RawIDs32, bool) {
 			}
 
 			// Not end‑anchored → part2 must appear somewhere after part1
-			return strings.Index(s[pos:], part2) == -1
+			return !strings.Contains(s[pos:], part2)
 		})
 
 		return result, true
