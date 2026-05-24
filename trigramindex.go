@@ -285,3 +285,275 @@ func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[
 		})
 	}
 }
+
+// Like returns all indexed strings that match the SQL LIKE pattern.
+// '%' matches any sequence of characters:
+// - '%' or '%%' => all
+// - 'abc' => equals
+// - 'ab%' => startsWith (prefix): 'ab'
+// - '%ab' => endsWith (suffix): 'ab'
+// - '%ab%' => contains: 'ab'
+// - '%ab%cd%' => contains: 'ab' and 'cd', in this order
+// - ” => empty, reutrn the empty IDs
+func (ti *TrigramIndex) Like(pattern string) (*RawIDs32, bool) {
+	// empty string
+	if len(pattern) == 0 {
+		return NewRawIDs[uint32](), true
+	}
+
+	var parts []string
+	start := 0
+	for i := 0; i < len(pattern); i++ {
+		if pattern[i] == '%' {
+			// add only not empty parts
+			if i > start {
+				parts = append(parts, pattern[start:i])
+			}
+			start = i + 1
+		}
+	}
+
+	// add the last one
+	if start < len(pattern) {
+		parts = append(parts, pattern[start:])
+	}
+
+	// LIKE starts here
+	switch len(parts) {
+	case 0:
+		// ONLY‑wildcard: %, %% → full table scan
+		result := NewRawIDs[uint32]()
+		for i, b := range ti.buckets {
+			if b.occupied {
+				result.Set(uint32(i))
+			}
+		}
+		return result, true
+	case 1:
+		anchoredStart := pattern[0] != '%'
+		anchoredEnd := pattern[len(pattern)-1] != '%'
+
+		part := parts[0]
+		bs, canMutate := ti.Get(part)
+		if bs.IsEmpty() {
+			return NewRawIDs[uint32](), true
+		}
+
+		switch {
+		// Equals
+		case anchoredStart && anchoredEnd:
+			if !canMutate {
+				bs = bs.Copy()
+			}
+			bs.Removes(func(id uint32) bool {
+				s := ti.buckets[id].str
+				if len(s) < len(part) {
+					return true
+				}
+				return s != part
+			})
+			return bs, true
+		// StartsWith
+		case anchoredStart:
+			if !canMutate {
+				bs = bs.Copy()
+			}
+			bs.Removes(func(id uint32) bool {
+				s := ti.buckets[id].str
+				if len(s) < len(part) {
+					return true
+				}
+				return !strings.HasPrefix(s, part)
+			})
+			return bs, true
+		// EndsWith
+		case anchoredEnd:
+			if !canMutate {
+				bs = bs.Copy()
+			}
+			bs.Removes(func(id uint32) bool {
+				s := ti.buckets[id].str
+				if len(s) < len(part) {
+					return true
+				}
+				return !strings.HasSuffix(s, part)
+			})
+			return bs, true
+		// Contains
+		default:
+			return bs, canMutate
+		}
+
+	case 2:
+		part1, part2 := parts[0], parts[1]
+
+		get1, canMutate1 := ti.Get(part1)
+		get2, canMutate2 := ti.Get(part2)
+		count1 := get1.Count()
+		count2 := get2.Count()
+
+		// copy and use the smaller one
+		var result *RawIDs32
+		if count1 < count2 {
+			if canMutate1 {
+				result = get1
+			} else {
+				result = get1.Copy()
+			}
+			result.And(get2)
+		} else {
+			if canMutate2 {
+				result = get2
+			} else {
+				result = get2.Copy()
+			}
+			result.And(get1)
+		}
+
+		anchoredStart := pattern[0] != '%'
+		anchoredEnd := pattern[len(pattern)-1] != '%'
+		totalLen := len(part1) + len(part2)
+
+		// remove the false-positive
+		result.Removes(func(id uint32) bool {
+			s := ti.buckets[id].str
+			if len(s) < totalLen {
+				return true
+			}
+
+			// Part 1
+			pos := 0
+			if anchoredStart {
+				if !strings.HasPrefix(s, part1) {
+					return true
+				}
+				pos = len(part1)
+			} else {
+				idx := strings.Index(s, part1)
+				if idx == -1 {
+					return true
+				}
+				pos = idx + len(part1)
+			}
+
+			// Part 2
+			if anchoredEnd {
+				return !strings.HasSuffix(s, part2) || len(s)-len(part2) < pos
+			}
+
+			// Not end‑anchored → part2 must appear somewhere after part1
+			return strings.Index(s[pos:], part2) == -1
+		})
+
+		return result, true
+
+	default:
+		var reqBuf [8]*RawIDs32
+		required := reqBuf[:0]
+
+		// calculate total string length of all parts
+		totalLen := 0
+		// fast-Scan and extract only the most selective bitsets
+		for _, part := range parts {
+			totalLen += len(part)
+			switch len(part) {
+			case 1:
+				key := pack(0, 0, part[0])
+				if bs, ok := ti.rawIDs[key]; ok {
+					required = append(required, bs)
+				} else {
+					return NewRawIDs[uint32](), true
+				}
+			case 2:
+				key := pack(0, part[0], part[1])
+				if bs, ok := ti.rawIDs[key]; ok {
+					required = append(required, bs)
+				} else {
+					return NewRawIDs[uint32](), true
+				}
+			default: // >= 3
+				// For long chunks, don't grab every single trigram step blindly.
+				// Just grab the first and last trigram of the chunk to maximize coverage
+				// while minimizing intersection CPU work.
+				keyFirst := pack(part[0], part[1], part[2])
+				bsFirst, ok1 := ti.rawIDs[keyFirst]
+				if !ok1 {
+					return NewRawIDs[uint32](), true
+				}
+				required = append(required, bsFirst)
+
+				if len(part) > 3 {
+					n := len(part)
+					keyLast := pack(part[n-3], part[n-2], part[n-1])
+					if bsLast, ok2 := ti.rawIDs[keyLast]; ok2 {
+						required = append(required, bsLast)
+					} else {
+						return NewRawIDs[uint32](), true
+					}
+				}
+			}
+		}
+
+		// find the smallest bitset first to minimize cloning costs
+		minIdx := 0
+		minCount := required[0].Count()
+		for i := 1; i < len(required); i++ {
+			c := required[i].Count()
+			if c < minCount {
+				minCount = c
+				minIdx = i
+			}
+		}
+
+		result := required[minIdx].Copy()
+
+		// Intersect remaining elements
+		for i, bs := range required {
+			if i == minIdx {
+				continue
+			}
+			result.And(bs)
+			if result.IsEmpty() {
+				return result, true
+			}
+		}
+
+		anchoredStart := pattern[0] != '%'
+		anchoredEnd := pattern[len(pattern)-1] != '%'
+
+		// remove false-positive
+		lastIdx := len(parts) - 1
+		result.Removes(func(id uint32) bool {
+			s := ti.buckets[id].str
+
+			// if the string s is shorter as all pattern length, than can delete
+			if len(s) < totalLen {
+				return true
+			}
+
+			pos := 0
+			for i, part := range parts {
+				if i == 0 && anchoredStart {
+					if !strings.HasPrefix(s, part) {
+						return true
+					}
+					pos = len(part)
+					continue
+				}
+				if i == lastIdx && anchoredEnd {
+					return !strings.HasSuffix(s, part) || len(s)-len(part) < pos
+				}
+
+				idx := strings.Index(s[pos:], part)
+				if idx == -1 {
+					return true
+				}
+				pos += idx + len(part)
+			}
+
+			return false
+		})
+
+		return result, true
+	}
+}

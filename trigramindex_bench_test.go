@@ -126,3 +126,58 @@ func BenchmarkTrigramIndex_Get(b *testing.B) {
 	// Reference global count outside to ensure it's never optimized out
 	_ = globalCount
 }
+
+func BenchmarkTrigramIndex_Like(b *testing.B) {
+	ds := 3_000_000
+	names := strings.Split(names_txt, "\n")
+
+	var validNames []string
+	for _, name := range names {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			validNames = append(validNames, trimmed)
+		}
+	}
+
+	if len(validNames) == 0 {
+		b.Fatal("names_txt contains no valid data to index")
+	}
+
+	ti := NewTrigramIndexWithCapacity(ds)
+	for i := 0; i < ds; i++ {
+		ti.Put(validNames[i%len(validNames)], i)
+	}
+
+	bmarks := []struct {
+		name  string
+		query string
+		count int
+	}{
+		{"Equals_____Acy", "Acy", 443},
+		{"Equals____Abel", "Abel", 443},
+		{"Contains_%ana%", "%ana%", 34_958},
+		{"Prefix____Jo%", "Jo%", 46_072},
+		{"Suffix___%son", "%son", 28_775},
+		{"Both___Jo%son", "Jo%son", 443},
+		{"Multi_%an%na%", "%an%na%", 26_551},
+		{"All_________%", "%", ds},
+	}
+
+	var globalCount int
+
+	for _, bench := range bmarks {
+		b.Run(bench.name, func(b *testing.B) {
+			for b.Loop() {
+				ids, _ := ti.Like(bench.query)
+				count := ids.Count()
+
+				if count != bench.count {
+					b.Fatalf("%s: expected count %d, got %d", bench.name, bench.count, count)
+				}
+
+				globalCount = count
+			}
+		})
+	}
+
+	_ = globalCount
+}

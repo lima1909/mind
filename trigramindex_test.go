@@ -416,3 +416,140 @@ func TestTrigram_BulkPut2(t *testing.T) {
 func ptr(s string) *string {
 	return &s
 }
+
+func TestTrigram_Like(t *testing.T) {
+	ti := NewTrigramIndexFrom("apple", "application", "apply", "banana", "bandana", "ban", "")
+
+	tests := []struct {
+		name    string
+		pattern string
+		wantIDs []uint32
+	}{
+		{
+			name:    "Prefix wildcard",
+			pattern: "appl%",
+			wantIDs: []uint32{0, 1, 2},
+		},
+		{
+			name:    "Suffix wildcard",
+			pattern: "%tion",
+			wantIDs: []uint32{1},
+		},
+		{
+			name:    "Both sides wildcard, like contains",
+			pattern: "%ppl%",
+			wantIDs: []uint32{0, 1, 2},
+		},
+		{
+			name:    "Prefix and suffix anchoring",
+			pattern: "app%y",
+			wantIDs: []uint32{2},
+		},
+		{
+			name:    "Prefix and Suffix",
+			pattern: "ban%ana",
+			wantIDs: []uint32{3, 4},
+		},
+		{
+			name:    "Multiple wildcard",
+			pattern: "ba%n%ana",
+			wantIDs: []uint32{3, 4},
+		},
+		{
+			name:    "Exact match (no wildcard)",
+			pattern: "ban",
+			wantIDs: []uint32{5},
+		},
+		{
+			name:    "Wildcard only — matches everything",
+			pattern: "%",
+			wantIDs: []uint32{0, 1, 2, 3, 4, 5, 6},
+		},
+		{
+			name:    "Only Consecutive — matches everything",
+			pattern: "%%",
+			wantIDs: []uint32{0, 1, 2, 3, 4, 5, 6},
+		},
+		{
+			name:    "Empty pattern — matches only empty string",
+			pattern: "",
+			wantIDs: []uint32{},
+		},
+		{
+			name:    "No match",
+			pattern: "xyz%",
+			wantIDs: []uint32{},
+		},
+		{
+			name:    "Consecutive wildcards equivalent to single",
+			pattern: "ban%%ana",
+			wantIDs: []uint32{3, 4},
+		},
+		{
+			name:    "Wildcard that expands to empty — apple matches apple%",
+			pattern: "apple%",
+			wantIDs: []uint32{0},
+		},
+		{
+			name:    "Ordering enforced — ana must precede ban",
+			pattern: "%ana%ban%",
+			wantIDs: []uint32{},
+		},
+		{
+			name:    "many wildcard",
+			pattern: "a%p%p%l%",
+			wantIDs: []uint32{0, 1, 2},
+		},
+		{
+			name:    "many many wildcard",
+			pattern: "a%p%p%l%a%p%p%l%a%p%p%l%e",
+			wantIDs: []uint32{},
+		},
+		{
+			name:    "to many wildcard",
+			pattern: "a%p%p%l%i%c%a%t%i%o%n",
+			wantIDs: []uint32{1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, _ := ti.Like(tt.pattern)
+			assert.Equal(t, tt.wantIDs, res.ToSlice())
+		})
+	}
+}
+
+func TestTrigram_Like_Anchoring(t *testing.T) {
+	ti := NewTrigramIndexFrom("abcde", "xabcde", "abcdex", "xabcdex", "abc")
+
+	// prefix anchor: must start with "abc"
+	res, _ := ti.Like("abc%")
+	assert.Equal(t, []uint32{0, 2, 4}, res.ToSlice())
+
+	// suffix anchor: must end with "de"
+	res, _ = ti.Like("%de")
+	assert.Equal(t, []uint32{0, 1}, res.ToSlice())
+
+	// both anchors: must start with "abc" AND end with "de"
+	res, _ = ti.Like("abc%de")
+	assert.Equal(t, []uint32{0}, res.ToSlice())
+
+	// empty query find nothing
+	res, _ = ti.Like("")
+	assert.Equal(t, []uint32{}, res.ToSlice())
+}
+
+func TestTrigram_Like_LongStrings(t *testing.T) {
+	ti := NewTrigramIndexFrom("abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdexyz")
+
+	res, _ := ti.Like("%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%")
+	assert.Equal(t, []uint32{0}, res.ToSlice())
+
+	res, _ = ti.Like("%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdexyz%")
+	assert.Equal(t, []uint32{0}, res.ToSlice())
+
+	// not found
+	res, _ = ti.Like("%abcdeabcdexyz%abcdeabcde%")
+	assert.Equal(t, []uint32{}, res.ToSlice())
+}
