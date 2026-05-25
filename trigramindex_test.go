@@ -521,7 +521,7 @@ func TestTrigram_Like(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, _ := ti.Like(tt.pattern)
+			res, _ := ti.Like(tt.pattern, nil)
 			assert.Equal(t, tt.wantIDs, res.ToSlice())
 		})
 	}
@@ -531,33 +531,33 @@ func TestTrigram_Like_Anchoring(t *testing.T) {
 	ti := NewTrigramIndexFrom("abcde", "xabcde", "abcdex", "xabcdex", "abc")
 
 	// prefix anchor: must start with "abc"
-	res, _ := ti.Like("abc%")
+	res, _ := ti.Like("abc%", nil)
 	assert.Equal(t, []uint32{0, 2, 4}, res.ToSlice())
 
 	// suffix anchor: must end with "de"
-	res, _ = ti.Like("%de")
+	res, _ = ti.Like("%de", nil)
 	assert.Equal(t, []uint32{0, 1}, res.ToSlice())
 
 	// both anchors: must start with "abc" AND end with "de"
-	res, _ = ti.Like("abc%de")
+	res, _ = ti.Like("abc%de", nil)
 	assert.Equal(t, []uint32{0}, res.ToSlice())
 
 	// empty query find nothing
-	res, _ = ti.Like("")
+	res, _ = ti.Like("", nil)
 	assert.Equal(t, []uint32{}, res.ToSlice())
 }
 
 func TestTrigram_Like_LongStrings(t *testing.T) {
 	ti := NewTrigramIndexFrom("abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdexyz")
 
-	res, _ := ti.Like("%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%")
+	res, _ := ti.Like("%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%", nil)
 	assert.Equal(t, []uint32{0}, res.ToSlice())
 
-	res, _ = ti.Like("%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdexyz%")
+	res, _ = ti.Like("%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde%abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdexyz%", nil)
 	assert.Equal(t, []uint32{0}, res.ToSlice())
 
 	// not found
-	res, _ = ti.Like("%abcdeabcdexyz%abcdeabcde%")
+	res, _ = ti.Like("%abcdeabcdexyz%abcdeabcde%", nil)
 	assert.Equal(t, []uint32{}, res.ToSlice())
 }
 
@@ -565,22 +565,22 @@ func TestTrigram_Like_SpecialChar(t *testing.T) {
 	ti := NewTrigramIndexFrom("Paul's", "näß")
 
 	// Paul's
-	res, _ := ti.Like("Pau%")
+	res, _ := ti.Like("Pau%", nil)
 	assert.Equal(t, []uint32{0}, res.ToSlice())
 
-	res, _ = ti.Like("Paul's")
+	res, _ = ti.Like("Paul's", nil)
 	assert.Equal(t, []uint32{0}, res.ToSlice())
 
-	res, _ = ti.Like("%'%")
+	res, _ = ti.Like("%'%", nil)
 	assert.Equal(t, []uint32{0}, res.ToSlice())
 
 	// näß
-	res, _ = ti.Like("%ä%")
+	res, _ = ti.Like("%ä%", nil)
 	assert.Equal(t, []uint32{1}, res.ToSlice())
 
-	res, _ = ti.Like("%ß%")
+	res, _ = ti.Like("%ß%", nil)
 	assert.Equal(t, []uint32{1}, res.ToSlice())
 
-	res, _ = ti.Like("%ß")
+	res, _ = ti.Like("%ß", nil)
 	assert.Equal(t, []uint32{1}, res.ToSlice())
 }

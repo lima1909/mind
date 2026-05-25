@@ -171,7 +171,7 @@ func BenchmarkTrigramIndex_Like(b *testing.B) {
 	for _, bench := range bmarks {
 		b.Run(bench.name, func(b *testing.B) {
 			for b.Loop() {
-				ids, _ := ti.Like(bench.query)
+				ids, _ := ti.Like(bench.query, nil)
 				count := ids.Count()
 
 				if count != bench.count {

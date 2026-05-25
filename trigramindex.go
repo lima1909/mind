@@ -106,127 +106,6 @@ func (ti *TrigramIndex) Get(s string) (*RawIDs32, bool) {
 	}
 }
 
-func (ti *TrigramIndex) Put(s string, li int) {
-	wasOccupied := false
-	if li < len(ti.buckets) {
-		wasOccupied = ti.buckets[li].occupied
-	} else {
-		if cap(ti.buckets) <= li {
-			newBuckets := make([]strBucket, li+1, (li+1)*2) // double capacity to avoid frequent allocations
-			copy(newBuckets, ti.buckets)
-			ti.buckets = newBuckets
-		} else {
-			ti.buckets = ti.buckets[:li+1]
-		}
-	}
-
-	ti.buckets[li] = strBucket{str: s, occupied: true}
-	if !wasOccupied {
-		ti.len++
-	}
-
-	slen := len(s)
-	if slen == 0 {
-		return // nothing to pack
-	}
-
-	// Bounds Check Elimination hint
-	_ = s[slen-1]
-
-	// unigrams (a) -> pack(0,0,a)
-	for j := range slen {
-		uni := pack(0, 0, s[j])
-		bs, found := ti.rawIDs[uni]
-		if !found {
-			bs = NewRawIDs[uint32]()
-			ti.rawIDs[uni] = bs
-		}
-		bs.Set(uint32(li))
-	}
-
-	// bigrams (ab) -> pack(0,a,b)
-	for j := 0; j < slen-1; j++ {
-		bi := pack(0, s[j], s[j+1])
-		bs, found := ti.rawIDs[bi]
-		if !found {
-			bs = NewRawIDs[uint32]()
-			ti.rawIDs[bi] = bs
-		}
-		bs.Set(uint32(li))
-	}
-
-	// trigrams
-	for j := 0; j < slen-2; j++ {
-		tri := pack(s[j], s[j+1], s[j+2])
-		bs, found := ti.rawIDs[tri]
-		if !found {
-			bs = NewRawIDs[uint32]()
-			ti.rawIDs[tri] = bs
-		}
-		bs.Set(uint32(li))
-	}
-}
-
-func (ti *TrigramIndex) Delete(li int) bool {
-	if li >= len(ti.buckets) || !ti.buckets[li].occupied {
-		return false
-	}
-
-	s := ti.buckets[li].str
-	slen := len(s)
-
-	// unigrams
-	for j := range slen {
-		uni := pack(0, 0, s[j])
-		if bs, found := ti.rawIDs[uni]; found {
-			bs.UnSet(uint32(li))
-			if bs.Count() == 0 {
-				delete(ti.rawIDs, uni)
-			} else {
-				bs.Shrink()
-			}
-		}
-	}
-
-	// bigrams
-	for j := 0; j < slen-1; j++ {
-		bi := pack(0, s[j], s[j+1])
-		if bs, found := ti.rawIDs[bi]; found {
-			bs.UnSet(uint32(li))
-			if bs.Count() == 0 {
-				delete(ti.rawIDs, bi)
-			} else {
-				bs.Shrink()
-			}
-		}
-	}
-
-	// trigrams
-	for j := 0; j < slen-2; j++ {
-		tri := pack(s[j], s[j+1], s[j+2])
-		if bs, found := ti.rawIDs[tri]; found {
-			bs.UnSet(uint32(li))
-			if bs.Count() == 0 {
-				delete(ti.rawIDs, tri)
-			} else {
-				bs.Shrink()
-			}
-		}
-	}
-
-	ti.buckets[li] = strBucket{str: "", occupied: false}
-	ti.len--
-
-	return true
-}
-
-func (ti *TrigramIndex) Len() int { return ti.len }
-
-// pack converts 3 bytes into a single uint32 to save memory and speed up lookups
-//
-//go:inline
-func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c) }
-
 // Like returns all indexed strings that match the SQL LIKE pattern.
 // '%' matches any sequence of characters:
 // - '%' or '%%' => all
@@ -236,7 +115,7 @@ func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c)
 // - '%ab%' => contains: 'ab'
 // - '%ab%cd%' => contains: 'ab' and 'cd', in this order
 // - ” => empty, reutrn the empty IDs
-func (ti *TrigramIndex) Like(pattern string) (*RawIDs32, bool) {
+func (ti *TrigramIndex) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, bool) {
 	// empty string
 	if len(pattern) == 0 {
 		return NewRawIDs[uint32](), true
@@ -261,8 +140,13 @@ func (ti *TrigramIndex) Like(pattern string) (*RawIDs32, bool) {
 
 	// LIKE starts here
 	switch len(parts) {
+	// ONLY‑wildcard: %, %% → full table scan
 	case 0:
-		// ONLY‑wildcard: %, %% → full table scan
+		// fast-path, if all ids are known
+		if allIDs != nil {
+			return allIDs, false
+		}
+
 		result := NewRawIDs[uint32]()
 		for i, b := range ti.buckets {
 			if b.occupied {
@@ -498,3 +382,124 @@ func (ti *TrigramIndex) Like(pattern string) (*RawIDs32, bool) {
 		return result, true
 	}
 }
+
+func (ti *TrigramIndex) Put(s string, li int) {
+	wasOccupied := false
+	if li < len(ti.buckets) {
+		wasOccupied = ti.buckets[li].occupied
+	} else {
+		if cap(ti.buckets) <= li {
+			newBuckets := make([]strBucket, li+1, (li+1)*2) // double capacity to avoid frequent allocations
+			copy(newBuckets, ti.buckets)
+			ti.buckets = newBuckets
+		} else {
+			ti.buckets = ti.buckets[:li+1]
+		}
+	}
+
+	ti.buckets[li] = strBucket{str: s, occupied: true}
+	if !wasOccupied {
+		ti.len++
+	}
+
+	slen := len(s)
+	if slen == 0 {
+		return // nothing to pack
+	}
+
+	// Bounds Check Elimination hint
+	_ = s[slen-1]
+
+	// unigrams (a) -> pack(0,0,a)
+	for j := range slen {
+		uni := pack(0, 0, s[j])
+		bs, found := ti.rawIDs[uni]
+		if !found {
+			bs = NewRawIDs[uint32]()
+			ti.rawIDs[uni] = bs
+		}
+		bs.Set(uint32(li))
+	}
+
+	// bigrams (ab) -> pack(0,a,b)
+	for j := 0; j < slen-1; j++ {
+		bi := pack(0, s[j], s[j+1])
+		bs, found := ti.rawIDs[bi]
+		if !found {
+			bs = NewRawIDs[uint32]()
+			ti.rawIDs[bi] = bs
+		}
+		bs.Set(uint32(li))
+	}
+
+	// trigrams
+	for j := 0; j < slen-2; j++ {
+		tri := pack(s[j], s[j+1], s[j+2])
+		bs, found := ti.rawIDs[tri]
+		if !found {
+			bs = NewRawIDs[uint32]()
+			ti.rawIDs[tri] = bs
+		}
+		bs.Set(uint32(li))
+	}
+}
+
+func (ti *TrigramIndex) Delete(li int) bool {
+	if li >= len(ti.buckets) || !ti.buckets[li].occupied {
+		return false
+	}
+
+	s := ti.buckets[li].str
+	slen := len(s)
+
+	// unigrams
+	for j := range slen {
+		uni := pack(0, 0, s[j])
+		if bs, found := ti.rawIDs[uni]; found {
+			bs.UnSet(uint32(li))
+			if bs.Count() == 0 {
+				delete(ti.rawIDs, uni)
+			} else {
+				bs.Shrink()
+			}
+		}
+	}
+
+	// bigrams
+	for j := 0; j < slen-1; j++ {
+		bi := pack(0, s[j], s[j+1])
+		if bs, found := ti.rawIDs[bi]; found {
+			bs.UnSet(uint32(li))
+			if bs.Count() == 0 {
+				delete(ti.rawIDs, bi)
+			} else {
+				bs.Shrink()
+			}
+		}
+	}
+
+	// trigrams
+	for j := 0; j < slen-2; j++ {
+		tri := pack(s[j], s[j+1], s[j+2])
+		if bs, found := ti.rawIDs[tri]; found {
+			bs.UnSet(uint32(li))
+			if bs.Count() == 0 {
+				delete(ti.rawIDs, tri)
+			} else {
+				bs.Shrink()
+			}
+		}
+	}
+
+	ti.buckets[li] = strBucket{str: "", occupied: false}
+	ti.len--
+
+	return true
+}
+
+func (ti *TrigramIndex) Len() int { return ti.len }
+
+// pack converts 3 bytes into a single uint32 to save memory and speed up lookups
+//
+//go:inline
+func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c) }

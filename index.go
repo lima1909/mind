@@ -960,16 +960,13 @@ func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*Ra
 	switch op.Op {
 	case OpLt, OpLe, OpGt, OpGe:
 		return ti.sortedIndex.Match(allIDs, op, value)
-	}
-
-	s, err := ValueFromAny[string](value)
-	if err != nil {
-		return nil, false, InvalidValueTypeError[string]{value}
-	}
-
-	switch op.Op {
 	case OpLike:
-		result, canMutate := ti.trigram.Like(s)
+		s, err := ValueFromAny[string](value)
+		if err != nil {
+			return nil, false, InvalidValueTypeError[string]{value}
+		}
+
+		result, canMutate := ti.trigram.Like(s, allIDs)
 		return result, canMutate, nil
 
 	default:
