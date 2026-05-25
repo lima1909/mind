@@ -31,11 +31,11 @@ go get github.com/lima1909/mind
 | `MapIndex`    | Hash map                                            | `=`, `!=`, `In`                                           |
 | `SortedIndex` | [SkipList](https://en.wikipedia.org/wiki/Skip_list) | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
 | `RangeIndex`  | uint8 slice                                         | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
-| `StringIndex` | SkipList and TrigramIndex                           | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`, `like` |
+| `StringIndex` | SkipList and TrigramIndex                           | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`, `Like` |
 
 **All operations** can be combined with `AND`, `OR` and `NOT`.
 
-`like` means:
+`Like` means:
   - '%' or '%%' => all
   - 'ab%'     => startsWith (prefix): 'ab'
   - '%ab'     => endsWith (suffix): 'ab'

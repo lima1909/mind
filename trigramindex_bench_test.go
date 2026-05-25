@@ -16,7 +16,7 @@ func BenchmarkTrigramIndex_BulkPut_vs_Put(b *testing.B) {
 	start := time.Now()
 	l := make([]*string, ds)
 
-	for i := 0; i < ds; i++ {
+	for i := range ds {
 		if n%6779 == 0 {
 			n = 0
 		}
@@ -85,7 +85,7 @@ func BenchmarkTrigramIndex_Get(b *testing.B) {
 
 	// 1. Bulk setup phase
 	ti := NewTrigramIndexWithCapacity(ds)
-	for i := 0; i < ds; i++ {
+	for i := range ds {
 		// Clean, allocation-free round-robin data selection
 		ti.Put(validNames[i%len(validNames)], i)
 	}
@@ -143,7 +143,7 @@ func BenchmarkTrigramIndex_Like(b *testing.B) {
 	}
 
 	ti := NewTrigramIndexWithCapacity(ds)
-	for i := 0; i < ds; i++ {
+	for i := range ds {
 		ti.Put(validNames[i%len(validNames)], i)
 	}
 

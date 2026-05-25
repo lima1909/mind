@@ -135,7 +135,7 @@ func (ti *TrigramIndex) Put(s string, li int) {
 	_ = s[slen-1]
 
 	// unigrams (a) -> pack(0,0,a)
-	for j := 0; j < slen; j++ {
+	for j := range slen {
 		uni := pack(0, 0, s[j])
 		bs, found := ti.rawIDs[uni]
 		if !found {
@@ -177,7 +177,7 @@ func (ti *TrigramIndex) Delete(li int) bool {
 	slen := len(s)
 
 	// unigrams
-	for j := 0; j < slen; j++ {
+	for j := range slen {
 		uni := pack(0, 0, s[j])
 		if bs, found := ti.rawIDs[uni]; found {
 			bs.UnSet(uint32(li))
@@ -232,10 +232,7 @@ func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[
 	for id, o := range objs {
 		// Expand bucket slice on the fly (unchanged)
 		if id >= len(ti.buckets) {
-			newSize := id + 1
-			if newSize < len(ti.buckets)*2 {
-				newSize = len(ti.buckets) * 2
-			}
+			newSize := max(id+1, len(ti.buckets)*2)
 			nb := make([]strBucket, newSize)
 			copy(nb, ti.buckets)
 			ti.buckets = nb
@@ -251,7 +248,7 @@ func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[
 			sLen := len(s)
 
 			// unigrams
-			for j := 0; j < sLen; j++ {
+			for j := range sLen {
 				uni := pack(0, 0, s[j])
 				bs := ti.rawIDs[uni]
 				if bs == nil {

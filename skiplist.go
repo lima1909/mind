@@ -2,9 +2,7 @@ package mind
 
 import (
 	"cmp"
-	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 )
 
@@ -312,35 +310,6 @@ func (sl *SkipList[K, V]) GreaterEqual(key K, visit VisitFn[K, V]) {
 			return
 		}
 	}
-}
-
-// StringStartsWith finds all keys with the given prefix.
-// If prefix (K) is not a string, this method panics!
-func (sl *SkipList[K, V]) StringStartsWith(prefix K, visit VisitFn[K, V]) bool {
-	prefixStr, ok := any(prefix).(string)
-	if !ok {
-		panic(fmt.Sprintf("StringStartsWith supports only strings, not: %T", prefix))
-	}
-
-	x := sl.head
-	for i := int(sl.level) - 1; i >= 0; i-- {
-		for next := x.next[i]; next != nil && next.key < prefix; next = x.next[i] {
-			x = next
-		}
-	}
-
-	for x = x.next[0]; x != nil; x = x.next[0] {
-		// We still have to box x.key here, but we stop as soon as it mismatches
-		kStr := any(x.key).(string)
-		if !strings.HasPrefix(kStr, prefixStr) {
-			break
-		}
-		if !visit(x.key, x.value) {
-			break
-		}
-	}
-
-	return true
 }
 
 // MinKey returns the first (smallest) Key

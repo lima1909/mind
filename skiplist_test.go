@@ -349,22 +349,6 @@ func TestSplitList_GreaterEqual(t *testing.T) {
 	assert.Equal(t, []int{}, result)
 }
 
-func TestSplitList_StringStartsWith(t *testing.T) {
-	sl := NewSkipList[string, int]()
-	assert.True(t, sl.Put("abc", 1))
-	assert.True(t, sl.Put("bca", 2))
-	assert.True(t, sl.Put("bcx", 3))
-	assert.True(t, sl.Put("ba", 4))
-
-	var result []int
-	sl.StringStartsWith("bc", func(k string, v int) bool {
-		result = append(result, v)
-		return true
-	})
-
-	assert.Equal(t, []int{2, 3}, result)
-}
-
 func TestSplitList_FindSortedKeys(t *testing.T) {
 	sl := NewSkipList[byte, uint32]()
 	sl.Put(1, 1)

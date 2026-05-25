@@ -922,7 +922,7 @@ type StringIndex[OBJ any] struct {
 func NewStringIndex[OBJ any](fromField FromField[OBJ, string]) Index[OBJ] {
 	return &StringIndex[OBJ]{
 		trigram:     NewTrigramIndex(),
-		sortedIndex: *NewSortedIndex[OBJ, string](fromField).(*SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
+		sortedIndex: *NewSortedIndex(fromField).(*SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
 	}
 }
 
