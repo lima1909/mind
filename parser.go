@@ -376,10 +376,7 @@ func (e UnexpectedTokenError) Error() string {
 		end = len(e.input)
 	}
 
-	caretLen := end - start
-	if caretLen < 1 {
-		caretLen = 1
-	}
+	caretLen := max(end-start, 1)
 
 	return fmt.Sprintf("%s\n  %s\n  %s%s",
 		msg,

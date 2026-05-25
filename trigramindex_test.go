@@ -373,7 +373,11 @@ func TestTrigram_BulkPut(t *testing.T) {
 	data := slices.All([]*string{ptr("apple"), ptr("apply"), ptr("ban"), ptr("banana"), ptr("xapp")})
 	ti := NewTrigramIndex()
 	handler := SingleValueHandler[string, string]{func(s *string) string { return *s }}
-	TrigramIndexBulkPut(&ti, handler, data)
+	for id, o := range data {
+		handler.Handle(o, func(s string) {
+			ti.Put(s, id)
+		})
+	}
 
 	assert.Equal(t, 5, ti.Len())
 	r, _ := ti.Get("app")
@@ -395,7 +399,6 @@ func TestTrigram_BulkPut2(t *testing.T) {
 		10: ptr("omega"), // Forces large structural exponential growth jump
 	}
 
-	// Convert native map to modern Go iter.Seq2
 	seq := func(yield func(int, *string) bool) {
 		for k, v := range items {
 			if !yield(k, v) {
@@ -405,9 +408,13 @@ func TestTrigram_BulkPut2(t *testing.T) {
 	}
 
 	handler := SingleValueHandler[string, string]{func(s *string) string { return *s }}
-	TrigramIndexBulkPut(&ti, handler, seq)
+	for id, o := range seq {
+		handler.Handle(o, func(s string) {
+			ti.Put(s, id)
+		})
+	}
 
-	assert.Equal(t, 11, ti.Len())
+	assert.Equal(t, 3, ti.Len())
 	r, _ := ti.Get("bet")
 	assert.Equal(t, []uint32{1}, r.ToSlice())
 

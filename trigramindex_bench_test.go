@@ -48,7 +48,11 @@ func BenchmarkTrigramIndex_BulkPut_vs_Put(b *testing.B) {
 			func() int {
 				ti := NewTrigramIndexWithCapacity(ds)
 				handler := SingleValueHandler[string, string]{func(s *string) string { return *s }}
-				TrigramIndexBulkPut(&ti, handler, slices.All(l))
+				for id, o := range slices.All(l) {
+					handler.Handle(o, func(s string) {
+						ti.Put(s, id)
+					})
+				}
 				return ti.len
 			},
 		},

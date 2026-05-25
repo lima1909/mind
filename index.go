@@ -935,7 +935,11 @@ func (ti *StringIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 
 func (ti *StringIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	ti.sortedIndex.BulkSet(objs)
-	TrigramIndexBulkPut(&ti.trigram, ti.sortedIndex.valueHandler, objs)
+	for id, o := range objs {
+		ti.sortedIndex.valueHandler.Handle(o, func(s string) {
+			ti.trigram.Put(s, id)
+		})
+	}
 }
 
 func (ti *StringIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {

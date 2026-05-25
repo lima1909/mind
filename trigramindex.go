@@ -1,7 +1,6 @@
 package mind
 
 import (
-	"iter"
 	"strings"
 )
 
@@ -227,61 +226,6 @@ func (ti *TrigramIndex) Len() int { return ti.len }
 //
 //go:inline
 func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c) }
-
-func TrigramIndexBulkPut[OBJ any](ti *TrigramIndex, vhandler SingleValueHandler[OBJ, string], objs iter.Seq2[int, *OBJ]) {
-	for id, o := range objs {
-		// Expand bucket slice on the fly (unchanged)
-		if id >= len(ti.buckets) {
-			newSize := max(id+1, len(ti.buckets)*2)
-			nb := make([]strBucket, newSize)
-			copy(nb, ti.buckets)
-			ti.buckets = nb
-		}
-
-		vhandler.Handle(o, func(s string) {
-			ti.buckets[id] = strBucket{str: s, occupied: true}
-			if id >= ti.len {
-				ti.len = id + 1
-			}
-
-			uID := uint32(id)
-			sLen := len(s)
-
-			// unigrams
-			for j := range sLen {
-				uni := pack(0, 0, s[j])
-				bs := ti.rawIDs[uni]
-				if bs == nil {
-					bs = NewRawIDs[uint32]()
-					ti.rawIDs[uni] = bs
-				}
-				bs.Set(uID)
-			}
-
-			// bigrams
-			for j := 0; j < sLen-1; j++ {
-				bi := pack(0, s[j], s[j+1])
-				bs := ti.rawIDs[bi]
-				if bs == nil {
-					bs = NewRawIDs[uint32]()
-					ti.rawIDs[bi] = bs
-				}
-				bs.Set(uID)
-			}
-
-			// trigrams
-			for j := 0; j < sLen-2; j++ {
-				tri := pack(s[j], s[j+1], s[j+2])
-				bs := ti.rawIDs[tri]
-				if bs == nil {
-					bs = NewRawIDs[uint32]()
-					ti.rawIDs[tri] = bs
-				}
-				bs.Set(uID)
-			}
-		})
-	}
-}
 
 // Like returns all indexed strings that match the SQL LIKE pattern.
 // '%' matches any sequence of characters:
