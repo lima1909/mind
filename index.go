@@ -978,6 +978,74 @@ func (ti *StringIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bo
 	return ti.sortedIndex.MatchMany(op, values...)
 }
 
+const CompositeIndexName = "CompositeIndex"
+
+// CompositeIndex fans out all mutations to every registered component index
+// and routes each query operator to the single component that was registered for it.
+type CompositeIndex[OBJ any, IDX Index[OBJ]] struct {
+	mainIndex IDX
+	routes    map[FilterOp]Index[OBJ]
+}
+
+func NewCompositeIndex[OBJ any, IDX Index[OBJ]](mainIndex IDX) *CompositeIndex[OBJ, IDX] {
+	return &CompositeIndex[OBJ, IDX]{
+		mainIndex: mainIndex,
+		routes:    make(map[FilterOp]Index[OBJ], 0),
+	}
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) Add(idx Index[OBJ], ops ...FilterOp) *CompositeIndex[OBJ, IDX] {
+	for _, op := range ops {
+		ci.routes[op] = idx
+	}
+	return ci
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) Set(obj *OBJ, lidx uint32) {
+	ci.mainIndex.Set(obj, lidx)
+	for _, idx := range ci.routes {
+		idx.Set(obj, lidx)
+	}
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	ci.mainIndex.BulkSet(objs)
+	for _, idx := range ci.routes {
+		idx.BulkSet(objs)
+	}
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) UnSet(obj *OBJ, lidx uint32) {
+	ci.mainIndex.UnSet(obj, lidx)
+	for _, idx := range ci.routes {
+		idx.UnSet(obj, lidx)
+	}
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) HasChanged(oldItem, newItem *OBJ) bool {
+	return ci.mainIndex.HasChanged(oldItem, newItem)
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) Equal(value any) (*RawIDs32, error) {
+	return ci.mainIndex.Equal(value)
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+	idx, ok := ci.routes[op]
+	if !ok {
+		return nil, false, InvalidOperationError{CompositeIndexName, op.Op}
+	}
+	return idx.Match(allIDs, op, value)
+}
+
+func (ci *CompositeIndex[OBJ, IDX]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+	idx, ok := ci.routes[op]
+	if !ok {
+		return nil, false, InvalidOperationError{CompositeIndexName, op.Op}
+	}
+	return idx.MatchMany(op, values...)
+}
+
 // ParserExt is a FIlter/Index extension for parsing the given string to an from Filter useable value.
 // For example for a given date-string to an unix-second-time
 // Or to convert a given Enum to an int Value

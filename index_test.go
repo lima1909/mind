@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestIndex_EquaString(t *testing.T) {
+func TestIndex_EqualString(t *testing.T) {
 	index := []struct {
 		name  string
 		index Index[string]
@@ -15,6 +15,7 @@ func TestIndex_EquaString(t *testing.T) {
 		{"map", NewMapIndex(FromValue[string]())},
 		{"sorted", NewSortedIndex(FromValue[string]())},
 		{"string", NewStringIndex(FromValue[string]())},
+		{"composite", NewCompositeIndex(NewMapIndex(FromValue[string]()))},
 	}
 
 	for _, tt := range index {
@@ -324,6 +325,8 @@ func TestIndex_Between_String(t *testing.T) {
 	}{
 		{"sorted", NewSortedIndex(FromValue[string]())},
 		{"string", NewStringIndex(FromValue[string]())},
+		{"composite", NewCompositeIndex(NewMapIndex(FromValue[string]())).
+			Add(NewSortedIndex(FromValue[string]()), FOpBetween)},
 	}
 
 	for _, tt := range index {
@@ -386,6 +389,8 @@ func TestIndex_In_String(t *testing.T) {
 	}{
 		{"sorted", NewSortedIndex(FromValue[string]())},
 		{"string", NewStringIndex(FromValue[string]())},
+		{"composite", NewCompositeIndex(NewMapIndex(FromValue[string]())).
+			Add(NewSortedIndex(FromValue[string]()), FOpIn)},
 	}
 
 	for _, tt := range index {
