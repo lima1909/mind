@@ -89,6 +89,12 @@ func Gt(fieldName string, val any) Expr { return TermExpr{fieldName, FOpGt, val}
 // Ge Greater Equal fieldName >= val
 func Ge(fieldName string, val any) Expr { return TermExpr{fieldName, FOpGe, val} }
 
+// Like is like a SQL-Like search
+func Like(fieldName string, val any) Expr { return TermExpr{fieldName, FOpLike, val} }
+
+// Sounds is a phonetic search
+func Sounds(fieldName string, val any) Expr { return TermExpr{fieldName, FOpSounds, val} }
+
 // IsNil is a Query which checks for a given type the nil value
 // func IsNil[V any](fieldName string) Query { return isNil[V](fieldName) }
 

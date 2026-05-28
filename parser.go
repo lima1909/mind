@@ -110,8 +110,8 @@ func (p *parser) parseCondition() (Expr, error) {
 			return nil, err
 		}
 		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
-	case OpLike:
-		// Like only support String
+	case OpLike, OpSounds:
+		// Like and Sounds only support String
 		if p.cur.Op != OpString {
 			return nil, p.unexpectedWithMsg(fmt.Sprintf("only string are supported for '%s'", tokenOp))
 		}

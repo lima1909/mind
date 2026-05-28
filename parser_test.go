@@ -27,9 +27,16 @@ func TestParser_Base(t *testing.T) {
 	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
 	indexMap.idIndex.Set(&User{ID: 40}, 0)
 	indexMap.idIndex.Set(&User{ID: 42}, 1)
+
 	indexMap.index["name"] = NewStringIndex((*User).Name)
 	indexMap.index["name"].Set(&User{name: "Paul\\'s"}, 0)
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
+
+	//TODO: replace this with composite-index
+	indexMap.index["name2"] = NewPhoneticIndex((*User).Name)
+	indexMap.index["name2"].Set(&User{name: "Paul\\'s"}, 0)
+	indexMap.index["name2"].Set(&User{name: "Alice"}, 1)
+
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
 	indexMap.index["role"].Set(&User{role: "developer"}, 0)
 	indexMap.index["role"].Set(&User{role: "admin"}, 1)
@@ -109,6 +116,8 @@ func TestParser_Base(t *testing.T) {
 		{query: `name like "Paul\\'%"`, expected: []uint32{0}},
 		{query: `name like "al%"`, expected: []uint32{}},
 
+		{query: `name2 sounds "Alice"`, expected: []uint32{1}},
+
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price in(3.0, 1.2)`, expected: []uint32{0, 1}},
 		{query: `role in("developer", "admin")`, expected: []uint32{0, 1}},
@@ -147,6 +156,9 @@ func TestParser_String(t *testing.T) {
 
 		// all possible escapes in one string
 		{query: `name = "\\\"\t\r\n\\'"`, ast: TermExpr{"name", FOpEq, "\\\"\t\r\n\\'"}},
+
+		{query: `name like "Pau%"`, ast: TermExpr{"name", FOpLike, "Pau%"}},
+		{query: `name sounds "Paul"`, ast: TermExpr{"name", FOpSounds, "Paul"}},
 	}
 
 	for _, tt := range tests {
@@ -179,6 +191,15 @@ func TestParser_Error(t *testing.T) {
 				input:    "name like true",
 				msg:      "only string are supported for 'LIKE'",
 				token:    token{Start: 10, End: 14, Op: OpBool},
+				expected: OpUndefined,
+			},
+		},
+		{
+			query: `name sounds true`,
+			err: UnexpectedTokenError{
+				input:    "name sounds true",
+				msg:      "only string are supported for 'SOUNDS'",
+				token:    token{Start: 12, End: 16, Op: OpBool},
 				expected: OpUndefined,
 			},
 		},

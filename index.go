@@ -256,6 +256,7 @@ var (
 	FOpGe      = FilterOp{Op: OpGe}
 	FOpGt      = FilterOp{Op: OpGt}
 	FOpLike    = FilterOp{Op: OpLike}
+	FOpSounds  = FilterOp{Op: OpSounds}
 	FOpIn      = FilterOp{Op: OpIn}
 	FOpBetween = FilterOp{Op: OpBetween}
 )
@@ -990,6 +991,13 @@ type CompositeIndex[OBJ any, IDX Index[OBJ]] struct {
 func NewCompositeIndex[OBJ any, IDX Index[OBJ]](mainIndex IDX) *CompositeIndex[OBJ, IDX] {
 	return &CompositeIndex[OBJ, IDX]{
 		mainIndex: mainIndex,
+		routes:    make(map[FilterOp]Index[OBJ], 0),
+	}
+}
+
+func NewMapCompositeIndex[OBJ any](fieldGetFn FromField[OBJ, string]) *CompositeIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]] {
+	return &CompositeIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
+		mainIndex: NewMapIndex(fieldGetFn).(*MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
 		routes:    make(map[FilterOp]Index[OBJ], 0),
 	}
 }

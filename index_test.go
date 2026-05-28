@@ -15,7 +15,7 @@ func TestIndex_EqualString(t *testing.T) {
 		{"map", NewMapIndex(FromValue[string]())},
 		{"sorted", NewSortedIndex(FromValue[string]())},
 		{"string", NewStringIndex(FromValue[string]())},
-		{"composite", NewCompositeIndex(NewMapIndex(FromValue[string]()))},
+		{"composite", NewMapCompositeIndex(FromValue[string]())},
 	}
 
 	for _, tt := range index {

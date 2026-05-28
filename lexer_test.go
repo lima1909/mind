@@ -41,6 +41,7 @@ func TestLexer_OneOpen(t *testing.T) {
 		{query: `In`, expected: OpIn},
 		{query: ` - `, expected: OpUndefined},
 		{query: `lIkE`, expected: OpLike},
+		{query: `sOuNDs`, expected: OpSounds},
 		{query: `ancestors_1`, expected: OpIdent},
 	}
 
@@ -157,6 +158,11 @@ func TestLexer_ManyOpen(t *testing.T) {
 		{query: `name like "Ma%"`, expected: []Op{
 			OpIdent,
 			OpLike,
+			OpString,
+		}},
+		{query: `name sounds "Müller"`, expected: []Op{
+			OpIdent,
+			OpSounds,
 			OpString,
 		}},
 		{query: `name IN("a", "x")`, expected: []Op{
