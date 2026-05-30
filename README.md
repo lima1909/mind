@@ -26,13 +26,14 @@ go get github.com/lima1909/mind
 
 ### Index Types
 
-| Index           | Backed by                                                 | Supported operations                                      |
-|-----------------|-----------------------------------------------------------|-----------------------------------------------------------|
-| `MapIndex`      | Hash map                                                  | `=`, `!=`, `In`                                           |
-| `SortedIndex`   | [SkipList](https://en.wikipedia.org/wiki/Skip_list)       | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
-| `RangeIndex`    | uint8 slice                                               | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
-| `StringIndex`   | SkipList and TrigramIndex                                 | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`, `Like` |
-| `PhoneticIndex` | [American Soundex](https://en.wikipedia.org/wiki/Soundex) | `Sounds`                                                  |
+| Index               | Backed by                                                | Supported operations                                      |
+|---------------------|----------------------------------------------------------|-----------------------------------------------------------|
+| `MapIndex`          | Hash map                                                 | `=`, `!=`, `In`                                           |
+| `SortedIndex`       | [SkipList](https://en.wikipedia.org/wiki/Skip_list)      | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
+| `RangeIndex`        | uint8 slice                                              | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
+| `RangeEncodedIndex` | Range Encoded slice                                      | `>`, `>=`, `<`, `<=`, `Between`                           |
+| `StringIndex`       | SkipList and TrigramIndex                                | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`, `Like` |
+| `PhoneticIndex`     | [American Soundex](https://en.wikipedia.org/wiki/Soundex)| `Sounds`                                                  |
 
 **All operations** can be combined with `AND`, `OR` and `NOT`.
 

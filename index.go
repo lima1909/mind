@@ -694,225 +694,6 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 	}
 }
 
-const RangeIndexName = "RangeIndex"
-
-type RangeIndex[OBJ any, H ValueHandler[OBJ, uint8]] struct {
-	data [256]*RawIDs32
-	// the length of the data (the max value)
-	// max can be: 256 if the data is full from 0-255
-	max          int
-	valueHandler H
-}
-
-func NewRangeIndex[OBJ any](fieldGetFn FromField[OBJ, uint8]) Index[OBJ] {
-	return &RangeIndex[OBJ, SingleValueHandler[OBJ, uint8]]{
-		// Array size must be 256 to cover indices 0-255
-		data:         [256]*RawIDs32{},
-		valueHandler: SingleValueHandler[OBJ, uint8]{fieldGetFn},
-	}
-}
-
-func NewRangeIndexSlice[OBJ any](fieldGetFn FromFieldSlice[OBJ, uint8]) Index[OBJ] {
-	return &RangeIndex[OBJ, MultiValueHandler[OBJ, uint8]]{
-		// Array size must be 256 to cover indices 0-255
-		data:         [256]*RawIDs32{},
-		valueHandler: MultiValueHandler[OBJ, uint8]{fieldGetFn},
-	}
-}
-
-func (ri *RangeIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
-	ri.valueHandler.Handle(obj, func(value uint8) {
-		valInt := int(value)
-
-		ids := ri.data[valInt]
-		if ids == nil {
-			ids = NewRawIDs[uint32]()
-			ri.data[valInt] = ids
-		}
-		ids.Set(lidx)
-
-		// new max value, if value greater the old max value
-		if ri.max < valInt+1 {
-			ri.max = valInt + 1
-		}
-	})
-}
-
-func (ri *RangeIndex[OBJ, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
-	for i, obj := range objs {
-		lidx := uint32(i)
-		ri.valueHandler.Handle(obj, func(value uint8) {
-			ids := ri.data[value]
-			if ids == nil {
-				ids = NewRawIDs[uint32]()
-				ri.data[value] = ids
-			}
-			ids.Set(lidx)
-
-			// new max value, if value greater the old max value
-			if ri.max < int(value)+1 {
-				ri.max = int(value + 1)
-			}
-		})
-	}
-}
-
-func (ri *RangeIndex[OBJ, H]) UnSet(obj *OBJ, lidx uint32) {
-	ri.valueHandler.Handle(obj, func(value uint8) {
-		valInt := int(value)
-
-		ids := ri.data[valInt]
-		if ids == nil {
-			return
-		}
-		ids.UnSet(lidx)
-
-		if ids.IsEmpty() {
-			ri.data[valInt] = nil
-
-			// if is empty, calculate the new max value
-			if ri.max == valInt+1 {
-				ri.max = 0 // default fallback
-				for i := valInt - 1; i >= 0; i-- {
-					if ri.data[i] != nil && !ri.data[i].IsEmpty() {
-						ri.max = i + 1
-						break
-					}
-				}
-			}
-		}
-	})
-}
-
-func (ri *RangeIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
-	return ri.valueHandler.HasChanged(oldItem, newItem)
-}
-
-func (ri *RangeIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
-	v, err := ValueFromAny[uint8](value)
-	if err != nil {
-		return nil, InvalidValueTypeError[uint8]{value}
-	}
-
-	ids := ri.data[v]
-	if ids == nil {
-		return NewRawIDs[uint32](), nil
-	}
-
-	return ids, nil
-}
-
-func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
-	v, err := ValueFromAny[uint8](value)
-	if err != nil {
-		return nil, false, InvalidValueTypeError[uint8]{value}
-	}
-	valInt := int(v)
-
-	// Define the Range Bounds
-	start, end := 0, ri.max
-	var invOp FilterOp
-
-	switch op.Op {
-	case OpLt:
-		end = valInt
-		invOp = FilterOp{Op: OpGe}
-	case OpLe:
-		end = valInt + 1
-		invOp = FilterOp{Op: OpGt}
-	case OpGt:
-		start = valInt + 1
-		invOp = FilterOp{Op: OpLe}
-	case OpGe:
-		start = valInt
-		invOp = FilterOp{Op: OpLt}
-	default:
-		return nil, false, InvalidOperationError{RangeIndexName, op.Op}
-	}
-
-	if end > ri.max {
-		end = ri.max
-	}
-	if start >= end {
-		return NewRawIDs[uint32](), true, nil
-	}
-
-	// Query Inversion Optimization
-	// If the range we are scanning is more than half of our total active data range,
-	// it's cheaper to get the inverse and subtract it from allIDs.
-	if ri.valueHandler.CanInvert() && end-start > (ri.max/2) {
-		// calculate the IDs we DON'T want
-		inverseResult, _, err := ri.Match(allIDs, invOp, value)
-		if err != nil {
-			return nil, false, err
-		}
-
-		// result = allIDs - inverseResult
-		finalResult := allIDs.Copy()
-		finalResult.AndNot(inverseResult)
-		return finalResult, true, nil
-	}
-
-	result := NewRawIDs[uint32]()
-	for i := start; i < end; i++ {
-		data := ri.data[i]
-		if data != nil && !data.IsEmpty() {
-			result.Or(data)
-		}
-	}
-
-	return result, true, nil
-}
-
-func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
-	switch op.Op {
-	case OpBetween:
-		if len(values) != 2 {
-			return nil, false, InvalidArgsLenError{Defined: "2", Got: len(values)}
-		}
-
-		minVal, err := ValueFromAny[uint8](values[0])
-		if err != nil {
-			return nil, false, InvalidValueTypeError[uint8]{values[0]}
-		}
-		maxVal, err := ValueFromAny[uint8](values[1])
-		if err != nil {
-			return nil, false, InvalidValueTypeError[uint8]{values[1]}
-		}
-
-		// Use ints to prevent infinite loop on maxVal == 255
-		min, max := int(minVal), int(maxVal)
-
-		result := NewRawIDs[uint32]()
-		for i := min; i <= max; i++ {
-			if i >= ri.max {
-				break
-			}
-			if ri.data[i] != nil && !ri.data[i].IsEmpty() {
-				result.Or(ri.data[i])
-			}
-		}
-		return result, true, nil
-	case OpIn:
-		result := NewRawIDs[uint32]()
-		for _, v := range values {
-			i, err := ValueFromAny[uint8](v)
-			if err != nil {
-				return nil, false, err
-			}
-
-			valInt := int(i)
-			if valInt < ri.max && ri.data[valInt] != nil && !ri.data[valInt].IsEmpty() {
-				result.Or(ri.data[i])
-			}
-		}
-		return result, true, nil
-
-	default:
-		return nil, false, InvalidOperationError{RangeIndexName, op.Op}
-	}
-}
-
 const StringIndexName = "StringIndex"
 
 type StringIndex[OBJ any] struct {
@@ -1039,19 +820,20 @@ func (ci *CompositeIndex[OBJ, IDX]) Equal(value any) (*RawIDs32, error) {
 }
 
 func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
-	idx, ok := ci.routes[op]
-	if !ok {
-		return nil, false, InvalidOperationError{CompositeIndexName, op.Op}
+	if idx, ok := ci.routes[op]; ok {
+		return idx.Match(allIDs, op, value)
 	}
-	return idx.Match(allIDs, op, value)
+
+	return ci.mainIndex.Match(allIDs, op, value)
 }
 
 func (ci *CompositeIndex[OBJ, IDX]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
-	idx, ok := ci.routes[op]
-	if !ok {
-		return nil, false, InvalidOperationError{CompositeIndexName, op.Op}
+
+	if idx, ok := ci.routes[op]; ok {
+		return idx.MatchMany(op, values...)
 	}
-	return idx.MatchMany(op, values...)
+
+	return ci.mainIndex.MatchMany(op, values...)
 }
 
 // ParserExt is a FIlter/Index extension for parsing the given string to an from Filter useable value.

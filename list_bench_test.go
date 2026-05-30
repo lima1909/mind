@@ -62,7 +62,7 @@ func BenchmarkQueryStr(b *testing.B) {
 	il := NewList[person]()
 	err := il.CreateIndex("name", NewStringIndex(FromName[person, string]("Name")))
 	require.NoError(b, err)
-	err = il.CreateIndex("age", NewSortedIndex(FromName[person, uint8]("Age")))
+	err = il.CreateIndex("age", NewRangeEncodedIndex(FromName[person, uint8]("Age"), 100))
 	require.NoError(b, err)
 	err = il.CreateIndex("age2", NewRangeIndex(FromName[person, uint8]("Age")))
 	require.NoError(b, err)

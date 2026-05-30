@@ -90,6 +90,8 @@ func index() []testIndex {
 	return []testIndex{
 		{"sorted", NewSortedIndex(FromValue[uint8]())},
 		{"range", NewRangeIndex(FromValue[uint8]())},
+		{"rangeencoded", NewCompositeIndex(NewMapIndex(FromValue[uint8]())).
+			Add(NewRangeEncodedIndex(FromValue[uint8](), 255), FOpLe, FOpLt, FOpGe, FOpGt, FOpBetween)},
 	}
 }
 
@@ -102,10 +104,9 @@ func TestIndex_Empty(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 
-			bs, canMutate, err := tt.index.Match(allIDs, FOpLt, 1)
+			bs, _, err = tt.index.Match(allIDs, FOpLt, 1)
 			assert.NoError(t, err)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
-			assert.True(t, canMutate)
 
 			bs, _, err = tt.index.Match(allIDs, FOpLe, 1)
 			assert.NoError(t, err)
@@ -150,8 +151,9 @@ func TestIndex_Less(t *testing.T) {
 			set(tt.index, 1, 1)
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
+			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
 
 			bs, canMutate, _ := tt.index.Match(allIDs, FOpLt, 0)
 			assert.True(t, canMutate)
@@ -164,6 +166,11 @@ func TestIndex_Less(t *testing.T) {
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpLt, 5)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
+			bs, _, _ = tt.index.Match(allIDs, FOpLt, 255)
+			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
+
+			_, _, err := tt.index.Match(allIDs, FOpLt, 256)
+			assert.Error(t, err)
 		})
 	}
 }
@@ -174,11 +181,11 @@ func TestIndex_LessEqual(t *testing.T) {
 			set(tt.index, 1, 1)
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
+			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
 
-			bs, canMutate, _ := tt.index.Match(allIDs, FOpLe, 0)
-			assert.True(t, canMutate)
+			bs, _, _ := tt.index.Match(allIDs, FOpLe, 0)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpLe, 1)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
@@ -188,6 +195,11 @@ func TestIndex_LessEqual(t *testing.T) {
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpLe, 5)
 			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
+			bs, _, _ = tt.index.Match(allIDs, FOpLe, 255)
+			assert.Equal(t, []uint32{1, 2, 3, 255}, bs.ToSlice())
+
+			_, _, err := tt.index.Match(allIDs, FOpLe, 256)
+			assert.Error(t, err)
 		})
 	}
 }
@@ -198,20 +210,26 @@ func TestIndex_Greater(t *testing.T) {
 			set(tt.index, 1, 1)
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
+			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
 
 			bs, canMutate, _ := tt.index.Match(allIDs, FOpGt, 0)
 			assert.True(t, canMutate)
-			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
+			assert.Equal(t, []uint32{1, 2, 3, 255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGt, 1)
-			assert.Equal(t, []uint32{3}, bs.ToSlice())
+			assert.Equal(t, []uint32{3, 255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGt, 2)
-			assert.Equal(t, []uint32{3}, bs.ToSlice())
+			assert.Equal(t, []uint32{3, 255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGt, 3)
-			assert.Equal(t, []uint32{}, bs.ToSlice())
+			assert.Equal(t, []uint32{255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGt, 5)
+			assert.Equal(t, []uint32{255}, bs.ToSlice())
+			bs, _, _ = tt.index.Match(allIDs, FOpGt, 255)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
+
+			_, _, err := tt.index.Match(allIDs, FOpGt, 256)
+			assert.Error(t, err)
 		})
 	}
 }
@@ -222,20 +240,25 @@ func TestIndex_GreaterEqual(t *testing.T) {
 			set(tt.index, 1, 1)
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
+			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
 
-			bs, canMutate, _ := tt.index.Match(allIDs, FOpGe, 0)
-			assert.True(t, canMutate)
-			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
+			bs, _, _ := tt.index.Match(allIDs, FOpGe, 0)
+			assert.Equal(t, []uint32{1, 2, 3, 255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGe, 1)
-			assert.Equal(t, []uint32{1, 2, 3}, bs.ToSlice())
+			assert.Equal(t, []uint32{1, 2, 3, 255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGe, 2)
-			assert.Equal(t, []uint32{3}, bs.ToSlice())
+			assert.Equal(t, []uint32{3, 255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGe, 3)
-			assert.Equal(t, []uint32{3}, bs.ToSlice())
+			assert.Equal(t, []uint32{3, 255}, bs.ToSlice())
 			bs, _, _ = tt.index.Match(allIDs, FOpGe, 5)
-			assert.Equal(t, []uint32{}, bs.ToSlice())
+			assert.Equal(t, []uint32{255}, bs.ToSlice())
+			bs, _, _ = tt.index.Match(allIDs, FOpGe, 255)
+			assert.Equal(t, []uint32{255}, bs.ToSlice())
+
+			_, _, err := tt.index.Match(allIDs, FOpGe, 256)
+			assert.Error(t, err)
 		})
 	}
 }
@@ -248,8 +271,7 @@ func TestIndex_Between(t *testing.T) {
 			set(tt.index, 3, 3)
 			set(tt.index, 255, 255)
 
-			bs, canMutate, _ := tt.index.MatchMany(FOpBetween, 0, 1)
-			assert.True(t, canMutate)
+			bs, _, _ := tt.index.MatchMany(FOpBetween, 0, 1)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
 			bs, _, _ = tt.index.MatchMany(FOpBetween, 1, 2)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
@@ -293,6 +315,64 @@ func TestIndex_In(t *testing.T) {
 
 			bs, _, _ = tt.index.MatchMany(FOpIn, 0, 2, 5)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
+		})
+	}
+}
+
+func TestIndex_UnSet(t *testing.T) {
+	for _, tt := range index() {
+		t.Run(tt.name, func(t *testing.T) {
+			set(tt.index, 1, 1)
+			set(tt.index, 1, 2)
+			set(tt.index, 3, 3)
+
+			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+
+			bs, _, _ := tt.index.MatchMany(FOpIn, 1)
+			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
+
+			// remove
+			unSet(tt.index, 1, 2)
+			allIDs.UnSet(2)
+
+			bs, _, _ = tt.index.MatchMany(FOpIn, 1)
+			assert.Equal(t, []uint32{1}, bs.ToSlice())
+
+			bs, _, err := tt.index.Match(allIDs, FOpLe, 1)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{1}, bs.ToSlice())
+
+			// remove
+			unSet(tt.index, 1, 1)
+			allIDs.UnSet(1)
+
+			bs, _, _ = tt.index.MatchMany(FOpIn, 1)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
+
+			bs, _, err = tt.index.Match(allIDs, FOpLe, 1)
+			assert.NoError(t, err)
+			assert.Equal(t, []uint32{}, bs.ToSlice())
+		})
+	}
+}
+
+func TestIndex_List(t *testing.T) {
+	for _, tt := range index() {
+		t.Run(tt.name, func(t *testing.T) {
+			l := NewList[uint8]()
+			assert.NoError(t, l.CreateIndex("value", tt.index))
+
+			assert.Equal(t, 0, l.Insert(1))
+			assert.Equal(t, 1, l.Insert(1))
+			assert.Equal(t, 2, l.Insert(3))
+
+			result, err := l.Query(Lt("value", 3)).Values()
+			assert.NoError(t, err)
+			assert.Equal(t, []uint8{1, 1}, result)
+
+			result, err = l.QueryStr("value between(1, 3)").Values()
+			assert.NoError(t, err)
+			assert.Equal(t, []uint8{1, 1, 3}, result)
 		})
 	}
 }
