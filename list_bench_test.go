@@ -31,6 +31,8 @@ var names_txt string
 // go test -blockprofile=block.prof
 // go tool pprof block.prof
 
+// go test  -bench=Ranges -count=2 -run=xy -benchmem
+
 // Update: https://pkg.go.dev/github.com/lima1909/mind
 // https://proxy.golang.org/github.com/lima1909/mind/@v/list
 

@@ -31,6 +31,7 @@ go get github.com/lima1909/mind
 | `MapIndex`          | Hash map                                                 | `=`, `!=`, `In`                                           |
 | `SortedIndex`       | [SkipList](https://en.wikipedia.org/wiki/Skip_list)      | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
 | `RangeIndex`        | uint8 slice                                              | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`         |
+| `FenwickIndex`      | [Fenwick](https://en.wikipedia.org/wiki/Fenwick_tree)    | `>`, `>=`, `<`, `<=`, `Between`                           |
 | `RangeEncodedIndex` | Range Encoded slice                                      | `>`, `>=`, `<`, `<=`, `Between`                           |
 | `StringIndex`       | SkipList and TrigramIndex                                | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In`, `Like` |
 | `PhoneticIndex`     | [American Soundex](https://en.wikipedia.org/wiki/Soundex)| `Sounds`                                                  |

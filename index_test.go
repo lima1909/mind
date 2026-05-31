@@ -92,6 +92,8 @@ func index() []testIndex {
 		{"range", NewRangeIndex(FromValue[uint8]())},
 		{"rangeencoded", NewCompositeIndex(NewMapIndex(FromValue[uint8]())).
 			Add(NewRangeEncodedIndex(FromValue[uint8](), 255), FOpLe, FOpLt, FOpGe, FOpGt, FOpBetween)},
+		{"fenwick", NewCompositeIndex(NewMapIndex(FromValue[uint8]())).
+			Add(NewFenwickIndex(FromValue[uint8](), 255), FOpLe, FOpLt, FOpGe, FOpGt, FOpBetween)},
 	}
 }
 

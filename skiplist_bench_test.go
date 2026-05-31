@@ -12,7 +12,7 @@ const (
 	to        = 3000
 )
 
-func BenchmarkGet(b *testing.B) {
+func BenchmarkSkiplist_Get(b *testing.B) {
 	sl := NewSkipList[uint32, uint32]()
 	for i := 1; i <= count; i++ {
 		sl.Put(uint32(i), uint32(i))
@@ -25,7 +25,7 @@ func BenchmarkGet(b *testing.B) {
 	}
 }
 
-func BenchmarkTraverse(b *testing.B) {
+func BenchmarkSkiplist_Traverse(b *testing.B) {
 	sl := NewSkipList[uint32, uint32]()
 	for i := 1; i <= count; i++ {
 		sl.Put(uint32(i), uint32(i))
@@ -44,7 +44,7 @@ func BenchmarkTraverse(b *testing.B) {
 	}
 }
 
-func BenchmarkRange(b *testing.B) {
+func BenchmarkSkiplist_Range(b *testing.B) {
 	sl := NewSkipList[uint32, uint32]()
 	for i := 1; i <= count; i++ {
 		sl.Put(uint32(i), uint32(i))

@@ -115,6 +115,10 @@ func Sounds(fieldName string, val any) Expr { return TermExpr{fieldName, FOpSoun
 // In("age", 21, 42) => age == 21 Or age == 42
 func In(fieldName string, vals ...any) Expr { return TermManyExpr{fieldName, FOpIn, vals} }
 
+// Between
+// Between("age", 21, 42) => age >= 21 Or age <= 42
+func Between(fieldName string, vals ...any) Expr { return TermManyExpr{fieldName, FOpBetween, vals} }
+
 // NotEq is a shorcut for Not(Eq(...)) and means for example age != 42
 func NotEq(fieldName string, val any) Expr { return TermExpr{fieldName, FOpNeq, val} }
 
