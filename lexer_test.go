@@ -42,6 +42,7 @@ func TestLexer_OneOpen(t *testing.T) {
 		{query: ` - `, expected: OpUndefined},
 		{query: `lIkE`, expected: OpLike},
 		{query: `sOuNDs`, expected: OpSounds},
+		{query: `fUzZy`, expected: OpFuzzy},
 		{query: `ancestors_1`, expected: OpIdent},
 	}
 
@@ -163,6 +164,11 @@ func TestLexer_ManyOpen(t *testing.T) {
 		{query: `name sounds "Müller"`, expected: []Op{
 			OpIdent,
 			OpSounds,
+			OpString,
+		}},
+		{query: `name fuzzy "Müller"`, expected: []Op{
+			OpIdent,
+			OpFuzzy,
 			OpString,
 		}},
 		{query: `name IN("a", "x")`, expected: []Op{

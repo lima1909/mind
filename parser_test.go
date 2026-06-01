@@ -33,9 +33,13 @@ func TestParser_Base(t *testing.T) {
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
 
 	//TODO: replace this with composite-index
-	indexMap.index["name2"] = NewPhoneticIndex((*User).Name)
-	indexMap.index["name2"].Set(&User{name: "Paul\\'s"}, 0)
-	indexMap.index["name2"].Set(&User{name: "Alice"}, 1)
+	indexMap.index["pname"] = NewPhoneticIndex((*User).Name)
+	indexMap.index["pname"].Set(&User{name: "Paul\\'s"}, 0)
+	indexMap.index["pname"].Set(&User{name: "Alice"}, 1)
+	//TODO: replace this with composite-index
+	indexMap.index["fname"] = NewFuzzyIndex((*User).Name)
+	indexMap.index["fname"].Set(&User{name: "Paul"}, 0)
+	indexMap.index["fname"].Set(&User{name: "Alice"}, 1)
 
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
 	indexMap.index["role"].Set(&User{role: "developer"}, 0)
@@ -116,7 +120,9 @@ func TestParser_Base(t *testing.T) {
 		{query: `name like "Paul\\'%"`, expected: []uint32{0}},
 		{query: `name like "al%"`, expected: []uint32{}},
 
-		{query: `name2 sounds "Alice"`, expected: []uint32{1}},
+		{query: `pname sounds "Alice"`, expected: []uint32{1}},
+		{query: `fname fuzzy  "Alice"`, expected: []uint32{1}},
+		{query: `fname fuzzy("Alice", 1)`, expected: []uint32{1}},
 
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price in(3.0, 1.2)`, expected: []uint32{0, 1}},
@@ -159,6 +165,8 @@ func TestParser_String(t *testing.T) {
 
 		{query: `name like "Pau%"`, ast: TermExpr{"name", FOpLike, "Pau%"}},
 		{query: `name sounds "Paul"`, ast: TermExpr{"name", FOpSounds, "Paul"}},
+		{query: `name fuzzy "Paul"`, ast: TermExpr{"name", FOpFuzzy, "Paul"}},
+		{query: `name fuzzy ("Paul", 1)`, ast: TermManyExpr{"name", FOpFuzzy, []any{"Paul", int64(1)}}},
 	}
 
 	for _, tt := range tests {
@@ -201,6 +209,15 @@ func TestParser_Error(t *testing.T) {
 				msg:      "only string are supported for 'SOUNDS'",
 				token:    token{Start: 12, End: 16, Op: OpBool},
 				expected: OpUndefined,
+			},
+		},
+		{
+			query: `name fuzzy("Paul")`,
+			err: UnexpectedTokenError{
+				input:    `name fuzzy("Paul")`,
+				msg:      "",
+				token:    token{Start: 17, End: 18, Op: OpRParen},
+				expected: OpComma,
 			},
 		},
 	}

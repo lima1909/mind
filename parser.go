@@ -119,6 +119,40 @@ func (p *parser) parseCondition() (Expr, error) {
 		val := parseString(p.input[p.cur.Start:p.cur.End])
 		p.next()
 		return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
+	case OpFuzzy:
+		switch p.cur.Op {
+		// Fuzzy support String
+		case OpString:
+			val := parseString(p.input[p.cur.Start:p.cur.End])
+			p.next()
+			return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: val}, nil
+
+		// Fuzzy support String and distance
+		case OpLParen:
+			p.next()
+			// string
+			str := parseString(p.input[p.cur.Start:p.cur.End])
+			p.next()
+
+			// comma
+			if p.cur.Op != OpComma {
+				return nil, p.unexpected(OpComma)
+			}
+			p.next()
+
+			// distance
+			dist := parseInt(p.input[p.cur.Start:p.cur.End])
+			p.next()
+
+			if p.cur.Op != OpRParen {
+				return nil, p.unexpected(OpRParen)
+			}
+			p.next()
+
+			return TermManyExpr{Field: field, Op: FilterOp{Op: tokenOp}, Values: []any{str, dist}}, nil
+		default:
+			return nil, p.unexpectedWithMsg(fmt.Sprintf("only string are supported for '%s'", tokenOp))
+		}
 	case OpBetween, OpIn:
 		values, err := p.parseValueList()
 		if err != nil {

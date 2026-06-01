@@ -90,10 +90,18 @@ func Gt(fieldName string, val any) Expr { return TermExpr{fieldName, FOpGt, val}
 func Ge(fieldName string, val any) Expr { return TermExpr{fieldName, FOpGe, val} }
 
 // Like is like a SQL-Like search
-func Like(fieldName string, val any) Expr { return TermExpr{fieldName, FOpLike, val} }
+func Like(fieldName string, val string) Expr { return TermExpr{fieldName, FOpLike, val} }
 
 // Sounds is a phonetic search
-func Sounds(fieldName string, val any) Expr { return TermExpr{fieldName, FOpSounds, val} }
+func Sounds(fieldName string, val string) Expr { return TermExpr{fieldName, FOpSounds, val} }
+
+// Fuzzy is a fuzzy search
+func Fuzzy(fieldName string, val string) Expr { return TermExpr{fieldName, FOpFuzzy, val} }
+
+// FuzzyDist is a fuzzy search with a given distance
+func FuzzyDist(fieldName string, val string, dist int64) Expr {
+	return TermManyExpr{fieldName, FOpFuzzy, []any{val, dist}}
+}
 
 // IsNil is a Query which checks for a given type the nil value
 // func IsNil[V any](fieldName string) Query { return isNil[V](fieldName) }

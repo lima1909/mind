@@ -50,8 +50,9 @@ const (
 	OpGe         = opRelational | (1 << 5)
 	OpLike       = opRelational | (1 << 6)
 	OpSounds     = opRelational | (1 << 7)
-	OpIn         = opRelational | (1 << 8)
-	OpBetween    = opRelational | (1 << 9)
+	OpFuzzy      = opRelational | (1 << 8)
+	OpIn         = opRelational | (1 << 9)
+	OpBetween    = opRelational | (1 << 10)
 )
 
 func (o Op) IsRelational() bool { return o&opCategoryMaskOp == opRelational }
@@ -100,6 +101,8 @@ func (o Op) String() string {
 		return "LIKE"
 	case OpSounds:
 		return "SOUNDS"
+	case OpFuzzy:
+		return "FUZZY"
 	case OpAnd:
 		return "AND"
 	case OpOr:
@@ -264,6 +267,14 @@ func (l *lexer) readKeyword() token {
 			b[3]|0x20 == 's' &&
 			b[4]|0x20 == 'e' {
 			return token{Op: OpBool, Start: start, End: l.pos}
+		}
+		// FUZZY
+		if b[0]|0x20 == 'f' &&
+			b[1]|0x20 == 'u' &&
+			b[2]|0x20 == 'z' &&
+			b[3]|0x20 == 'z' &&
+			b[4]|0x20 == 'y' {
+			return token{Op: OpFuzzy, Start: start, End: l.pos}
 		}
 	case 6:
 		// SOUNDS

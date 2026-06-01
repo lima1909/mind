@@ -257,6 +257,7 @@ var (
 	FOpGt      = FilterOp{Op: OpGt}
 	FOpLike    = FilterOp{Op: OpLike}
 	FOpSounds  = FilterOp{Op: OpSounds}
+	FOpFuzzy   = FilterOp{Op: OpFuzzy}
 	FOpIn      = FilterOp{Op: OpIn}
 	FOpBetween = FilterOp{Op: OpBetween}
 )

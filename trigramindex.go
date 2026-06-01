@@ -4,11 +4,6 @@ import (
 	"strings"
 )
 
-// FuzzyGet exmaple:
-// Stephen
-// Steve
-// Seven
-
 type strBucket struct {
 	str      string
 	occupied bool
