@@ -123,6 +123,7 @@ func TestParser_Base(t *testing.T) {
 		{query: `pname sounds "Alice"`, expected: []uint32{1}},
 		{query: `fname fuzzy  "Alice"`, expected: []uint32{1}},
 		{query: `fname fuzzy("Alice", 1)`, expected: []uint32{1}},
+		{query: `fname fuzzy ( "Alice" )`, expected: []uint32{1}},
 
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price in(3.0, 1.2)`, expected: []uint32{0, 1}},
@@ -212,12 +213,30 @@ func TestParser_Error(t *testing.T) {
 			},
 		},
 		{
-			query: `name fuzzy("Paul")`,
+			query: `name fuzzy("Paul"`,
 			err: UnexpectedTokenError{
-				input:    `name fuzzy("Paul")`,
+				input:    `name fuzzy("Paul"`,
 				msg:      "",
-				token:    token{Start: 17, End: 18, Op: OpRParen},
+				token:    token{Start: 17, End: 17, Op: OpEOF},
 				expected: OpComma,
+			},
+		},
+		{
+			query: `name fuzzy(true, 1)`,
+			err: UnexpectedTokenError{
+				input:    `name fuzzy(true, 1)`,
+				msg:      "",
+				token:    token{Start: 11, End: 15, Op: OpBool},
+				expected: OpString,
+			},
+		},
+		{
+			query: `name fuzzy("Paul", true)`,
+			err: UnexpectedTokenError{
+				input:    `name fuzzy("Paul", true)`,
+				msg:      "",
+				token:    token{Start: 19, End: 23, Op: OpBool},
+				expected: OpNumberInt,
 			},
 		},
 	}

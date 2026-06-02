@@ -131,8 +131,17 @@ func (p *parser) parseCondition() (Expr, error) {
 		case OpLParen:
 			p.next()
 			// string
+			if p.cur.Op != OpString {
+				return nil, p.unexpected(OpString)
+			}
 			str := parseString(p.input[p.cur.Start:p.cur.End])
 			p.next()
+
+			// if closing Parenties, then is it fuzzying without distance
+			if p.cur.Op == OpRParen {
+				p.next()
+				return TermExpr{Field: field, Op: FilterOp{Op: tokenOp}, Value: str}, nil
+			}
 
 			// comma
 			if p.cur.Op != OpComma {
@@ -140,7 +149,10 @@ func (p *parser) parseCondition() (Expr, error) {
 			}
 			p.next()
 
-			// distance
+			// int-value, distance
+			if p.cur.Op != OpNumberInt {
+				return nil, p.unexpected(OpNumberInt)
+			}
 			dist := parseInt(p.input[p.cur.Start:p.cur.End])
 			p.next()
 
