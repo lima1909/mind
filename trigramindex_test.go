@@ -25,13 +25,13 @@ func TestTrigram_Base(t *testing.T) {
 	assert.Equal(t, []uint32{3}, r.ToSlice())
 
 	// grow the bucket list
-	ti.Put("xban", 20)
+	ti.Set(ptr("xban"), 20)
 	assert.Equal(t, 5, ti.Len())
 	r, _ = ti.Get("ban")
 	assert.Equal(t, []uint32{3, 20}, r.ToSlice())
 
 	// reuse index 2
-	ti.Put("xappx", 2)
+	ti.Set(ptr("xappx"), 2)
 	assert.Equal(t, 6, ti.Len())
 	r, _ = ti.Get("app")
 	assert.Equal(t, []uint32{0, 1, 2, 4}, r.ToSlice())
@@ -42,20 +42,20 @@ func TestTrigram_Base(t *testing.T) {
 	assert.Equal(t, []uint32{}, r.ToSlice())
 
 	// empty init
-	ti = NewTrigramIndex()
+	ti = NewTrigramIndex(FromValue[string]()).(*TrigramIndex[string])
 	assert.Equal(t, 0, ti.Len())
 	r, _ = ti.Get("nix")
 	assert.Equal(t, []uint32{}, r.ToSlice())
 
-	ti.Put("üöß€ä@", 2)
+	ti.Set(ptr("üöß€ä@"), 2)
 	assert.Equal(t, 1, ti.Len())
 	r, _ = ti.Get("öß€ä")
 	assert.Equal(t, []uint32{2}, r.ToSlice())
 }
 
 func TestTrigram_abc(t *testing.T) {
-	ti := NewTrigramIndex()
-	ti.Put("abc---bcd", 0)
+	ti := NewTrigramIndex(FromValue[string]()).(*TrigramIndex[string])
+	ti.Set(ptr("abc---bcd"), 0)
 	assert.Equal(t, 1, ti.Len())
 
 	r, _ := ti.Get("abcd")
@@ -66,7 +66,7 @@ func TestTrigram_abc(t *testing.T) {
 	r, _ = ti.Get("bcd")
 	assert.Equal(t, 1, r.Count())
 
-	ti.Put("abc---abc", 1)
+	ti.Set(ptr("abc---abc"), 1)
 	assert.Equal(t, 2, ti.Len())
 
 	r, _ = ti.Get("abc")
@@ -92,12 +92,12 @@ func TestTrigram_abc(t *testing.T) {
 
 func TestNewTrigram_Initializers(t *testing.T) {
 	t.Run("Default Initialization", func(t *testing.T) {
-		ti := NewTrigramIndex()
+		ti := NewTrigramIndex(FromValue[string]()).(*TrigramIndex[string])
 		assert.Equal(t, 0, ti.Len())
 	})
 
 	t.Run("With Capacity", func(t *testing.T) {
-		ti := NewTrigramIndexWithCapacity(50)
+		ti := NewTrigramIndexWithCapacity(FromValue[string](), 50).(*TrigramIndex[string])
 		assert.Equal(t, 50, cap(ti.buckets))
 	})
 
@@ -111,41 +111,41 @@ func TestNewTrigram_Initializers(t *testing.T) {
 
 func TestTrigram_Put_EdgeCases(t *testing.T) {
 	t.Run("Bucket Expansion Mechanics", func(t *testing.T) {
-		ti := NewTrigramIndex()
+		ti := NewTrigramIndex(FromValue[string]()).(*TrigramIndex[string])
 
 		// Force standard expansion branch
-		ti.Put("apple", 5)
+		ti.Set(ptr("apple"), 5)
 		assert.Equal(t, 1, ti.Len())
 		assert.Equal(t, 6, len(ti.buckets))
 
 		// Hit the 'else' branch when within capacity but larger than current slice len
-		ti.Put("banana", 3)
+		ti.Set(ptr("banana"), 3)
 		assert.Equal(t, "banana", ti.buckets[3].str)
 		assert.Equal(t, 2, ti.Len())
 
 		// Overwrite an already occupied bucket
-		ti.Put("apricot", 5)
+		ti.Set(ptr("apricot"), 5)
 		assert.Equal(t, "apricot", ti.buckets[5].str)
 		assert.Equal(t, 2, ti.Len())
 	})
 
 	t.Run("String Length Limits", func(t *testing.T) {
-		ti := NewTrigramIndex()
+		ti := NewTrigramIndex(FromValue[string]()).(*TrigramIndex[string])
 
 		// 2-char strings index one null-padded pseudo-trigram
-		ti.Put("go", 0)
+		ti.Set(ptr("go"), 0)
 		assert.Equal(t, 3, len(ti.rawIDs))
 		assert.Equal(t, 1, ti.Len())
 		r, _ := ti.Get("go")
 		assert.Equal(t, []uint32{0}, r.ToSlice())
 
 		// Empty string handling
-		ti.Put("", 1)
+		ti.Set(ptr(""), 1)
 		assert.Equal(t, 3, len(ti.rawIDs))
 		assert.Equal(t, 2, ti.Len())
 
 		// 1-char strings index two null-padded pseudo-trigram
-		ti.Put("g", 2)
+		ti.Set(ptr("g"), 2)
 		assert.Equal(t, 3, len(ti.rawIDs))
 		assert.Equal(t, 3, ti.Len())
 		r, _ = ti.Get("g")
@@ -371,11 +371,11 @@ func TestTrigram_UnicodeAndUTF8(t *testing.T) {
 
 func TestTrigram_BulkPut(t *testing.T) {
 	data := slices.All([]*string{ptr("apple"), ptr("apply"), ptr("ban"), ptr("banana"), ptr("xapp")})
-	ti := NewTrigramIndex()
+	ti := NewTrigramIndex(FromValue[string]()).(*TrigramIndex[string])
 	handler := SingleValueHandler[string, string]{func(s *string) string { return *s }}
 	for id, o := range data {
 		handler.Handle(o, func(s string) {
-			ti.Put(s, id)
+			ti.Set(&s, uint32(id))
 		})
 	}
 
@@ -390,7 +390,7 @@ func TestTrigram_BulkPut(t *testing.T) {
 }
 
 func TestTrigram_BulkPut2(t *testing.T) {
-	ti := NewTrigramIndex() // Empty map initialization verification
+	ti := NewTrigramIndex(FromValue[string]()).(*TrigramIndex[string])
 
 	// Mock payload collection
 	items := map[int]*string{
@@ -410,7 +410,7 @@ func TestTrigram_BulkPut2(t *testing.T) {
 	handler := SingleValueHandler[string, string]{func(s *string) string { return *s }}
 	for id, o := range seq {
 		handler.Handle(o, func(s string) {
-			ti.Put(s, id)
+			ti.Set(&s, uint32(id))
 		})
 	}
 

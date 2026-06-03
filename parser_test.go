@@ -28,18 +28,12 @@ func TestParser_Base(t *testing.T) {
 	indexMap.idIndex.Set(&User{ID: 40}, 0)
 	indexMap.idIndex.Set(&User{ID: 42}, 1)
 
-	indexMap.index["name"] = NewStringIndex((*User).Name)
+	indexMap.index["name"] = NewCompositeIndex(NewMapIndex((*User).Name)).
+		Add(NewPhoneticIndex((*User).Name), FOpSounds).
+		Add(NewFuzzyIndex((*User).Name), FOpFuzzy).
+		Add(NewTrigramIndex((*User).Name), FOpLike)
 	indexMap.index["name"].Set(&User{name: "Paul\\'s"}, 0)
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
-
-	//TODO: replace this with composite-index
-	indexMap.index["pname"] = NewPhoneticIndex((*User).Name)
-	indexMap.index["pname"].Set(&User{name: "Paul\\'s"}, 0)
-	indexMap.index["pname"].Set(&User{name: "Alice"}, 1)
-	//TODO: replace this with composite-index
-	indexMap.index["fname"] = NewFuzzyIndex((*User).Name)
-	indexMap.index["fname"].Set(&User{name: "Paul"}, 0)
-	indexMap.index["fname"].Set(&User{name: "Alice"}, 1)
 
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
 	indexMap.index["role"].Set(&User{role: "developer"}, 0)
@@ -120,10 +114,10 @@ func TestParser_Base(t *testing.T) {
 		{query: `name like "Paul\\'%"`, expected: []uint32{0}},
 		{query: `name like "al%"`, expected: []uint32{}},
 
-		{query: `pname sounds "Alice"`, expected: []uint32{1}},
-		{query: `fname fuzzy  "Alice"`, expected: []uint32{1}},
-		{query: `fname fuzzy("Alice", 1)`, expected: []uint32{1}},
-		{query: `fname fuzzy ( "Alice" )`, expected: []uint32{1}},
+		{query: `name sounds "Alice"`, expected: []uint32{1}},
+		{query: `name fuzzy  "Alice"`, expected: []uint32{1}},
+		{query: `name fuzzy("Alice", 1)`, expected: []uint32{1}},
+		{query: `name fuzzy ( "Alice" )`, expected: []uint32{1}},
 
 		{query: `price in(1.2, 3.0)`, expected: []uint32{0, 1}},
 		{query: `price in(3.0, 1.2)`, expected: []uint32{0, 1}},

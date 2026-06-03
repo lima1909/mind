@@ -36,9 +36,9 @@ func BenchmarkTrigramIndex_BulkPut_vs_Put(b *testing.B) {
 		{
 			"Put",
 			func() int {
-				ti := NewTrigramIndexWithCapacity(ds)
+				ti := NewTrigramIndexWithCapacity(FromValue[string](), ds).(*TrigramIndex[string])
 				for i, s := range l {
-					ti.Put(*s, i)
+					ti.Set(s, uint32(i))
 				}
 				return ti.len
 			},
@@ -46,11 +46,11 @@ func BenchmarkTrigramIndex_BulkPut_vs_Put(b *testing.B) {
 		{
 			"Bulk",
 			func() int {
-				ti := NewTrigramIndexWithCapacity(ds)
+				ti := NewTrigramIndexWithCapacity(FromValue[string](), ds).(*TrigramIndex[string])
 				handler := SingleValueHandler[string, string]{func(s *string) string { return *s }}
 				for id, o := range slices.All(l) {
 					handler.Handle(o, func(s string) {
-						ti.Put(s, id)
+						ti.Set(&s, uint32(id))
 					})
 				}
 				return ti.len
@@ -88,10 +88,10 @@ func BenchmarkTrigramIndex_Get(b *testing.B) {
 	}
 
 	// 1. Bulk setup phase
-	ti := NewTrigramIndexWithCapacity(ds)
+	ti := NewTrigramIndexWithCapacity(FromValue[string](), ds).(*TrigramIndex[string])
 	for i := range ds {
 		// Clean, allocation-free round-robin data selection
-		ti.Put(validNames[i%len(validNames)], i)
+		ti.Set(&validNames[i%len(validNames)], uint32(i))
 	}
 
 	bmarks := []struct {
@@ -146,9 +146,9 @@ func BenchmarkTrigramIndex_Like(b *testing.B) {
 		b.Fatal("names_txt contains no valid data to index")
 	}
 
-	ti := NewTrigramIndexWithCapacity(ds)
+	ti := NewTrigramIndexWithCapacity(FromValue[string](), ds).(*TrigramIndex[string])
 	for i := range ds {
-		ti.Put(validNames[i%len(validNames)], i)
+		ti.Set(&validNames[i%len(validNames)], uint32(i))
 	}
 
 	bmarks := []struct {

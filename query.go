@@ -181,21 +181,15 @@ func And(left Expr, right Expr) Expr { return AndExpr{left, right} }
 //go:inline
 func matchAnd(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
-
-		result, canMutate, err := a(l, allIDs)
+		left, canMutate, err := a(l, allIDs)
 		if err != nil {
 			return nil, false, err
 		}
 
 		// if Query 'a' has 0 matches, stop immediately.
 		// we completely skip executing 'b' and 'other'.
-		if result.IsEmpty() {
-			return result, canMutate, nil
-		}
-
-		result, err = ensureMutable(result, canMutate, nil)
-		if err != nil {
-			return nil, false, err
+		if left.IsEmpty() {
+			return left, canMutate, nil
 		}
 
 		right, _, err := b(l, allIDs)
@@ -203,8 +197,11 @@ func matchAnd(a Query, b Query) Query {
 			return nil, false, err
 		}
 
-		result.And(right)
-		return result, true, nil
+		if !canMutate {
+			left = left.Copy()
+		}
+		left.And(right)
+		return left, true, nil
 	}
 }
 
@@ -214,7 +211,7 @@ func Or(left Expr, right Expr) Expr { return OrExpr{left, right} }
 //go:inline
 func matchOr(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
-		result, canMutate, err := a(l, allIDs)
+		left, canMutate, err := a(l, allIDs)
 		if err != nil {
 			return nil, false, err
 		}
@@ -225,21 +222,20 @@ func matchOr(a Query, b Query) Query {
 		}
 
 		// if 'result' was empty, the result is just 'right'.
-		if result.IsEmpty() {
+		if left.IsEmpty() {
 			return right, rightMutate, nil
 		}
 
 		if !right.IsEmpty() {
 			// both have data, so we must merge them.
-			result, err = ensureMutable(result, canMutate, nil)
-			if err != nil {
-				return nil, false, err
+			if !canMutate {
+				left = left.Copy()
 			}
-			result.Or(right)
+			left.Or(right)
 			canMutate = true
 		}
 
-		return result, canMutate, nil
+		return left, canMutate, nil
 	}
 }
 
@@ -274,29 +270,11 @@ func matchAndNot(base Query, sub Query) Query {
 			return result, canMutate, nil
 		}
 
-		result, err = ensureMutable(result, canMutate, nil)
-		if err != nil {
-			return nil, false, err
+		if !canMutate {
+			result = result.Copy()
 		}
-
 		result.AndNot(exclude)
 
 		return result, true, nil
 	}
-}
-
-// check, must the BitSet copied or not
-// only copy, if not mutable
-//
-//go:inline
-func ensureMutable(rid *RawIDs32, canMutate bool, err error) (*RawIDs32, error) {
-	if err != nil {
-		return nil, err
-	}
-
-	if canMutate {
-		return rid, nil
-	}
-
-	return rid.Copy(), nil
 }

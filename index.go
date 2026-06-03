@@ -698,31 +698,25 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 const StringIndexName = "StringIndex"
 
 type StringIndex[OBJ any] struct {
-	trigram     TrigramIndex
+	trigram     TrigramIndex[OBJ]
 	sortedIndex SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]
 }
 
 func NewStringIndex[OBJ any](fromField FromField[OBJ, string]) Index[OBJ] {
 	return &StringIndex[OBJ]{
-		trigram:     NewTrigramIndex(),
+		trigram:     *NewTrigramIndex(fromField).(*TrigramIndex[OBJ]),
 		sortedIndex: *NewSortedIndex(fromField).(*SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
 	}
 }
 
 func (ti *StringIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 	ti.sortedIndex.Set(obj, lidx)
-	ti.sortedIndex.valueHandler.Handle(obj, func(value string) {
-		ti.trigram.Put(value, int(lidx))
-	})
+	ti.trigram.Set(obj, lidx)
 }
 
 func (ti *StringIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	ti.sortedIndex.BulkSet(objs)
-	for id, o := range objs {
-		ti.sortedIndex.valueHandler.Handle(o, func(s string) {
-			ti.trigram.Put(s, id)
-		})
-	}
+	ti.trigram.BulkSet(objs)
 }
 
 func (ti *StringIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {

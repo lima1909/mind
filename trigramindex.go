@@ -1,43 +1,48 @@
 package mind
 
 import (
+	"iter"
 	"strings"
 )
+
+const TrigramIndexName = "TrigramIndex"
 
 type strBucket struct {
 	str      string
 	occupied bool
 }
 
-type TrigramIndex struct {
+type TrigramIndex[OBJ any] struct {
 	//   unigrams:   pack(0, 0, a)
 	//   bigrams:    pack(0, a, b)
 	//   trigrams:   pack(a, b, c)
 	rawIDs  map[uint32]*RawIDs32
 	buckets []strBucket
 	len     int
+	handler SingleValueHandler[OBJ, string]
 }
 
-func NewTrigramIndex() TrigramIndex {
-	return NewTrigramIndexWithCapacity(0)
+func NewTrigramIndex[OBJ any](fieldGetFn FromField[OBJ, string]) Index[OBJ] {
+	return NewTrigramIndexWithCapacity(fieldGetFn, 0)
 }
 
-func NewTrigramIndexFrom(s ...string) TrigramIndex {
-	ti := NewTrigramIndexWithCapacity(len(s))
-	for i, el := range s {
-		ti.Put(el, i)
-	}
-	return ti
-}
-
-func NewTrigramIndexWithCapacity(size int) TrigramIndex {
-	return TrigramIndex{
+func NewTrigramIndexWithCapacity[OBJ any](fieldGetFn FromField[OBJ, string], size int) Index[OBJ] {
+	return &TrigramIndex[OBJ]{
 		rawIDs:  make(map[uint32]*RawIDs32, size),
 		buckets: make([]strBucket, 0, size),
+		handler: SingleValueHandler[OBJ, string]{fieldGetFn},
 	}
 }
 
-func (ti *TrigramIndex) Get(s string) (*RawIDs32, bool) {
+func NewTrigramIndexFrom(ss ...string) *TrigramIndex[string] {
+	ti := NewTrigramIndexWithCapacity(FromValue[string](), len(ss))
+	for i, s := range ss {
+		ti.Set(&s, uint32(i))
+	}
+	return ti.(*TrigramIndex[string])
+}
+
+func (ti *TrigramIndex[OBJ]) Get(s string) (*RawIDs32, bool) {
 	slen := len(s)
 
 	switch len(s) {
@@ -110,7 +115,7 @@ func (ti *TrigramIndex) Get(s string) (*RawIDs32, bool) {
 // - '%ab%' => contains: 'ab'
 // - '%ab%cd%' => contains: 'ab' and 'cd', in this order
 // - ” => empty, reutrn the empty IDs
-func (ti *TrigramIndex) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, bool) {
+func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, bool) {
 	// empty string
 	if len(pattern) == 0 {
 		return NewRawIDs[uint32](), true
@@ -378,68 +383,77 @@ func (ti *TrigramIndex) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, bool)
 	}
 }
 
-func (ti *TrigramIndex) Put(s string, li int) {
-	wasOccupied := false
-	if li < len(ti.buckets) {
-		wasOccupied = ti.buckets[li].occupied
-	} else {
-		if cap(ti.buckets) <= li {
-			newBuckets := make([]strBucket, li+1, (li+1)*2) // double capacity to avoid frequent allocations
-			copy(newBuckets, ti.buckets)
-			ti.buckets = newBuckets
+func (ti *TrigramIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
+	ti.handler.Handle(obj, func(s string) {
+		li := int(lidx)
+		wasOccupied := false
+		if li < len(ti.buckets) {
+			wasOccupied = ti.buckets[li].occupied
 		} else {
-			ti.buckets = ti.buckets[:li+1]
+			if cap(ti.buckets) <= li {
+				newBuckets := make([]strBucket, li+1, (li+1)*2) // double capacity to avoid frequent allocations
+				copy(newBuckets, ti.buckets)
+				ti.buckets = newBuckets
+			} else {
+				ti.buckets = ti.buckets[:li+1]
+			}
 		}
-	}
 
-	ti.buckets[li] = strBucket{str: s, occupied: true}
-	if !wasOccupied {
-		ti.len++
-	}
-
-	slen := len(s)
-	if slen == 0 {
-		return // nothing to pack
-	}
-
-	// Bounds Check Elimination hint
-	_ = s[slen-1]
-
-	// unigrams (a) -> pack(0,0,a)
-	for j := range slen {
-		uni := pack(0, 0, s[j])
-		bs, found := ti.rawIDs[uni]
-		if !found {
-			bs = NewRawIDs[uint32]()
-			ti.rawIDs[uni] = bs
+		ti.buckets[li] = strBucket{str: s, occupied: true}
+		if !wasOccupied {
+			ti.len++
 		}
-		bs.Set(uint32(li))
-	}
 
-	// bigrams (ab) -> pack(0,a,b)
-	for j := 0; j < slen-1; j++ {
-		bi := pack(0, s[j], s[j+1])
-		bs, found := ti.rawIDs[bi]
-		if !found {
-			bs = NewRawIDs[uint32]()
-			ti.rawIDs[bi] = bs
+		slen := len(s)
+		if slen == 0 {
+			return // nothing to pack
 		}
-		bs.Set(uint32(li))
-	}
 
-	// trigrams
-	for j := 0; j < slen-2; j++ {
-		tri := pack(s[j], s[j+1], s[j+2])
-		bs, found := ti.rawIDs[tri]
-		if !found {
-			bs = NewRawIDs[uint32]()
-			ti.rawIDs[tri] = bs
+		// Bounds Check Elimination hint
+		_ = s[slen-1]
+
+		// unigrams (a) -> pack(0,0,a)
+		for j := range slen {
+			uni := pack(0, 0, s[j])
+			bs, found := ti.rawIDs[uni]
+			if !found {
+				bs = NewRawIDs[uint32]()
+				ti.rawIDs[uni] = bs
+			}
+			bs.Set(uint32(li))
 		}
-		bs.Set(uint32(li))
+
+		// bigrams (ab) -> pack(0,a,b)
+		for j := 0; j < slen-1; j++ {
+			bi := pack(0, s[j], s[j+1])
+			bs, found := ti.rawIDs[bi]
+			if !found {
+				bs = NewRawIDs[uint32]()
+				ti.rawIDs[bi] = bs
+			}
+			bs.Set(uint32(li))
+		}
+
+		// trigrams
+		for j := 0; j < slen-2; j++ {
+			tri := pack(s[j], s[j+1], s[j+2])
+			bs, found := ti.rawIDs[tri]
+			if !found {
+				bs = NewRawIDs[uint32]()
+				ti.rawIDs[tri] = bs
+			}
+			bs.Set(uint32(li))
+		}
+	})
+}
+
+func (ti *TrigramIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
+	for i, obj := range objs {
+		ti.Set(obj, uint32(i))
 	}
 }
 
-func (ti *TrigramIndex) Delete(li int) bool {
+func (ti *TrigramIndex[OBJ]) Delete(li int) bool {
 	if li >= len(ti.buckets) || !ti.buckets[li].occupied {
 		return false
 	}
@@ -492,7 +506,40 @@ func (ti *TrigramIndex) Delete(li int) bool {
 	return true
 }
 
-func (ti *TrigramIndex) Len() int { return ti.len }
+func (ti *TrigramIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {
+	_ = ti.Delete(int(lidx))
+}
+
+func (ti *TrigramIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
+	return ti.handler.HasChanged(oldItem, newItem)
+}
+
+func (ti *TrigramIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
+	return nil, InvalidOperationError{TrigramIndexName, OpEq}
+}
+
+func (ti *TrigramIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+
+	switch op.Op {
+	case OpLike:
+		s, err := ValueFromAny[string](value)
+		if err != nil {
+			return nil, false, InvalidValueTypeError[string]{value}
+		}
+
+		result, canMutate := ti.Like(s, allIDs)
+		return result, canMutate, nil
+
+	default:
+		return nil, false, InvalidOperationError{StringIndexName, op.Op}
+	}
+}
+
+func (ti *TrigramIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+	return nil, false, InvalidOperationError{TrigramIndexName, op.Op}
+}
+
+func (ti *TrigramIndex[OBJ]) Len() int { return ti.len }
 
 // pack converts 3 bytes into a single uint32 to save memory and speed up lookups
 //
