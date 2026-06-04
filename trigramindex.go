@@ -519,20 +519,18 @@ func (ti *TrigramIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
 }
 
 func (ti *TrigramIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
-
-	switch op.Op {
-	case OpLike:
-		s, err := ValueFromAny[string](value)
-		if err != nil {
-			return nil, false, InvalidValueTypeError[string]{value}
-		}
-
-		result, canMutate := ti.Like(s, allIDs)
-		return result, canMutate, nil
-
-	default:
-		return nil, false, InvalidOperationError{StringIndexName, op.Op}
+	// only support for Like match
+	if op.Op != OpLike {
+		return nil, false, InvalidOperationError{TrigramIndexName, op.Op}
 	}
+
+	s, err := ValueFromAny[string](value)
+	if err != nil {
+		return nil, false, InvalidValueTypeError[string]{value}
+	}
+
+	result, canMutate := ti.Like(s, allIDs)
+	return result, canMutate, nil
 }
 
 func (ti *TrigramIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {

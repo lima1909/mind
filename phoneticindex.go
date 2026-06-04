@@ -4,9 +4,6 @@ import (
 	"iter"
 )
 
-// check that PhoneticIndex implement Index
-var _ Index[string] = &PhoneticIndex[string, SingleValueHandler[string, string]]{}
-
 const PhoneticIndexName = "PhoneticIndex"
 
 // PhoneticIndex indexes strings by their American Soundex phonetic code.
@@ -81,35 +78,25 @@ func (pi *PhoneticIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 }
 
 func (pi *PhoneticIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
-	s, err := ValueFromAny[string](value)
-	if err != nil {
-		return nil, InvalidValueTypeError[string]{value}
-	}
-
-	code := pi.soundexFn(s)
-	ids, found := pi.codes[code]
-	if !found {
-		return NewRawIDs[uint32](), nil
-	}
-	return ids, nil
+	return nil, InvalidOperationError{PhoneticIndexName, OpEq}
 }
 
 func (pi *PhoneticIndex[OBJ, H]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
-	switch op.Op {
-	case OpSounds:
-		s, err := ValueFromAny[string](value)
-		if err != nil {
-			return nil, false, InvalidValueTypeError[string]{value}
-		}
-		code := pi.soundexFn(s)
-		ids, found := pi.codes[code]
-		if !found {
-			return NewRawIDs[uint32](), true, nil
-		}
-		return ids, false, nil
-	default:
+	// only support for Sounds match
+	if op.Op != OpSounds {
 		return nil, false, InvalidOperationError{PhoneticIndexName, op.Op}
 	}
+
+	s, err := ValueFromAny[string](value)
+	if err != nil {
+		return nil, false, InvalidValueTypeError[string]{value}
+	}
+	code := pi.soundexFn(s)
+	ids, found := pi.codes[code]
+	if !found {
+		return NewRawIDs[uint32](), true, nil
+	}
+	return ids, false, nil
 }
 
 func (pi *PhoneticIndex[OBJ, H]) MatchMany(op FilterOp, _ ...any) (*RawIDs32, bool, error) {

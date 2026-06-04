@@ -406,7 +406,7 @@ func TestIndex_Between_String(t *testing.T) {
 		index Index[string]
 	}{
 		{"sorted", NewSortedIndex(FromValue[string]())},
-		{"string", NewStringIndex(FromValue[string]())},
+		{"string", NewStringSortedIndex(FromValue[string]())},
 		{"composite", NewCompositeIndex(NewMapIndex(FromValue[string]())).
 			Add(NewSortedIndex(FromValue[string]()), FOpBetween)},
 	}
@@ -593,7 +593,7 @@ func TestIndex_Inverse(t *testing.T) {
 }
 
 func TestStringIndex(t *testing.T) {
-	ti := NewStringIndex(FromValue[string]())
+	ti := NewStringIndex(FromValue[string]()).AddTrigramIndex()
 
 	set(ti, "abba", 1)
 	set(ti, "acca", 2)
@@ -623,16 +623,16 @@ func TestStringIndex(t *testing.T) {
 }
 
 func TestStringIndex_Error(t *testing.T) {
-	ti := NewStringIndex(FromValue[string]())
+	ti := NewStringIndex(FromValue[string]()).AddTrigramIndex()
 	allIDs := NewRawIDsFrom[uint32](1, 2, 3)
 
 	// contains
 	_, _, err := ti.Match(allIDs, FilterOp{Name: "contains"}, "%bb%")
-	assert.ErrorIs(t, InvalidOperationError{StringIndexName, 0}, err)
+	assert.ErrorIs(t, InvalidOperationError{MapIndexName, 0}, err)
 
 	// startsWith
 	_, _, err = ti.Match(allIDs, FilterOp{Name: "startswith"}, "bb%")
-	assert.ErrorIs(t, InvalidOperationError{StringIndexName, 0}, err)
+	assert.ErrorIs(t, InvalidOperationError{MapIndexName, 0}, err)
 }
 
 func TestParserExt(t *testing.T) {

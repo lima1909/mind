@@ -281,19 +281,6 @@ func TestPhoneticIndex_UnSet(t *testing.T) {
 	assert.Equal(t, []uint32{1}, ids.ToSlice())
 }
 
-func TestPhoneticIndex_Equal(t *testing.T) {
-	type Person struct{ Name string }
-
-	idx := NewPhoneticIndex(func(p *Person) string { return p.Name })
-	p := Person{"Schmidt"}
-	idx.Set(&p, 42)
-
-	// Equal also uses the phonetic code, so a variant spelling finds the same entry.
-	ids, err := idx.Equal("Schmitt")
-	assert.NoError(t, err)
-	assert.True(t, ids.Contains(42))
-}
-
 func TestPhoneticIndex_InvalidOp(t *testing.T) {
 	type Person struct{ Name string }
 	idx := NewPhoneticIndex(func(p *Person) string { return p.Name })

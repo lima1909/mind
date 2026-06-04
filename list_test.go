@@ -554,7 +554,7 @@ func TestList_QueryStr(t *testing.T) {
 func TestList_EscapedString(t *testing.T) {
 	il := NewList[car]()
 
-	err := il.CreateIndex("name", NewStringIndex((*car).Name))
+	err := il.CreateIndex("name", NewStringIndex((*car).Name).AddTrigramIndex())
 	require.NoError(t, err)
 
 	il.Insert(car{name: "Opel 1", age: 22})

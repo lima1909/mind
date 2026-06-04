@@ -28,10 +28,7 @@ func TestParser_Base(t *testing.T) {
 	indexMap.idIndex.Set(&User{ID: 40}, 0)
 	indexMap.idIndex.Set(&User{ID: 42}, 1)
 
-	indexMap.index["name"] = NewCompositeIndex(NewMapIndex((*User).Name)).
-		Add(NewPhoneticIndex((*User).Name), FOpSounds).
-		Add(NewFuzzyIndex((*User).Name), FOpFuzzy).
-		Add(NewTrigramIndex((*User).Name), FOpLike)
+	indexMap.index["name"] = NewStringIndex((*User).Name).AddPhoneticIndex().AddFuzzyIndex().AddTrigramIndex()
 	indexMap.index["name"].Set(&User{name: "Paul\\'s"}, 0)
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
 

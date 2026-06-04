@@ -695,67 +695,65 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 	}
 }
 
-const StringIndexName = "StringIndex"
-
-type StringIndex[OBJ any] struct {
-	trigram     TrigramIndex[OBJ]
-	sortedIndex SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]
+// StringIndex only supported if the value is the string
+type StringIndex[OBJ any, IDX Index[OBJ]] struct {
+	fieldGetFn     FromField[OBJ, string]
+	compositeIndex CompositeIndex[OBJ, IDX]
 }
 
-func NewStringIndex[OBJ any](fromField FromField[OBJ, string]) Index[OBJ] {
-	return &StringIndex[OBJ]{
-		trigram:     *NewTrigramIndex(fromField).(*TrigramIndex[OBJ]),
-		sortedIndex: *NewSortedIndex(fromField).(*SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
+func NewStringIndex[OBJ any](fieldGetFn FromField[OBJ, string]) *StringIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]] {
+	return &StringIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
+		fieldGetFn: fieldGetFn,
+		compositeIndex: CompositeIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
+			mainIndex: NewMapIndex(fieldGetFn).(*MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
+			routes:    make(map[FilterOp]Index[OBJ], 0),
+		},
 	}
 }
 
-func (ti *StringIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
-	ti.sortedIndex.Set(obj, lidx)
-	ti.trigram.Set(obj, lidx)
-}
-
-func (ti *StringIndex[OBJ]) BulkSet(objs iter.Seq2[int, *OBJ]) {
-	ti.sortedIndex.BulkSet(objs)
-	ti.trigram.BulkSet(objs)
-}
-
-func (ti *StringIndex[OBJ]) UnSet(obj *OBJ, lidx uint32) {
-	ti.sortedIndex.UnSet(obj, lidx)
-	ti.trigram.Delete(int(lidx))
-}
-
-func (ti *StringIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
-	return ti.sortedIndex.HasChanged(oldItem, newItem)
-}
-
-func (ti *StringIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
-	return ti.sortedIndex.Equal(value)
-}
-
-func (ti *StringIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
-
-	switch op.Op {
-	case OpLt, OpLe, OpGt, OpGe:
-		return ti.sortedIndex.Match(allIDs, op, value)
-	case OpLike:
-		s, err := ValueFromAny[string](value)
-		if err != nil {
-			return nil, false, InvalidValueTypeError[string]{value}
-		}
-
-		result, canMutate := ti.trigram.Like(s, allIDs)
-		return result, canMutate, nil
-
-	default:
-		return nil, false, InvalidOperationError{StringIndexName, op.Op}
+func NewStringSortedIndex[OBJ any](fieldGetFn FromField[OBJ, string]) *StringIndex[OBJ, *SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]] {
+	return &StringIndex[OBJ, *SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
+		fieldGetFn: fieldGetFn,
+		compositeIndex: CompositeIndex[OBJ, *SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
+			mainIndex: NewSortedIndex(fieldGetFn).(*SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
+			routes:    make(map[FilterOp]Index[OBJ], 0),
+		},
 	}
 }
 
-func (ti *StringIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
-	return ti.sortedIndex.MatchMany(op, values...)
+func (si *StringIndex[OBJ, H]) Add(idx Index[OBJ], ops ...FilterOp) *StringIndex[OBJ, H] {
+	si.compositeIndex.Add(idx, ops...)
+	return si
 }
 
-const CompositeIndexName = "CompositeIndex"
+func (si *StringIndex[OBJ, H]) AddPhoneticIndex() *StringIndex[OBJ, H] {
+	return si.Add(NewPhoneticIndex(si.fieldGetFn), FOpSounds)
+}
+
+func (si *StringIndex[OBJ, H]) AddFuzzyIndex() *StringIndex[OBJ, H] {
+	return si.Add(NewFuzzyIndex(si.fieldGetFn), FOpFuzzy)
+}
+
+func (si *StringIndex[OBJ, H]) AddTrigramIndex() *StringIndex[OBJ, H] {
+	return si.Add(NewTrigramIndex(si.fieldGetFn), FOpLike)
+}
+
+func (si *StringIndex[OBJ, H]) Set(obj *OBJ, lidx uint32)         { si.compositeIndex.Set(obj, lidx) }
+func (si *StringIndex[OBJ, H]) BulkSet(objs iter.Seq2[int, *OBJ]) { si.compositeIndex.BulkSet(objs) }
+func (si *StringIndex[OBJ, H]) UnSet(obj *OBJ, lidx uint32)       { si.compositeIndex.UnSet(obj, lidx) }
+func (si *StringIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
+	return si.compositeIndex.HasChanged(oldItem, newItem)
+}
+func (si *StringIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
+	return si.compositeIndex.Equal(value)
+}
+func (si *StringIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+	return si.compositeIndex.Match(allIDs, op, value)
+}
+
+func (si *StringIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+	return si.compositeIndex.MatchMany(op, values...)
+}
 
 // CompositeIndex fans out all mutations to every registered component index
 // and routes each query operator to the single component that was registered for it.
@@ -771,9 +769,9 @@ func NewCompositeIndex[OBJ any, IDX Index[OBJ]](mainIndex IDX) *CompositeIndex[O
 	}
 }
 
-func NewMapCompositeIndex[OBJ any](fieldGetFn FromField[OBJ, string]) *CompositeIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]] {
-	return &CompositeIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
-		mainIndex: NewMapIndex(fieldGetFn).(*MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
+func NewMapCompositeIndex[OBJ any, V comparable](fieldGetFn FromField[OBJ, V]) *CompositeIndex[OBJ, *MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]] {
+	return &CompositeIndex[OBJ, *MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]]{
+		mainIndex: NewMapIndex(fieldGetFn).(*MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]),
 		routes:    make(map[FilterOp]Index[OBJ], 0),
 	}
 }
