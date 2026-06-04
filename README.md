@@ -26,17 +26,17 @@ go get github.com/lima1909/mind
 
 ### Index Types
 
-| Index               | Backed by                                                | Datatype      | Supported operations                              |
-|---------------------|----------------------------------------------------------|---------------|---------------------------------------------------|
-| `MapIndex`          | HashMap                                                  | `comparable`  | `=`, `!=`, `In`                                   |
-| `SortedIndex`       | [SkipList](https://en.wikipedia.org/wiki/Skip_list)      | `ordered`     | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In` |
-| `RangeIndex`        | uint8 slice                                              | `uint8`       | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In` |
-| `RangeEncodedIndex` | Range Encoded slice                                      | `uint8`       | `>`, `>=`, `<`, `<=`, `Between`                   |
-| `FenwickIndex`      | [Fenwick](https://en.wikipedia.org/wiki/Fenwick_tree)    | `uint`, `int` | `>`, `>=`, `<`, `<=`, `Between`                   |
-| `TrigramIndex`      | TrigramIndex                                             | `string`      | `Like`                                            |
-| `PhoneticIndex`     | [American Soundex](https://en.wikipedia.org/wiki/Soundex)| `string`      | `Sounds`                                          |
-| `FuzzyIndex`        | Fuzzy search (BK-tree for Levenshtein-distance)          | `string`      | `Fuzzy`, `Fuzzy([string], [distance])`            |
-| `StringIndex`       | SkipList Or HashMap (cann add Trigram, Phonetic, Fuzzy)  | `string`      | like `SortedIndex` or `MapIndex` + added Index    |
+| Index               | Backed by                                                         | Datatype      | Supported operations                              |
+|---------------------|-------------------------------------------------------------------|---------------|---------------------------------------------------|
+| `MapIndex`          | HashMap                                                           | `comparable`  | `=`, `!=`, `In`                                   |
+| `SortedIndex`       | [SkipList](https://en.wikipedia.org/wiki/Skip_list)               | `ordered`     | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In` |
+| `RangeIndex`        | uint8 slice                                                       | `uint8`       | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In` |
+| `RangeEncodedIndex` | Range Encoded slice                                               | `uint8`       | `>`, `>=`, `<`, `<=`, `Between`                   |
+| `FenwickIndex`      | [Fenwick](https://en.wikipedia.org/wiki/Fenwick_tree)             | `uint`, `int` | `>`, `>=`, `<`, `<=`, `Between`                   |
+| `TrigramIndex`      | TrigramIndex                                                      | `string`      | `Like`                                            |
+| `PhoneticIndex`     | [American Soundex](https://en.wikipedia.org/wiki/Soundex)         | `string`      | `Sounds`                                          |
+| `FuzzyIndex`        | Fuzzy search (BK-tree for Levenshtein-distance)                   | `string`      | `Fuzzy`, `Fuzzy([string], [distance])`            |
+| `StringIndex`       | SkipList Or HashMap (can combined with Trigram, Phonetic, Fuzzy)  | `string`      | `SortedIndex` or `MapIndex` and combined Index    |
 
 **All operations** can be combined with `AND`, `OR` and `NOT`.
 

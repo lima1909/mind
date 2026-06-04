@@ -111,7 +111,6 @@ var soundexTable = "01230120022455012623010202"
 // Only letters A-Z are considered; non‑letters are ignored.
 // Empty string returns empty string.
 func soundex(s string) string {
-	var out [4]byte
 
 	// find first alphabetic character
 	first := -1
@@ -127,10 +126,7 @@ func soundex(s string) string {
 	}
 
 	fc := s[first] &^ byte(0x20) // uppercase first letter
-	out[0] = fc
-	out[1] = '0'
-	out[2] = '0'
-	out[3] = '0'
+	out := [4]byte{fc, '0', '0', '0'}
 
 	prevCode := soundexTable[fc|0x20-'a'] - '0'
 	pos := 1
