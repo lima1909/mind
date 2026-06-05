@@ -18,6 +18,8 @@ type bkNode struct {
 	word     string
 	ids      *RawIDs32
 	children []bkEdge
+	// largest edge distance among children, for search optimizing
+	maxChild uint8
 }
 
 // FuzzyIndex indexes strings in a BK-tree for Levenshtein-distance fuzzy search.
@@ -59,6 +61,9 @@ func (fi *FuzzyIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 			if child == nil {
 				child = &bkNode{word: s, ids: NewRawIDsFrom(lidx)}
 				node.children = append(node.children, bkEdge{node: child, dist: uint8(dist)})
+				if uint8(dist) > node.maxChild {
+					node.maxChild = uint8(dist)
+				}
 				return
 			}
 			node = child
@@ -148,12 +153,19 @@ func bkSearch(root *bkNode, query string, maxDist int) *RawIDs32 {
 		node := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 
-		dist := levenshtein(node.word, query)
+		// we only need the exact distance up to maxChild+maxDist: beyond that the
+		// node is not a hit and no child edge can fall in [dist-maxDist, dist+maxDist],
+		// so the whole subtree is unreachable. Leaves (maxChild==0) cut off at maxDist.
+		bound := int(node.maxChild) + maxDist
+		dist := levenshteinMax(node.word, query, bound)
+		if dist > bound {
+			continue
+		}
 		if dist <= maxDist {
 			result.Or(node.ids)
 		}
 
-		// Only visit children whose edge distance falls in [dist-maxDist, dist+maxDist].
+		// only visit children whose edge distance falls in [dist-maxDist, dist+maxDist].
 		// This is the core BK-tree pruning property.
 		lo := max(dist-maxDist, 0)
 		hi := dist + maxDist
@@ -195,7 +207,7 @@ func levenshtein(a, b string) int {
 		prev = stack[:la+1]
 		curr = stack[16 : 16+la+1]
 	} else {
-		// Safe fallback for unusually long string anomalies
+		// safe fallback for unusually long string anomalies
 		prev = make([]int, la+1)
 		curr = make([]int, la+1)
 	}
@@ -219,6 +231,76 @@ func levenshtein(a, b string) int {
 				v = sub
 			}
 			curr[j] = v
+		}
+		prev, curr = curr, prev
+	}
+
+	return prev[la]
+}
+
+// levenshteinMax returns the Levenshtein distance between a and b when it is at
+// most k, and otherwise some value > k as soon as the bound is provably exceeded.
+// Two cheap guards keep far-apart words from paying the full O(la*lb) matrix:
+// the length difference is a lower bound on the distance, and the per-row minimum
+// is non-decreasing, so once it passes k the final distance cannot come back down.
+func levenshteinMax(a, b string, k int) int {
+	la, lb := len(a), len(b)
+
+	// keep a as the shorter string to minimise allocations
+	if la > lb {
+		a, b = b, a
+		la, lb = lb, la
+	}
+
+	// edit distance is at least the difference in length
+	if lb-la > k {
+		return k + 1
+	}
+	if la == 0 {
+		return lb
+	}
+	if a == b {
+		return 0
+	}
+
+	var stack [32]int
+	var prev, curr []int
+
+	if la+1 <= 16 {
+		prev = stack[:la+1]
+		curr = stack[16 : 16+la+1]
+	} else {
+		// Safe fallback for unusually long string anomalies
+		prev = make([]int, la+1)
+		curr = make([]int, la+1)
+	}
+
+	for j := range prev {
+		prev[j] = j
+	}
+
+	for i := 1; i <= lb; i++ {
+		curr[0] = i
+		rowMin := i
+		for j := 1; j <= la; j++ {
+			cost := 1
+			if b[i-1] == a[j-1] {
+				cost = 0
+			}
+			v := prev[j] + 1
+			if ins := curr[j-1] + 1; ins < v {
+				v = ins
+			}
+			if sub := prev[j-1] + cost; sub < v {
+				v = sub
+			}
+			curr[j] = v
+			if v < rowMin {
+				rowMin = v
+			}
+		}
+		if rowMin > k {
+			return k + 1
 		}
 		prev, curr = curr, prev
 	}
