@@ -6,7 +6,35 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func cologneStr(code uint32) string {
+	if code == 0 {
+		return ""
+	}
+	var out []byte
+	started := false
+	for shift := 28; shift >= 0; shift -= 4 {
+		nib := byte(code>>uint(shift)) & 0xF
+		if !started {
+			if nib == 0 {
+				continue
+			}
+			started = true // first non-zero nibble is the leading marker; skip it
+			continue
+		}
+		out = append(out, '0'+nib)
+	}
+	return string(out)
+}
+
 func TestPhonetic_Soundex(t *testing.T) {
+	soundex := func(s string) string {
+		code := soundex(s)
+		if code == 0 {
+			return ""
+		}
+		return string([]byte{byte(code >> 24), byte(code >> 16), byte(code >> 8), byte(code)})
+	}
+
 	tests := []struct {
 		input string
 		want  string
@@ -154,7 +182,7 @@ func TestGermanPhonetics_CommonGermanNames(t *testing.T) {
 		{"Müller", "657"},
 	}
 	for _, tc := range tests {
-		assert.Equal(t, tc.want, ColognePhonetics(tc.input), "colognePhonetics(%q)", tc.input)
+		assert.Equal(t, tc.want, cologneStr(ColognePhonetics(tc.input)), "colognePhonetics(%q)", tc.input)
 	}
 }
 
@@ -194,7 +222,7 @@ func TestGermanPhonetics_ContextRules(t *testing.T) {
 		{"Hexe", "048", "X not after C/K/Q → 4 then 8 (vowel-start kept)"},
 	}
 	for _, tc := range tests {
-		got := ColognePhonetics(tc.input)
+		got := cologneStr(ColognePhonetics(tc.input))
 		assert.Equal(t, tc.want, got, "colognePhonetics(%q) [%s]", tc.input, tc.desc)
 	}
 }
@@ -217,7 +245,7 @@ func TestGermanPhonetics_EdgeCases(t *testing.T) {
 		{"Schmidt 123", "862"}, // spaces and digits ignored
 	}
 	for _, tc := range tests {
-		assert.Equal(t, tc.want, ColognePhonetics(tc.input), "colognePhonetics(%q)", tc.input)
+		assert.Equal(t, tc.want, cologneStr(ColognePhonetics(tc.input)), "colognePhonetics(%q)", tc.input)
 	}
 }
 

@@ -8,9 +8,13 @@ const PhoneticIndexName = "PhoneticIndex"
 
 // PhoneticIndex indexes strings by their American Soundex phonetic code.
 // Use the FOpSounds operator to find strings that sound similar (e.g. "Smith" finds "Smyth").
+//
+// A Soundex code is always exactly 4 bytes (a letter + 3 digits), so it is stored
+// packed into a uint32: this keeps coding allocation-free and makes the map lookups
+// integer-keyed. A code of 0 means "no phonetic code" (empty / non-alphabetic input).
 type PhoneticIndex[OBJ any, H ValueHandler[OBJ, string]] struct {
-	codes     map[string]*RawIDs32
-	soundexFn func(string) string
+	codes     map[uint32]*RawIDs32
+	soundexFn func(string) uint32
 	handler   H
 }
 
@@ -18,7 +22,7 @@ func NewPhoneticIndex[OBJ any](fieldGetFn FromField[OBJ, string]) Index[OBJ] {
 	return &PhoneticIndex[OBJ, SingleValueHandler[OBJ, string]]{
 		handler:   SingleValueHandler[OBJ, string]{fieldGetFn},
 		soundexFn: soundex,
-		codes:     make(map[string]*RawIDs32),
+		codes:     make(map[uint32]*RawIDs32),
 	}
 }
 
@@ -26,14 +30,14 @@ func NewPhoneticIndexSlice[OBJ any](fieldGetFn FromFieldSlice[OBJ, string]) Inde
 	return &PhoneticIndex[OBJ, MultiValueHandler[OBJ, string]]{
 		handler:   MultiValueHandler[OBJ, string]{fieldGetFn},
 		soundexFn: soundex,
-		codes:     make(map[string]*RawIDs32),
+		codes:     make(map[uint32]*RawIDs32),
 	}
 }
 
 func (pi *PhoneticIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
 	pi.handler.Handle(obj, func(s string) {
 		code := pi.soundexFn(s)
-		if code == "" {
+		if code == 0 {
 			return
 		}
 		ids, found := pi.codes[code]
@@ -46,11 +50,11 @@ func (pi *PhoneticIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
 }
 
 func (pi *PhoneticIndex[OBJ, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
-	batch := make(map[string][]uint32)
+	batch := make(map[uint32][]uint32)
 	for i, obj := range objs {
 		pi.handler.Handle(obj, func(s string) {
 			code := pi.soundexFn(s)
-			if code != "" {
+			if code != 0 {
 				batch[code] = append(batch[code], uint32(i))
 			}
 		})
@@ -107,11 +111,12 @@ func (pi *PhoneticIndex[OBJ, H]) MatchMany(op FilterOp, _ ...any) (*RawIDs32, bo
 // 0 = silent (vowels A E I O U, and H W Y which are transparent).
 var soundexTable = "01230120022455012623010202"
 
-// Soundex returns the Soundex code of s (4 characters, e.g. "S530").
-// Only letters A-Z are considered; non‑letters are ignored.
-// Empty string returns empty string.
-func soundex(s string) string {
-
+// soundex returns the Soundex code of s packed into a uint32 (the 4 code bytes
+// in big-endian order, e.g. "S530" -> 'S'<<24 | '5'<<16 | '3'<<8 | '0').
+// Only letters A-Z are considered; non-letters are ignored. Input without any
+// letter returns 0, which is a safe sentinel because a real code's high byte is
+// always an uppercase letter and therefore never zero.
+func soundex(s string) uint32 {
 	// find first alphabetic character
 	first := -1
 	for i := 0; i < len(s); i++ {
@@ -122,7 +127,7 @@ func soundex(s string) string {
 		}
 	}
 	if first == -1 {
-		return ""
+		return 0
 	}
 
 	fc := s[first] &^ byte(0x20) // uppercase first letter
@@ -152,7 +157,7 @@ func soundex(s string) string {
 		prevCode = code
 	}
 
-	return string(out[:4])
+	return uint32(out[0])<<24 | uint32(out[1])<<16 | uint32(out[2])<<8 | uint32(out[3])
 }
 
 // colognePhonetics returns the Cologne Phonetics (Kölner Phonetik) code for s.
@@ -186,10 +191,15 @@ func soundex(s string) string {
 //
 // Examples: "Müller"→"657", "Meier"/"Meyer"/"Maier"/"Mayer"→"67",
 // "Schmidt"→"862", "Schneider"→"8627", "Wikipedia"→"3412".
-// func colognePhonetics(s string) string {
-func ColognePhonetics(s string) string {
+//
+// The code is returned packed into a uint32 so it can key a PhoneticIndex without
+// allocating. The digits are stored as 4-bit nibbles behind a leading 1-nibble
+// marker (so length and leading zeros survive): "657" -> 0x1657, "06" -> 0x106.
+// This holds up to 7 digits, which is enough for any realistic name; longer codes
+// are truncated. Empty / non-alphabetic input returns 0.
+func ColognePhonetics(s string) uint32 {
 	if len(s) == 0 {
-		return ""
+		return 0
 	}
 
 	// normalize to uppercase A–Z, expanding German special characters.
@@ -214,7 +224,7 @@ func ColognePhonetics(s string) string {
 	}
 
 	if len(norm) == 0 {
-		return ""
+		return 0
 	}
 
 	// encode each character to its Cologne digit(s).
@@ -289,25 +299,34 @@ func ColognePhonetics(s string) string {
 	}
 
 	if len(codes) == 0 {
-		return ""
+		return 0
 	}
 
-	// remove consecutive duplicate digits.
-	deduped := make([]byte, 0, len(codes))
-	deduped = append(deduped, codes[0])
-	for i := 1; i < len(codes); i++ {
-		if codes[i] != codes[i-1] {
-			deduped = append(deduped, codes[i])
+	// Pack the digits into a uint32, in a single pass that also drops consecutive
+	// duplicates and drops '0' (vowel markers) except at the first deduped position.
+	// A leading 1-nibble marker preserves length and leading zeros.
+	const maxDigits = 7 // uint32 holds the marker + 7 nibbles
+	packed := uint32(1)
+	emitted := 0
+	prev := byte(0xFF) // sentinel that never equals a code byte, so codes[0] is kept
+	pos := -1          // index within the deduped stream
+	for _, b := range codes {
+		if b == prev {
+			continue // collapse consecutive duplicates
+		}
+		prev = b
+		pos++
+		if b == '0' && pos != 0 {
+			continue // drop vowel markers except at the very start
+		}
+		packed = packed<<4 | uint32(b-'0')
+		if emitted++; emitted == maxDigits {
+			break
 		}
 	}
 
-	// remove all '0' (vowel markers) except at position 0.
-	out := make([]byte, 0, len(deduped))
-	for i, b := range deduped {
-		if b != '0' || i == 0 {
-			out = append(out, b)
-		}
+	if emitted == 0 {
+		return 0
 	}
-
-	return string(out)
+	return packed
 }
