@@ -33,7 +33,7 @@ go get github.com/lima1909/mind
 | `RangeIndex`        | uint8 slice                                                       | `uint8`       | `=`, `!=` , `>`, `>=`, `<`, `<=`, `Between`, `In` |
 | `RangeEncodedIndex` | Range Encoded slice                                               | `uint8`       | `>`, `>=`, `<`, `<=`, `Between`                   |
 | `FenwickIndex`      | [Fenwick](https://en.wikipedia.org/wiki/Fenwick_tree)             | `uint`, `int` | `>`, `>=`, `<`, `<=`, `Between`                   |
-| `TrigramIndex`      | TrigramIndex                                                      | `string`      | `Like`                                            |
+| `TrigramIndex`      | [TrigramIndex](https://en.wikipedia.org/wiki/Trigram_search)      | `string`      | `Like`                                            |
 | `PhoneticIndex`     | [American Soundex](https://en.wikipedia.org/wiki/Soundex)         | `string`      | `Sounds`                                          |
 | `FuzzyIndex`        | Fuzzy search (BK-tree for Levenshtein-distance)                   | `string`      | `Fuzzy`, `Fuzzy([string], [distance])`            |
 | `StringIndex`       | SkipList Or HashMap (can combined with Trigram, Phonetic, Fuzzy)  | `string`      | `SortedIndex` or `MapIndex` and combined Index    |

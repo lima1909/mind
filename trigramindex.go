@@ -12,12 +12,21 @@ type strBucket struct {
 	occupied bool
 }
 
+// TrigramIndex breaks every name into overlapping 3-letter chunks (trigrams) and maps each chunk to a list of IDs that contain it.
+// It is essentially a "lookup table" for substrings, letting your code jump straight to the data instead of scanning it.
+//
+// In linguistics and computer science, the term "gram" comes from the Greek word gramma, meaning "something written" or "a letter."
+// When you combine "tri" (three) and "gram" (written thing), a trigram is literally a "three-letter sequence."
+//
+// Example:
+// Original String | Trigram 1 | Trigram 2  | Trigram 3 | Trigram 4 | Trigram 5 | Trigram 6
+// D A T A B A S E | DAT       | ATA        | TAB       | ABA       | BAS       | ASE
 type TrigramIndex[OBJ any] struct {
 	//   unigrams:   pack(0, 0, a)
 	//   bigrams:    pack(0, a, b)
 	//   trigrams:   pack(a, b, c)
 	rawIDs  map[uint32]*RawIDs32
-	buckets []strBucket
+	buckets []strBucket // save the strings for filtering out the false positives
 	len     int
 	handler SingleValueHandler[OBJ, string]
 }
