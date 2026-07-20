@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createIndexMap() indexMap[User, struct{}] {
-	indexMap := indexMap[User, struct{}]{
+func createIndexMap() indexMap[User] {
+	indexMap := indexMap[User]{
 		index:  make(map[string]Index[User]),
 		allIDs: NewRawIDs[uint32](),
 	}

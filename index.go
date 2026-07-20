@@ -6,32 +6,21 @@ import (
 	"sync"
 )
 
-const IDIndexFieldName = "id"
-
 // indexMap maps a given field name to an Index
-type indexMap[OBJ any, ID comparable] struct {
-	index   map[string]Index[OBJ]
-	idIndex idIndex[OBJ, ID]
-	allIDs  *RawIDs32
+type indexMap[OBJ any] struct {
+	index  map[string]Index[OBJ]
+	allIDs *RawIDs32
 }
 
-func newIndexMap[OBJ any, ID comparable](idIndex idIndex[OBJ, ID]) indexMap[OBJ, ID] {
-	return indexMap[OBJ, ID]{
-		idIndex: idIndex,
-		index:   make(map[string]Index[OBJ]),
-		allIDs:  NewRawIDs[uint32](),
+func newIndexMap[OBJ any]() indexMap[OBJ] {
+	return indexMap[OBJ]{
+		index:  make(map[string]Index[OBJ]),
+		allIDs: NewRawIDs[uint32](),
 	}
 }
 
 // FilterByName finds the Filter by a given field-name
-func (i indexMap[OBJ, ID]) FilterByName(fieldName string) (Filter, error) {
-	if fieldName == IDIndexFieldName {
-		if i.idIndex == nil {
-			return nil, NoIdIndexDefinedError{}
-		}
-		return i.idIndex, nil
-	}
-
+func (i indexMap[OBJ]) FilterByName(fieldName string) (Filter, error) {
 	if idx, found := i.index[fieldName]; found {
 		return idx, nil
 	}
@@ -40,13 +29,8 @@ func (i indexMap[OBJ, ID]) FilterByName(fieldName string) (Filter, error) {
 }
 
 // insert to all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ, ID]) insert(obj *OBJ, idx int) {
+func (i indexMap[OBJ]) insert(obj *OBJ, idx int) {
 	uidx := uint32(idx)
-
-	if i.idIndex != nil {
-		i.idIndex.Set(obj, uidx)
-	}
-
 	i.allIDs.Set(uidx)
 
 	for _, fieldIndex := range i.index {
@@ -55,14 +39,8 @@ func (i indexMap[OBJ, ID]) insert(obj *OBJ, idx int) {
 }
 
 // bulkInsert creates a go routine for every creating Index
-func (i indexMap[OBJ, ID]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
+func (i indexMap[OBJ]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
 	var wg sync.WaitGroup
-
-	if i.idIndex != nil {
-		wg.Go(func() {
-			i.idIndex.BulkSet(objs)
-		})
-	}
 
 	wg.Go(func() {
 		for lidx := range objs {
@@ -80,15 +58,8 @@ func (i indexMap[OBJ, ID]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
 }
 
 // update update all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ, ID]) update(oldObj, newObj *OBJ, idx int) {
+func (i indexMap[OBJ]) update(oldObj, newObj *OBJ, idx int) {
 	uidx := uint32(idx)
-
-	if i.idIndex != nil {
-		if i.idIndex.HasChanged(oldObj, newObj) {
-			i.idIndex.UnSet(oldObj, uidx)
-			i.idIndex.Set(newObj, uidx)
-		}
-	}
 
 	i.allIDs.UnSet(uidx)
 	i.allIDs.Set(uidx)
@@ -103,12 +74,8 @@ func (i indexMap[OBJ, ID]) update(oldObj, newObj *OBJ, idx int) {
 }
 
 // delete remove all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ, ID]) delete(obj *OBJ, idx int) {
+func (i indexMap[OBJ]) delete(obj *OBJ, idx int) {
 	uidx := uint32(idx)
-
-	if i.idIndex != nil {
-		i.idIndex.UnSet(obj, uidx)
-	}
 
 	i.allIDs.UnSet(uidx)
 
@@ -116,109 +83,6 @@ func (i indexMap[OBJ, ID]) delete(obj *OBJ, idx int) {
 		fieldIndex.UnSet(obj, uidx)
 	}
 }
-
-func (i indexMap[OBJ, ID]) getListIdxByID(id ID) (uint32, error) {
-	if i.idIndex == nil {
-		return 0, NoIdIndexDefinedError{}
-	}
-
-	return i.idIndex.GetIndex(id)
-}
-
-func (i indexMap[OBJ, ID]) getIDByItem(item *OBJ) (ID, uint32, error) {
-	if i.idIndex == nil {
-		var id ID
-		return id, 0, NoIdIndexDefinedError{}
-	}
-
-	return i.idIndex.GetID(item)
-}
-
-type idIndex[OBJ any, ID comparable] interface {
-	Index[OBJ]
-	GetIndex(ID) (uint32, error)
-	GetID(*OBJ) (ID, uint32, error)
-}
-
-const IDMapIndexName = "IDMapIndex"
-
-type idMapIndex[OBJ any, ID comparable] struct {
-	data       map[ID]uint32
-	fieldGetFn FromField[OBJ, ID]
-}
-
-func newIDMapIndex[OBJ any, ID comparable](fieldGetFn FromField[OBJ, ID]) idIndex[OBJ, ID] {
-	return &idMapIndex[OBJ, ID]{
-		data:       make(map[ID]uint32),
-		fieldGetFn: fieldGetFn,
-	}
-}
-
-func (mi *idMapIndex[OBJ, ID]) Set(obj *OBJ, lidx uint32) {
-	id := mi.fieldGetFn(obj)
-	mi.data[id] = lidx
-}
-
-func (mi idMapIndex[OBJ, ID]) BulkSet(objs iter.Seq2[int, *OBJ]) {
-	for lidx, obj := range objs {
-		id := mi.fieldGetFn(obj)
-		mi.data[id] = uint32(lidx)
-	}
-}
-
-func (mi *idMapIndex[OBJ, ID]) UnSet(obj *OBJ, lidx uint32) {
-	id := mi.fieldGetFn(obj)
-	delete(mi.data, id)
-}
-
-func (mi *idMapIndex[OBJ, ID]) HasChanged(oldItem, newItem *OBJ) bool {
-	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
-}
-
-func (mi *idMapIndex[OBJ, ID]) GetIndex(id ID) (uint32, error) {
-	if lidx, found := mi.data[id]; found {
-		return lidx, nil
-	}
-
-	return 0, ValueNotFoundError{id}
-}
-
-func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) (ID, uint32, error) {
-	id := mi.fieldGetFn(item)
-	if lidx, found := mi.data[id]; found {
-		return id, lidx, nil
-	}
-
-	var null ID
-	return null, 0, ValueNotFoundError{id}
-}
-
-func (mi *idMapIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
-	id, ok := value.(ID)
-	if !ok {
-		return nil, InvalidValueTypeError[ID]{value}
-	}
-
-	idx, err := mi.GetIndex(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRawIDsFrom(uint32(idx)), nil
-}
-
-func (mi *idMapIndex[OBJ, ID]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, bool, error) {
-	return nil, false, InvalidOperationError{IDMapIndexName, op.Op}
-}
-
-// MatchMany is not supported by idMapIndex, so that always returns an error
-func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
-	return nil, false, InvalidOperationError{IDMapIndexName, op.Op}
-}
-
-// ------------------------------------------
-// here starts the Index with the Index impls
-// ------------------------------------------
 
 // Index is interface for handling the mapping of an Value: V to an List-Index: LI
 // The Value V comes from a func(*OBJ) V

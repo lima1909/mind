@@ -229,71 +229,70 @@ func TestBitSet_ValuesIter(t *testing.T) {
 	assert.Equal(t, []uint8{0, 1, 2, 142}, values)
 }
 
-func TestBitSet_Range(t *testing.T) {
+func TestBitSet_ValuesSkipN(t *testing.T) {
 
 	tests := []struct {
 		name     string
 		bs       *BitSet[uint32]
-		from     uint32
-		to       uint32
+		fromIdx  int
+		length   int
 		expected []uint32
 	}{
 		{
 			name:     "Middle of set",
 			bs:       NewBitSetFrom[uint32](1, 2, 8, 42),
-			from:     2,
-			to:       8,
+			fromIdx:  1,
+			length:   2,
 			expected: []uint32{2, 8},
 		},
 		{
 			name:     "Last value",
 			bs:       NewBitSetFrom[uint32](0, 1, 2),
-			from:     2,
-			to:       2,
+			fromIdx:  2,
+			length:   1,
 			expected: []uint32{2},
 		},
 		{
 			name:     "Single bit range (Exact match)",
 			bs:       NewBitSetFrom[uint32](10, 20, 30),
-			from:     20,
-			to:       20,
+			fromIdx:  1,
+			length:   1,
 			expected: []uint32{20},
 		},
 		{
-			name:     "Empty Range (Nothing found)",
-			bs:       NewBitSetFrom[uint32](10, 20, 30),
-			from:     11,
-			to:       19,
-			expected: nil,
-		},
-		{
-			name: "Spanning Word Boundaries",
-			// Word 0: bit 63 | Word 1: bit 64, 65 | Word 2: bit 130
+			name:     "Spanning Word Boundaries",
 			bs:       NewBitSetFrom[uint32](0, 63, 64, 65, 130),
-			from:     63,
-			to:       100,
-			expected: []uint32{63, 64, 65},
+			fromIdx:  0,
+			length:   3,
+			expected: []uint32{0, 63, 64},
 		},
 		{
 			name:     "From > To (Invalid range)",
 			bs:       NewBitSetFrom[uint32](1, 2, 3),
-			from:     10,
-			to:       5,
+			fromIdx:  10,
+			length:   5,
 			expected: nil,
 		},
 		{
 			name:     "Full Set Range",
 			bs:       NewBitSetFrom[uint32](5, 10),
-			from:     0,
-			to:       100,
+			fromIdx:  0,
+			length:   100,
 			expected: []uint32{5, 10},
 		},
 		{
 			name:     "Boundary: Bit at 0",
 			bs:       NewBitSetFrom[uint32](0, 1, 2),
-			from:     0,
-			to:       0,
+			fromIdx:  0,
+			length:   1,
 			expected: []uint32{0},
+		},
+		{
+			name:     "Middle of big set",
+			bs:       NewBitSetFrom[uint32](1_000_000, 1_200_000, 1_200_001, 1_300_000),
+			fromIdx:  1,
+			length:   2,
+			expected: []uint32{1_200_000, 1_200_001},
 		},
 	}
 
@@ -301,27 +300,19 @@ func TestBitSet_Range(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			var results []uint32
-			tt.bs.Range(tt.from, tt.to, func(val uint32) bool {
+			tt.bs.ValuesSkipN(tt.fromIdx, func(val uint32) bool {
 				results = append(results, val)
-				return true
+				return len(results) != tt.length
 			})
 
-			if len(results) != len(tt.expected) {
-				t.Fatalf("expected %d results, got %d", len(tt.expected), len(results))
-			}
-
-			for i := range results {
-				if results[i] != tt.expected[i] {
-					t.Errorf("at result %d: expected %+v, got %+v", i, tt.expected[i], results[i])
-				}
-			}
+			assert.Equal(t, tt.expected, results)
 		})
 	}
 }
 
 func TestBitSet_ValueOnIndex(t *testing.T) {
 
-	bs := NewBitSetFrom[uint32](1, 2, 8, 42, 1028)
+	bs := NewBitSetFrom[uint32](1, 2, 8, 42, 1028, 100_000)
 
 	tests := []struct {
 		index    uint32
@@ -341,10 +332,15 @@ func TestBitSet_ValueOnIndex(t *testing.T) {
 			expected: 8,
 		},
 		{
-			// end
 			index:    4,
 			found:    true,
 			expected: 1028,
+		},
+		{
+			// end
+			index:    5,
+			found:    true,
+			expected: 100_000,
 		},
 		{
 			// to big, not found

@@ -11,7 +11,7 @@ import (
 )
 
 type User struct {
-	ID    int64
+	id    int64
 	name  string
 	role  string
 	ok    bool
@@ -22,11 +22,14 @@ func (u *User) Name() string   { return u.name }
 func (u *User) Role() string   { return u.role }
 func (u *User) Ok() bool       { return u.ok }
 func (u *User) Price() float64 { return u.price }
+func (u *User) ID() int64      { return u.id }
 
 func TestParser_Base(t *testing.T) {
-	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
-	indexMap.idIndex.Set(&User{ID: 40}, 0)
-	indexMap.idIndex.Set(&User{ID: 42}, 1)
+	indexMap := newIndexMap[User]()
+
+	indexMap.index["id"] = NewMapIndex((*User).ID)
+	indexMap.index["id"].Set(&User{id: 40}, 0)
+	indexMap.index["id"].Set(&User{id: 42}, 1)
 
 	indexMap.index["name"] = NewStringIndex((*User).Name).AddPhoneticIndex().AddFuzzyIndex().AddTrigramIndex()
 	indexMap.index["name"].Set(&User{name: "Paul\\'s"}, 0)
@@ -342,7 +345,7 @@ func TestParser_Cast(t *testing.T) {
 		F64 float64
 	}
 
-	indexMap := newIndexMap[data, struct{}](nil)
+	indexMap := newIndexMap[data]()
 	indexMap.index["u"] = NewSortedIndex(FromName[data, uint]("U"))
 	indexMap.index["u"].Set(&data{U: 42}, 1)
 	indexMap.index["u8"] = NewSortedIndex(FromName[data, uint8]("U8"))
@@ -501,9 +504,7 @@ func TestParser_ConstantFolding(t *testing.T) {
 }
 
 func TestParser_ImpossibleRange(t *testing.T) {
-	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
-	indexMap.idIndex.Set(&User{ID: 40}, 0)
-	indexMap.idIndex.Set(&User{ID: 42}, 1)
+	indexMap := newIndexMap[User]()
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
 	indexMap.index["role"].Set(&User{role: "developer"}, 0)
 	indexMap.index["role"].Set(&User{role: "admin"}, 1)
@@ -544,9 +545,7 @@ func TestParser_ImpossibleRange(t *testing.T) {
 }
 
 func TestParser_UDF(t *testing.T) {
-	indexMap := newIndexMap(newIDMapIndex(func(u *User) int64 { return u.ID }))
-	indexMap.idIndex.Set(&User{ID: 40}, 0)
-	indexMap.idIndex.Set(&User{ID: 42}, 1)
+	indexMap := newIndexMap[User]()
 	indexMap.index["name"] = newUdfIndex((*User).Name)
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
 	indexMap.index["price"] = newUdfIndex((*User).Price)

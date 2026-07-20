@@ -117,14 +117,22 @@ func (s *RawIDs[U]) UnSet(value U) bool {
 	return s.bits.UnSet(value)
 }
 
-// Range iterates over set bits between 'from' and 'to' (inclusive).
-// It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
-func (s *RawIDs[U]) Range(from, to U, visit func(v U) bool) {
+// Values iterates over all values in the set.
+func (s *RawIDs[U]) Values(yield func(U) bool) {
 	if s.IsSlice() {
-		s.slice.Range(from, to, visit)
+		s.slice.Values(yield)
+	} else {
+		s.bits.Values(yield)
+	}
+}
+
+// ValuesSkipN iterates over set by starting from 'skipN' until the end or visit returns false.
+func (s *RawIDs[U]) ValuesSkipN(fromIdx int, visit func(v U) bool) {
+	if s.IsSlice() {
+		s.slice.ValuesSkipN(fromIdx, visit)
 		return
 	}
-	s.bits.Range(from, to, visit)
+	s.bits.ValuesSkipN(fromIdx, visit)
 }
 
 // Contains checks if the value exists in the set.
@@ -328,15 +336,6 @@ func (s *RawIDs[U]) AndNot(other *RawIDs[U]) {
 			}
 		}
 		s.slice.data = s.slice.data[:n]
-	}
-}
-
-// Values iterates over all values in the set.
-func (s *RawIDs[U]) Values(yield func(U) bool) {
-	if s.IsSlice() {
-		s.slice.Values(yield)
-	} else {
-		s.bits.Values(yield)
 	}
 }
 

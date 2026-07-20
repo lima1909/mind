@@ -57,6 +57,19 @@ func (l *FreeList[T]) Insert(item T) int {
 	return idx
 }
 
+// Update replaced the Item on the given index, with the given Item. Return the old Item and true.
+// If the given index has no Item, then will the return the zero Value of T and false.
+// index must be >=0 and < len(slots), otherwise return Update zero value and false and do nothing.
+func (l *FreeList[T]) Update(index int, newItem T) (T, bool) {
+	if oldItem, found := l.Get(index); found {
+		l.slots[index].value = newItem
+		return oldItem, true
+	}
+
+	var null T
+	return null, false
+}
+
 // Remove mark the Item on the given index as deleted.
 // index must be >=0 and < len(slots), otherwise return Remove false and do nothing.
 func (l *FreeList[T]) Remove(index int) bool {
@@ -93,19 +106,6 @@ func (l *FreeList[T]) Get(index int) (T, bool) {
 	}
 
 	return slot.value, true
-}
-
-// Set replaced the Item on the given index, with the given Item. Return the old Item and true.
-// If the given index has no Item, then will the return the zero Value of T and false.
-// index must be >=0 and < len(slots), otherwise return Set zero value and false and do nothing.
-func (l *FreeList[T]) Set(index int, newItem T) (T, bool) {
-	if oldItem, found := l.Get(index); found {
-		l.slots[index].value = newItem
-		return oldItem, true
-	}
-
-	var null T
-	return null, false
 }
 
 // Count returns the count of the occupied slots

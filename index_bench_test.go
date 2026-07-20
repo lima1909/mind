@@ -1,6 +1,7 @@
 package mind
 
 import (
+	"math/rand"
 	"slices"
 	"testing"
 
@@ -236,6 +237,79 @@ func BenchmarkRanges(b *testing.B) {
 				if bcount != bench.count {
 					b.Fatalf("expected: %d, got: %d", bench.count, bcount)
 				}
+			}
+		})
+	}
+}
+
+func BenchmarkIDIndex(b *testing.B) {
+
+	ds := 3_000_000
+
+	idmap := newIDMapIndex(FromValue[uint32]())
+	idslice := NewIDSliceIndex(FromValue[uint32]())
+	resultIdx := NewRawIDsWithCapacity[uint32](ds)
+
+	for i := range ds {
+		u := uint32(i)
+		idmap.Set(&u, u)
+		idslice.Set(&u, u)
+		resultIdx.Set(u)
+	}
+
+	// random ACL IDs
+	numAcls := 3_000
+	acls := make([]uint32, 0, numAcls)
+	aclIDs := NewRawIDsWithCapacity[uint32](numAcls)
+	for range numAcls {
+		id := rand.Intn(ds)
+		acls = append(acls, uint32(id))
+		aclIDs.Set(uint32(id))
+	}
+
+	b.ResetTimer()
+
+	bmarks := []struct {
+		name  string
+		bmark func()
+	}{
+		{
+			"map",
+			func() {
+				for _, id := range acls {
+					idx, _ := idmap.GetIndex(id)
+					resultIdx.Contains(idx)
+				}
+			},
+		},
+		{
+			"slice",
+			func() {
+				for _, id := range acls {
+					idx, _ := idslice.GetIndex(id)
+					resultIdx.Contains(idx)
+				}
+			},
+		},
+		{
+			"prepareC",
+			func() {
+				r := resultIdx.Copy()
+				r.And(aclIDs)
+			},
+		},
+		{
+			"prepare",
+			func() {
+				resultIdx.And(aclIDs)
+			},
+		},
+	}
+
+	for _, bench := range bmarks {
+		b.Run(bench.name, func(b *testing.B) {
+			for b.Loop() {
+				bench.bmark()
 			}
 		})
 	}

@@ -18,7 +18,7 @@ func (c *Car) Age() uint8   { return c.age }
 
 func main() {
 
-	l := mind.NewListWithID((*Car).ID)
+	l := mind.NewIDList((*Car).ID)
 
 	// ignore error
 	_ = l.CreateIndex("name", mind.NewMapIndex((*Car).Name))
@@ -35,13 +35,16 @@ func main() {
 	// Output:
 	// {3 Mercedes 5
 
-	removed, _ := l.Remove(4)
+	removed, _, _ := l.Remove(4)
 	fmt.Println(removed)
 	// Output:
 	// true
 
 	t := &mind.Tracer{}
-	values, _ := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)), mind.WithTracer(t)).Values()
+	values, _ := l.Query(
+		mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)),
+		mind.WithTracer(t),
+	).Values()
 	fmt.Println(values)
 	// Output:
 	// [{1 Dacia 2} {2 Opel 12} {3 Mercedes 5}]

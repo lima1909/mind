@@ -37,21 +37,21 @@ func TestFreeList_Update(t *testing.T) {
 	assert.Equal(t, 2, l.Insert("c"))
 	assert.Equal(t, 3, l.Count())
 
-	old, ok := l.Set(1, "z")
+	old, ok := l.Update(1, "z")
 	assert.True(t, ok)
 	assert.Equal(t, "b", old)
 
 	// index to big
-	_, ok = l.Set(100, "z")
+	_, ok = l.Update(100, "z")
 	assert.False(t, ok)
 	// negative index
-	_, ok = l.Set(-100, "z")
+	_, ok = l.Update(-100, "z")
 	assert.False(t, ok)
 
 	// index not found
 	assert.True(t, l.Remove(1))
 	assert.Equal(t, 2, l.Count())
-	_, ok = l.Set(1, "z")
+	_, ok = l.Update(1, "z")
 	assert.False(t, ok)
 
 }

@@ -148,47 +148,71 @@ func (b *BitSet[U]) ValueOnIndex(idx uint32) (uint32, bool) {
 	return 0, false
 }
 
-// Range iterates over set bits between 'from' and 'to' (inclusive).
-// It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
-func (b *BitSet[U]) Range(from, to U, visit func(v U) bool) {
-	if from > to || len(b.data) == 0 {
+// Values iterate over the complete BitSet and call the yield function, for every value
+func (b *BitSet[U]) Values(yield func(U) bool) {
+	for i, w := range b.data {
+		for w != 0 {
+			t := bits.TrailingZeros64(w)
+			val := (i << 6) + t
+			if !yield(U(val)) {
+				return
+			}
+			w &= (w - 1)
+		}
+	}
+}
+
+func (b *BitSet[U]) ValuesSkipN(skipN int, visit func(v U) bool) {
+	if len(b.data) == 0 {
 		return
 	}
 
-	startWord := int(from >> 6)
-	endWord := int(to >> 6)
-
-	// bounds check
-	if startWord >= len(b.data) {
-		return
-	}
-	if endWord >= len(b.data) {
-		endWord = len(b.data) - 1
-	}
-
-	for i := startWord; i <= endWord; i++ {
-		w := b.data[i]
+	idx := 0
+	for i, w := range b.data {
 		if w == 0 {
 			continue
 		}
 
-		if i == startWord {
-			w &= (^uint64(0) << (from & 63))
-		}
-		if i == endWord {
-			w &= (^uint64(0) >> (63 - (to & 63)))
+		// Count how many set bits are in this word
+		c := bits.OnesCount64(w)
+
+		// If all bits in this word come before the target rank, skip the whole word instantly
+		if idx+c <= skipN {
+			idx += c
+			continue
 		}
 
+		// We don't need the bit positions here, just clear the lowest set bit and count.
+		for w != 0 && idx < skipN {
+			w &= w - 1 // clear lowest set bit
+			idx++
+		}
+
+		// Visit all remaining set bits in this word
+		// `idx` is now >= skipN (or w is 0). No more `idx` checks needed for this word.
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
 			val := U(i<<6) + U(t)
-
 			if !visit(val) {
 				return
 			}
-
 			w &= w - 1
 		}
+
+		// Since we've reached the starting rank, we can directly iterate over the rest.
+		for j := i + 1; j < len(b.data); j++ {
+			w2 := b.data[j]
+			for w2 != 0 {
+				t := bits.TrailingZeros64(w2)
+				val := U(j<<6) + U(t)
+				if !visit(val) {
+					return
+				}
+				w2 &= w2 - 1
+			}
+		}
+
+		return // all bits from `skipN` onward have been visited
 	}
 }
 
@@ -447,20 +471,6 @@ func (b *BitSet[U]) Shrink() {
 	b.data = bd[:i+1]
 	if i < 0 {
 		b.count = 0
-	}
-}
-
-// Values iterate over the complete BitSet and call the yield function, for every value
-func (b *BitSet[U]) Values(yield func(U) bool) {
-	for i, w := range b.data {
-		for w != 0 {
-			t := bits.TrailingZeros64(w)
-			val := (i << 6) + t
-			if !yield(U(val)) {
-				return
-			}
-			w &= (w - 1)
-		}
 	}
 }
 

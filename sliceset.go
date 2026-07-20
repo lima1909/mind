@@ -63,33 +63,17 @@ func (s *SliceSet[U]) UnSet(value U) bool {
 
 }
 
-// Range iterates over set bits between 'from' and 'to' (inclusive).
-// It calls 'visit' for each found bit. If 'visit' returns false, iteration stops.
-func (s *SliceSet[U]) Range(from, to U, visit func(v U) bool) {
-	if len(s.data) == 0 || from > to {
-		return
-	}
-
-	// Binary Search to find the exact starting index.
-	// We are looking for the FIRST index where s.data[i] >= from.
-	low, high := 0, len(s.data)
-	for low < high {
-		// Bitwise shift is a micro-optimization for: (low + high) / 2
-		mid := int(uint(low+high) >> 1)
-
-		if s.data[mid] < from {
-			low = mid + 1
-		} else {
-			high = mid
+func (s *SliceSet[U]) Values(yield func(U) bool) {
+	for _, v := range s.data {
+		if !yield(v) {
+			return
 		}
 	}
+}
 
-	for i := low; i < len(s.data); i++ {
+func (s *SliceSet[U]) ValuesSkipN(skipN int, visit func(v U) bool) {
+	for i := skipN; i < len(s.data); i++ {
 		val := s.data[i]
-		if val > to {
-			break
-		}
-
 		if !visit(val) {
 			break
 		}
@@ -103,6 +87,13 @@ func (s *SliceSet[U]) Contains(value U) bool {
 }
 
 // ValueOnIndex returns the Value of the dx-th matched item.
+// For exmaple: BitSet Values: [1, 2, 8, 42, 1028]
+// 0 -> 1
+// 1 -> 2
+// 2 -> 8
+// 3 -> 42
+// 4 -> 1028
+// 5 -> not found
 func (s *SliceSet[U]) ValueOnIndex(idx uint32) (uint32, bool) {
 	if int(idx) >= len(s.data) {
 		return 0, false
@@ -311,14 +302,6 @@ func (s *SliceSet[U]) AndNot(other *SliceSet[U]) {
 	}
 
 	s.data = sa[:writeIdx]
-}
-
-func (s *SliceSet[U]) Values(yield func(U) bool) {
-	for _, v := range s.data {
-		if !yield(v) {
-			return
-		}
-	}
 }
 
 // Removes iterate over the complete SliceStet and call the check function,

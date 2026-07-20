@@ -20,7 +20,7 @@ func BenchmarkLexer(b *testing.B) {
 func BenchmarkParser(b *testing.B) {
 	user := User{name: "Alice", role: "admin", ok: false, price: 1.2}
 
-	indexMap := newIndexMap[User, struct{}](nil)
+	indexMap := newIndexMap[User]()
 	indexMap.index["name"] = NewSortedIndex((*User).Name)
 	indexMap.index["name"].Set(&user, 1)
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
