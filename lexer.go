@@ -382,3 +382,22 @@ func (l *lexer) readString(quote byte) token {
 	// the parser will "Unescape" the string
 	return token{Op: OpString, Start: start, End: end}
 }
+
+func IsValidName(s string) error {
+	if s == "" {
+		return fmt.Errorf("empty input is not allowed")
+	}
+
+	lexer := lexer{input: s, pos: 0}
+
+	token := lexer.nextToken()
+	if token.Op != OpIdent {
+		return fmt.Errorf("invalid input: %q", s)
+	}
+
+	if len(s) > token.End {
+		return fmt.Errorf("expect end of the input: %q, got: %q", s[:token.End], s[token.End:])
+	}
+
+	return nil
+}

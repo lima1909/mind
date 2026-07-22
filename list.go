@@ -31,8 +31,8 @@ func NewList[T any]() *List[T] {
 //
 // Hint: empty field-name are not allowed!
 func (l *List[T]) CreateIndex(fieldName string, index Index[T]) error {
-	if fieldName == "" {
-		return fmt.Errorf("empty fieldName is not allowed")
+	if err := IsValidName(fieldName); err != nil {
+		return err
 	}
 
 	l.lock.Lock()

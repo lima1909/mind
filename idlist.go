@@ -36,11 +36,12 @@ func NewIDList[T any, ID comparable](fieldIDGetFn func(*T) ID) *IDList[T, ID] {
 //
 // Hint: empty field-name or the field-name ID are not allowed!
 func (l *IDList[T, ID]) CreateIndex(fieldName string, index Index[T]) error {
-	if fieldName == "" {
-		return fmt.Errorf("empty fieldName is not allowed")
-	}
 	if strings.ToLower(fieldName) == IDIndexFieldName {
 		return fmt.Errorf("ID is a reserved field name")
+	}
+
+	if err := IsValidName(fieldName); err != nil {
+		return err
 	}
 
 	l.lock.Lock()

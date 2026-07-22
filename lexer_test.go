@@ -234,3 +234,40 @@ func TestLexer_Invalid(t *testing.T) {
 		})
 	}
 }
+
+func TestLexer_IsValidName(t *testing.T) {
+
+	tests := []struct {
+		input string
+		err   bool
+	}{
+		{input: "name", err: false},
+		{input: "NamE", err: false},
+		{input: "Na_mE", err: false},
+		{input: "a", err: false},
+		{input: "zy", err: false},
+
+		{input: "name ", err: true}, // spaces are not allowed
+		{input: "name \n ", err: true},
+		{input: "true", err: true}, // keyword are not allowed
+		{input: "na me", err: true},
+		{input: "\\", err: true},
+		{input: "\"", err: true},
+		{input: ",", err: true},
+		{input: "!", err: true},
+		{input: " ", err: true},
+		{input: "ö", err: true},
+		{input: "", err: true}, // empty string is not allowed
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			err := IsValidName(tt.input)
+			if tt.err {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
