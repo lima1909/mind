@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -248,7 +249,7 @@ func BenchmarkIDIndex(b *testing.B) {
 
 	idmap := newIDMapIndex(FromValue[uint32]())
 	idslice := NewIDSliceIndex(FromValue[uint32]())
-	resultIdx := NewRawIDsWithCapacity[uint32](ds)
+	resultIdx := lidx.NewRawIDsWithCapacity[uint32](ds)
 
 	for i := range ds {
 		u := uint32(i)
@@ -260,7 +261,7 @@ func BenchmarkIDIndex(b *testing.B) {
 	// random ACL IDs
 	numAcls := 3_000
 	acls := make([]uint32, 0, numAcls)
-	aclIDs := NewRawIDsWithCapacity[uint32](numAcls)
+	aclIDs := lidx.NewRawIDsWithCapacity[uint32](numAcls)
 	for range numAcls {
 		id := rand.Intn(ds)
 		acls = append(acls, uint32(id))

@@ -1,4 +1,4 @@
-package mind
+package lidx
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ func TestBitSet_Base(t *testing.T) {
 	assert.Equal(t, 1, b.Len())
 	assert.Equal(t, 0, b.Min())
 	assert.Equal(t, 42, b.Max())
-	assert.Equal(t, 0, b.MaxSetIndex())
+	assert.Equal(t, 0, b.MaxIndex())
 	assert.True(t, b.Contains(2))
 
 	b.UnSet(2)
@@ -40,7 +40,7 @@ func TestBitSet_Base(t *testing.T) {
 func TestBitSet_ToBig(t *testing.T) {
 	b := NewBitSet[uint32]()
 
-	assert.Equal(t, -1, b.MaxSetIndex())
+	assert.Equal(t, -1, b.MaxIndex())
 
 	assert.False(t, b.UnSet(40_000))
 	assert.False(t, b.Contains(40_000))
@@ -51,7 +51,7 @@ func TestBitSet_Shrink(t *testing.T) {
 	b.Set(1)
 	b.Set(130)
 
-	assert.Equal(t, 2, b.MaxSetIndex())
+	assert.Equal(t, 2, b.MaxIndex())
 
 	assert.Equal(t, 2, b.Count())
 	assert.Equal(t, 3, b.Len())
@@ -60,7 +60,7 @@ func TestBitSet_Shrink(t *testing.T) {
 	b.Shrink()
 	assert.Equal(t, 1, b.Count())
 	assert.Equal(t, 1, b.Len())
-	assert.Equal(t, 0, b.MaxSetIndex())
+	assert.Equal(t, 0, b.MaxIndex())
 }
 
 func TestBitSet_And(t *testing.T) {
@@ -202,14 +202,14 @@ func TestBitSet_MinMax(t *testing.T) {
 	assert.Equal(t, 0, b.Min())
 	assert.Equal(t, 130, b.Max())
 	// 0, 1, 2
-	assert.Equal(t, 2, b.MaxSetIndex())
+	assert.Equal(t, 2, b.MaxIndex())
 
 	b.UnSet(0)
 	b.UnSet(130)
 	assert.Equal(t, 1, b.Min())
 	assert.Equal(t, 67, b.Max())
 	// 0, 1
-	assert.Equal(t, 1, b.MaxSetIndex())
+	assert.Equal(t, 1, b.MaxIndex())
 }
 
 func TestBitSet_ValuesIter(t *testing.T) {

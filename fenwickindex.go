@@ -2,6 +2,8 @@ package mind
 
 import (
 	"iter"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 const FenwickIndexName = "FenwickIndex"
@@ -17,7 +19,7 @@ type Int interface {
 type FenwickIndex[OBJ any, V Int] struct {
 	// tree is a store as a linear arrays
 	// calculates the next Binary Tree Index: idx += idx & -idx
-	tree    []*RawIDs32
+	tree    []*lidx.RawIDs32
 	minVal  int
 	maxVal  int
 	handler SingleValueHandler[OBJ, V]
@@ -42,9 +44,9 @@ func NewFenwickIndexWithMinValue[OBJ any, V Int](fieldGetFn FromField[OBJ, V], m
 
 	// add 2: one for the 0-inclusive boundary, one for the 1-based indexing shift
 	size := domainSize + 2
-	tree := make([]*RawIDs32, size)
+	tree := make([]*lidx.RawIDs32, size)
 	for i := range tree {
-		tree[i] = NewRawIDs[uint32]()
+		tree[i] = lidx.NewRawIDs[uint32]()
 	}
 
 	return &FenwickIndex[OBJ, V]{
@@ -99,14 +101,14 @@ func (fx *FenwickIndex[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
 }
 
 // prefixUnion expects an ALREADY SHIFTED 0-based value.
-func (fx *FenwickIndex[OBJ, V]) prefixUnion(shiftedV int) *RawIDs32 {
+func (fx *FenwickIndex[OBJ, V]) prefixUnion(shiftedV int) *lidx.RawIDs32 {
 	idx := shiftedV + 1
 
 	if idx >= len(fx.tree) {
 		idx = len(fx.tree) - 1
 	}
 
-	result := NewRawIDs[uint32]()
+	result := lidx.NewRawIDs[uint32]()
 	for idx > 0 {
 		result.Or(fx.tree[idx])
 		idx -= idx & -idx
@@ -115,11 +117,11 @@ func (fx *FenwickIndex[OBJ, V]) prefixUnion(shiftedV int) *RawIDs32 {
 	return result
 }
 
-func (fx *FenwickIndex[OBJ, V]) Equal(value any) (*RawIDs32, error) {
+func (fx *FenwickIndex[OBJ, V]) Equal(value any) (*lidx.RawIDs32, error) {
 	return nil, InvalidOperationError{FenwickIndexName, OpEq}
 }
 
-func (fx *FenwickIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[V]{value}
@@ -129,7 +131,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) 
 	switch op.Op {
 	case OpLe:
 		if iv < fx.minVal {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if iv > fx.maxVal {
 			return allIDs, false, nil
@@ -138,7 +140,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) 
 
 	case OpLt:
 		if iv <= fx.minVal {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if iv > fx.maxVal {
 			return allIDs, false, nil
@@ -147,7 +149,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) 
 
 	case OpGt:
 		if iv >= fx.maxVal {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if iv < fx.minVal {
 			return allIDs, false, nil
@@ -158,7 +160,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) 
 
 	case OpGe:
 		if iv > fx.maxVal {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if iv <= fx.minVal {
 			return allIDs, false, nil
@@ -172,7 +174,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *RawIDs32, op FilterOp, value any) 
 	}
 }
 
-func (fx *FenwickIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (fx *FenwickIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
@@ -188,14 +190,14 @@ func (fx *FenwickIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*RawIDs32
 		}
 
 		if maxV < minV {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 
 		imin := int(minV)
 		imax := int(maxV)
 
 		if imin > fx.maxVal || imax < fx.minVal {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if imin < fx.minVal {
 			imin = fx.minVal

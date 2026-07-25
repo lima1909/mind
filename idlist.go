@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 const IDIndexFieldName = "id"
@@ -247,7 +249,7 @@ func (l *IDList[T, ID]) filterByName(fieldName string) (Filter, error) {
 	return l.indexMap.FilterByName(fieldName)
 }
 
-func (l *IDList[T, ID]) execQuery(query Query, exec func(*RawIDs32, getItemFn[T])) error {
+func (l *IDList[T, ID]) execQuery(query Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 

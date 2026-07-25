@@ -3,6 +3,7 @@ package mind
 import (
 	"testing"
 
+	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,7 +17,7 @@ func TestFenwickIndex_Base(t *testing.T) {
 	set(5, 5)
 	set(10, 6)
 
-	allIDs := NewRawIDsFrom[uint32](1, 2, 3, 4, 5, 6)
+	allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 4, 5, 6)
 
 	t.Run("Operation: OpLe (<=)", func(t *testing.T) {
 		res, _, err := idx.Match(allIDs, FilterOp{Op: OpLe}, -5)
@@ -91,7 +92,7 @@ func TestFenwickIndex_MinMax_negative(t *testing.T) {
 	set(-1, 4)
 	set(-100, 5)
 
-	allIDs := NewRawIDsFrom[uint32](1, 2, 3, 4, 5)
+	allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 4, 5)
 
 	t.Run("Operation: OpLe (<=)", func(t *testing.T) {
 		res, _, err := idx.Match(allIDs, FilterOp{Op: OpLe}, -5)

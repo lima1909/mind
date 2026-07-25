@@ -3,6 +3,7 @@ package mind
 import (
 	"testing"
 
+	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -74,7 +75,7 @@ func TestMapIndex_Get(t *testing.T) {
 	set(mi, 42, 42)
 
 	bs, _ := mi.Equal(1)
-	assert.Equal(t, NewRawIDsFrom[uint32](1), bs)
+	assert.Equal(t, lidx.NewRawIDsFrom[uint32](1), bs)
 	bs, _ = mi.Equal(3)
 	assert.Equal(t, []uint32{3, 5}, bs.ToSlice())
 
@@ -129,7 +130,7 @@ func TestMapIndex_Query(t *testing.T) {
 	assert.Equal(t, []uint32{1, 3, 5}, result.ToSlice())
 
 	// AND
-	result, canMutate, err = And(Eq("val", 3), Not(Eq("val", 3))).Compile(nil)(fi, NewRawIDsFrom[uint32](1, 3, 5, 42))
+	result, canMutate, err = And(Eq("val", 3), Not(Eq("val", 3))).Compile(nil)(fi, lidx.NewRawIDsFrom[uint32](1, 3, 5, 42))
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{}, result.ToSlice())
@@ -163,7 +164,7 @@ func TestMapIndex_Query_Not(t *testing.T) {
 
 	fi := fieldIndexMapFn(mi)
 
-	allIDs := NewRawIDsFrom[uint32](1, 3, 5, 42)
+	allIDs := lidx.NewRawIDsFrom[uint32](1, 3, 5, 42)
 
 	// Not
 	result, canMutate, err := Not(Eq("val", 3)).Compile(nil)(fi, allIDs)
@@ -195,7 +196,7 @@ func TestSortedIndex_Query_Not(t *testing.T) {
 
 	fi := fieldIndexMapFn(mi)
 
-	allIDs := NewRawIDsFrom[uint32](1, 3, 5, 42)
+	allIDs := lidx.NewRawIDsFrom[uint32](1, 3, 5, 42)
 
 	// Not
 	result, canMutate, err := Not(Eq("val", 3)).Compile(nil)(fi, allIDs)
@@ -262,7 +263,7 @@ func TestMapIndex_QueryAll(t *testing.T) {
 	set(mi, 42, 42)
 
 	fi := fieldIndexMapFn(mi)
-	result, canMutate, err := All().Compile(nil)(fi, NewRawIDsFrom[uint32](1, 3, 5, 42))
+	result, canMutate, err := All().Compile(nil)(fi, lidx.NewRawIDsFrom[uint32](1, 3, 5, 42))
 	assert.NoError(t, err)
 	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5, 42}, result.ToSlice())

@@ -1,4 +1,4 @@
-package mind
+package lidx
 
 import (
 	"fmt"
@@ -17,13 +17,13 @@ func TestSliceSet_Base(t *testing.T) {
 	assert.Equal(t, 3, sp.Len())
 	assert.Equal(t, 1, sp.Min())
 	assert.Equal(t, 42, sp.Max())
-	assert.Equal(t, 2, sp.MaxSetIndex())
+	assert.Equal(t, 2, sp.MaxIndex())
 	assert.Equal(t, []uint16{1, 3, 42}, sp.ToSlice())
 
 	assert.True(t, sp.UnSet(3))
 	assert.False(t, sp.UnSet(99))
 	assert.Equal(t, 2, sp.Len())
-	assert.Equal(t, 1, sp.MaxSetIndex())
+	assert.Equal(t, 1, sp.MaxIndex())
 }
 func TestSliceSet_DoubleAndOrderCheck(t *testing.T) {
 	s := NewSliceSetFrom[uint16](3, 1, 0, 3, 1)

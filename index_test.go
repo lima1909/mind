@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -98,7 +99,7 @@ func index() []testIndex {
 }
 
 func TestIndex_Empty(t *testing.T) {
-	allIDs := NewRawIDs[uint32]()
+	allIDs := lidx.NewRawIDs[uint32]()
 
 	for _, tt := range index() {
 		t.Run(tt.name, func(t *testing.T) {
@@ -155,7 +156,7 @@ func TestIndex_Less(t *testing.T) {
 			set(tt.index, 3, 3)
 			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
+			allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 255)
 
 			bs, canMutate, _ := tt.index.Match(allIDs, FOpLt, 0)
 			assert.True(t, canMutate)
@@ -185,7 +186,7 @@ func TestIndex_LessEqual(t *testing.T) {
 			set(tt.index, 3, 3)
 			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
+			allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 255)
 
 			bs, _, _ := tt.index.Match(allIDs, FOpLe, 0)
 			assert.Equal(t, []uint32{}, bs.ToSlice())
@@ -214,7 +215,7 @@ func TestIndex_Greater(t *testing.T) {
 			set(tt.index, 3, 3)
 			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
+			allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 255)
 
 			bs, canMutate, _ := tt.index.Match(allIDs, FOpGt, 0)
 			assert.True(t, canMutate)
@@ -244,7 +245,7 @@ func TestIndex_GreaterEqual(t *testing.T) {
 			set(tt.index, 3, 3)
 			set(tt.index, 255, 255)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 255)
+			allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 255)
 
 			bs, _, _ := tt.index.Match(allIDs, FOpGe, 0)
 			assert.Equal(t, []uint32{1, 2, 3, 255}, bs.ToSlice())
@@ -328,7 +329,7 @@ func TestIndex_UnSet(t *testing.T) {
 			set(tt.index, 1, 2)
 			set(tt.index, 3, 3)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+			allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3)
 
 			bs, _, _ := tt.index.MatchMany(FOpIn, 1)
 			assert.Equal(t, []uint32{1, 2}, bs.ToSlice())
@@ -384,7 +385,7 @@ func TestIDIndex_Filter(t *testing.T) {
 	vw := car{name: "vw", age: 2}
 	mi.Set(&vw, 0)
 
-	allIDS := NewRawIDsFrom[uint32](0)
+	allIDS := lidx.NewRawIDsFrom[uint32](0)
 
 	bs, err := mi.Equal("vw")
 	assert.NoError(t, err)
@@ -571,7 +572,7 @@ func TestIndex_Inverse(t *testing.T) {
 			set(tt.index, 4, 4)
 			set(tt.index, 5, 5)
 
-			allIDs := NewRawIDsFrom[uint32](1, 2, 3, 4, 5)
+			allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 4, 5)
 
 			bs, _, err := tt.index.Match(allIDs, FOpGt, 1)
 			assert.NoError(t, err)
@@ -600,7 +601,7 @@ func TestStringIndex(t *testing.T) {
 	set(ti, "bbba", 3)
 	set(ti, "abxy", 4)
 
-	allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+	allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3)
 
 	// contains
 	bs, _, _ := ti.Match(allIDs, FOpLike, "%bb%")
@@ -624,7 +625,7 @@ func TestStringIndex(t *testing.T) {
 
 func TestStringIndex_Error(t *testing.T) {
 	ti := NewStringIndex(FromValue[string]()).AddTrigramIndex()
-	allIDs := NewRawIDsFrom[uint32](1, 2, 3)
+	allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3)
 
 	// contains
 	_, _, err := ti.Match(allIDs, FilterOp{Name: "contains"}, "%bb%")
@@ -660,7 +661,7 @@ func TestParserExt(t *testing.T) {
 	rids, _ := fi.Equal("a")
 	assert.Equal(t, []uint32{1}, rids.ToSlice())
 
-	allIDs := NewRawIDsFrom[uint32](1, 2, 3, 4)
+	allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 4)
 	rids, _, _ = fi.Match(allIDs, FOpGt, "a")
 	assert.Equal(t, []uint32{2, 3, 4}, rids.ToSlice())
 
@@ -731,7 +732,7 @@ func TestIndex_SliceValues_More(t *testing.T) {
 			tt.index.Set(&[]uint8{2, 3, 4}, 1)
 			tt.index.Set(&[]uint8{2, 5}, 2)
 
-			allIDs := NewRawIDsFrom[uint32](0, 1, 2)
+			allIDs := lidx.NewRawIDsFrom[uint32](0, 1, 2)
 
 			rids, _, _ := tt.index.Match(allIDs, FOpGe, 2)
 			assert.Equal(t, []uint32{0, 1, 2}, rids.ToSlice())

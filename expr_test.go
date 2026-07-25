@@ -3,6 +3,7 @@ package mind
 import (
 	"testing"
 
+	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -10,7 +11,7 @@ import (
 func createIndexMap() indexMap[User] {
 	indexMap := indexMap[User]{
 		index:  make(map[string]Index[User]),
-		allIDs: NewRawIDs[uint32](),
+		allIDs: lidx.NewRawIDs[uint32](),
 	}
 	indexMap.index["name"] = NewSortedIndex((*User).Name)
 	indexMap.index["name"].Set(&User{name: "a"}, 0)

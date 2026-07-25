@@ -1,9 +1,7 @@
-package mind
+package lidx
 
-const (
-	// sparseMinCount is the minimum element count before considering a switch to BitSet.
-	sparseMinCount = 64
-)
+// sparseMinCount is the minimum element count before considering a switch to BitSet.
+const sparseMinCount = 64
 
 // RawIDs32 is the default RawIDs
 type RawIDs32 = RawIDs[uint32]
@@ -121,9 +119,9 @@ func (s *RawIDs[U]) UnSet(value U) bool {
 func (s *RawIDs[U]) Values(yield func(U) bool) {
 	if s.IsSlice() {
 		s.slice.Values(yield)
-	} else {
-		s.bits.Values(yield)
+		return
 	}
+	s.bits.Values(yield)
 }
 
 // ValuesSkipN iterates over set by starting from 'skipN' until the end or visit returns false.
@@ -159,12 +157,12 @@ func (s *RawIDs[U]) Max() int {
 	return s.bits.Max()
 }
 
-// MaxSetIndex returns the max index of the underlying storage.
-func (s *RawIDs[U]) MaxSetIndex() int {
+// MaxIndex returns the max index of the underlying storage.
+func (s *RawIDs[U]) MaxIndex() int {
 	if s.IsSlice() {
-		return s.slice.MaxSetIndex()
+		return s.slice.MaxIndex()
 	}
-	return s.bits.MaxSetIndex()
+	return s.bits.MaxIndex()
 }
 
 // ValueOnIndex returns the Value of the dx-th matched item.
@@ -344,9 +342,9 @@ func (s *RawIDs[U]) AndNot(other *RawIDs[U]) {
 func (s *RawIDs[U]) Removes(check func(U) bool) {
 	if s.IsSlice() {
 		s.slice.Removes(check)
-	} else {
-		s.bits.Removes(check)
+		return
 	}
+	s.bits.Removes(check)
 }
 
 // Shrink is only executed on BitSet

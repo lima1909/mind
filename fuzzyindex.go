@@ -2,6 +2,8 @@ package mind
 
 import (
 	"iter"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 const (
@@ -16,7 +18,7 @@ type bkEdge struct {
 
 type bkNode struct {
 	word     string
-	ids      *RawIDs32
+	ids      *lidx.RawIDs32
 	children []bkEdge
 	// largest edge distance among children, for search optimizing
 	maxChild uint8
@@ -35,10 +37,10 @@ func NewFuzzyIndex[OBJ any](fieldGetFn FromField[OBJ, string]) Index[OBJ] {
 	}
 }
 
-func (fi *FuzzyIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
+func (fi *FuzzyIndex[OBJ]) Set(obj *OBJ, idx uint32) {
 	fi.handler.Handle(obj, func(s string) {
 		if fi.root == nil {
-			fi.root = &bkNode{word: s, ids: NewRawIDsFrom(lidx)}
+			fi.root = &bkNode{word: s, ids: lidx.NewRawIDsFrom(idx)}
 			return
 		}
 
@@ -46,7 +48,7 @@ func (fi *FuzzyIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 		for {
 			dist := levenshtein(node.word, s)
 			if dist == 0 {
-				node.ids.Set(lidx)
+				node.ids.Set(idx)
 				return
 			}
 
@@ -59,7 +61,7 @@ func (fi *FuzzyIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 			}
 
 			if child == nil {
-				child = &bkNode{word: s, ids: NewRawIDsFrom(lidx)}
+				child = &bkNode{word: s, ids: lidx.NewRawIDsFrom(idx)}
 				node.children = append(node.children, bkEdge{node: child, dist: uint8(dist)})
 				if uint8(dist) > node.maxChild {
 					node.maxChild = uint8(dist)
@@ -103,11 +105,11 @@ func (fi *FuzzyIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
 	return fi.handler.HasChanged(oldItem, newItem)
 }
 
-func (fi *FuzzyIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
+func (fi *FuzzyIndex[OBJ]) Equal(value any) (*lidx.RawIDs32, error) {
 	return nil, InvalidOperationError{FuzzyIndexName, OpEq}
 }
 
-func (fi *FuzzyIndex[OBJ]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (fi *FuzzyIndex[OBJ]) Match(_ *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	if op.Op != OpFuzzy {
 		return nil, false, InvalidOperationError{FuzzyIndexName, op.Op}
 	}
@@ -119,7 +121,7 @@ func (fi *FuzzyIndex[OBJ]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs32
 	return bkSearch(fi.root, s, defaultFuzzyMaxDist), true, nil
 }
 
-func (fi *FuzzyIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (fi *FuzzyIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	if op.Op != OpFuzzy {
 		return nil, false, InvalidOperationError{FuzzyIndexName, op.Op}
 	}
@@ -140,8 +142,8 @@ func (fi *FuzzyIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, boo
 
 // bkSearch walks the BK-tree collecting all words within maxDist of query.
 // Iterative stack-based traversal to avoid deep recursion on large trees.
-func bkSearch(root *bkNode, query string, maxDist int) *RawIDs32 {
-	result := NewRawIDs[uint32]()
+func bkSearch(root *bkNode, query string, maxDist int) *lidx.RawIDs32 {
+	result := lidx.NewRawIDs[uint32]()
 	if root == nil {
 		return result
 	}

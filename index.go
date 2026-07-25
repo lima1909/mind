@@ -4,18 +4,20 @@ import (
 	"cmp"
 	"iter"
 	"sync"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 // indexMap maps a given field name to an Index
 type indexMap[OBJ any] struct {
 	index  map[string]Index[OBJ]
-	allIDs *RawIDs32
+	allIDs *lidx.RawIDs32
 }
 
 func newIndexMap[OBJ any]() indexMap[OBJ] {
 	return indexMap[OBJ]{
 		index:  make(map[string]Index[OBJ]),
-		allIDs: NewRawIDs[uint32](),
+		allIDs: lidx.NewRawIDs[uint32](),
 	}
 }
 
@@ -103,13 +105,13 @@ type Index[OBJ any] interface {
 type Filter interface {
 	// Equal is seperated from Match
 	// because the RawIDs result you can NOT mutable
-	Equal(value any) (*RawIDs32, error)
+	Equal(value any) (*lidx.RawIDs32, error)
 	// Match execute a query (FilterOP) with one given value
 	// for example: age > 18
-	Match(allIDs *RawIDs32, op FilterOp, value any) (ids *RawIDs32, canMutate bool, err error)
+	Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (ids *lidx.RawIDs32, canMutate bool, err error)
 	// MatchMany execute a query (FilterOp) for many given values
 	// for example: age between 18 and 80
-	MatchMany(op FilterOp, values ...any) (ids *RawIDs32, canMutate bool, err error)
+	MatchMany(op FilterOp, values ...any) (ids *lidx.RawIDs32, canMutate bool, err error)
 }
 
 var (
@@ -198,33 +200,33 @@ const MapIndexName = "MapIndex"
 // MapIndex is a mapping of any value to the Index in the List.
 // This index only supported Queries with the Equal Ralation!
 type MapIndex[OBJ any, V comparable, H ValueHandler[OBJ, V]] struct {
-	data         map[V]*RawIDs32
+	data         map[V]*lidx.RawIDs32
 	valueHandler H
 }
 
 func NewMapIndex[OBJ any, V comparable](fieldGetFn FromField[OBJ, V]) Index[OBJ] {
 	return &MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]{
-		data:         make(map[V]*RawIDs32),
+		data:         make(map[V]*lidx.RawIDs32),
 		valueHandler: SingleValueHandler[OBJ, V]{fieldGetFn},
 	}
 }
 
 func NewMapIndexSlice[OBJ any, V comparable](fieldGetFn FromFieldSlice[OBJ, V]) Index[OBJ] {
 	return &MapIndex[OBJ, V, MultiValueHandler[OBJ, V]]{
-		data:         make(map[V]*RawIDs32),
+		data:         make(map[V]*lidx.RawIDs32),
 		valueHandler: MultiValueHandler[OBJ, V]{fieldGetFn},
 	}
 }
 
-func (mi *MapIndex[OBJ, V, H]) Set(obj *OBJ, lidx uint32) {
+func (mi *MapIndex[OBJ, V, H]) Set(obj *OBJ, idx uint32) {
 	mi.valueHandler.Handle(obj, func(value V) {
 		ids, found := mi.data[value]
 		if !found {
-			ids = NewRawIDs[uint32]()
+			ids = lidx.NewRawIDs[uint32]()
 			mi.data[value] = ids
 		}
 
-		ids.Set(lidx)
+		ids.Set(idx)
 	})
 }
 
@@ -239,7 +241,7 @@ func (mi *MapIndex[OBJ, V, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 
 	// merge the grouped batches into the main index
 	for val, ids := range batch {
-		mi.data[val] = NewRawIDsFrom(ids...)
+		mi.data[val] = lidx.NewRawIDsFrom(ids...)
 	}
 }
 
@@ -258,7 +260,7 @@ func (mi *MapIndex[OBJ, V, H]) HasChanged(oldItem, newItem *OBJ) bool {
 	return mi.valueHandler.HasChanged(oldItem, newItem)
 }
 
-func (mi *MapIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
+func (mi *MapIndex[OBJ, V, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -266,24 +268,24 @@ func (mi *MapIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
 
 	ids, found := mi.data[v]
 	if !found {
-		return NewRawIDs[uint32](), nil
+		return lidx.NewRawIDs[uint32](), nil
 	}
 
 	return ids, nil
 }
 
-func (mi *MapIndex[OBJ, V, H]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, bool, error) {
+func (mi *MapIndex[OBJ, V, H]) Match(_ *lidx.RawIDs32, op FilterOp, _ any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{MapIndexName, op.Op}
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
 	case OpIn:
 		// fast path for 0 or 1 values
 		switch len(values) {
 		case 0:
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		case 1:
 			key, err := ValueFromAny[V](values[0])
 			if err != nil {
@@ -293,10 +295,10 @@ func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 				// not copied
 				return rid, false, nil
 			}
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 
-		matched := make([]*RawIDs32, 0, len(values))
+		matched := make([]*lidx.RawIDs32, 0, len(values))
 		var maxLen int
 
 		for _, v := range values {
@@ -317,13 +319,13 @@ func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32,
 		// fast path for 0 or 1 matches
 		switch len(matched) {
 		case 0:
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		case 1:
 			// not copied
 			return matched[0], false, nil
 		}
 
-		result := NewRawIDsWithCapacity[uint32](maxLen)
+		result := lidx.NewRawIDsWithCapacity[uint32](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}
@@ -338,33 +340,33 @@ const SortedIndexName = "SortedIndex"
 
 // SortedIndex is well suited for Queries with: Range, Min, Max, Greater and Less
 type SortedIndex[OBJ any, V cmp.Ordered, H ValueHandler[OBJ, V]] struct {
-	skipList     SkipList[V, *RawIDs32]
+	skipList     SkipList[V, *lidx.RawIDs32]
 	valueHandler H
 }
 
 func NewSortedIndex[OBJ any, V cmp.Ordered](fieldGetFn FromField[OBJ, V]) Index[OBJ] {
 	return &SortedIndex[OBJ, V, SingleValueHandler[OBJ, V]]{
-		skipList:     NewSkipList[V, *RawIDs32](),
+		skipList:     NewSkipList[V, *lidx.RawIDs32](),
 		valueHandler: SingleValueHandler[OBJ, V]{fieldGetFn},
 	}
 }
 
 func NewSortedIndexSlice[OBJ any, V cmp.Ordered](fieldGetFn FromFieldSlice[OBJ, V]) Index[OBJ] {
 	return &SortedIndex[OBJ, V, MultiValueHandler[OBJ, V]]{
-		skipList:     NewSkipList[V, *RawIDs32](),
+		skipList:     NewSkipList[V, *lidx.RawIDs32](),
 		valueHandler: MultiValueHandler[OBJ, V]{fieldGetFn},
 	}
 }
 
-func (si *SortedIndex[OBJ, V, H]) Set(obj *OBJ, lidx uint32) {
+func (si *SortedIndex[OBJ, V, H]) Set(obj *OBJ, idx uint32) {
 	si.valueHandler.Handle(obj, func(value V) {
 		ids, found := si.skipList.Get(value)
 		if !found {
-			ids = NewRawIDs[uint32]()
+			ids = lidx.NewRawIDs[uint32]()
 			si.skipList.Put(value, ids)
 		}
 
-		ids.Set(lidx)
+		ids.Set(idx)
 	})
 }
 
@@ -379,7 +381,7 @@ func (si *SortedIndex[OBJ, V, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 
 	// merge into the SkipList
 	for val, ids := range batch {
-		si.skipList.Put(val, NewRawIDsFrom(ids...))
+		si.skipList.Put(val, lidx.NewRawIDsFrom(ids...))
 	}
 }
 
@@ -398,7 +400,7 @@ func (si *SortedIndex[OBJ, V, H]) HasChanged(oldItem, newItem *OBJ) bool {
 	return si.valueHandler.HasChanged(oldItem, newItem)
 }
 
-func (si *SortedIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
+func (si *SortedIndex[OBJ, V, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -406,20 +408,20 @@ func (si *SortedIndex[OBJ, V, H]) Equal(value any) (*RawIDs32, error) {
 
 	ids, found := si.skipList.Get(v)
 	if !found {
-		return NewRawIDs[uint32](), nil
+		return lidx.NewRawIDs[uint32](), nil
 	}
 
 	return ids, nil
 }
 
-func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (si *SortedIndex[OBJ, V, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[V]{value}
 	}
 
-	var toMerge []*RawIDs32
-	var visitor func(V, *RawIDs32) bool
+	var toMerge []*lidx.RawIDs32
+	var visitor func(V, *lidx.RawIDs32) bool
 	abortedForInversion := false
 
 	if si.valueHandler.CanInvert() {
@@ -427,7 +429,7 @@ func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any
 		count := 0
 		halfwayMark := si.skipList.Len() / 2
 
-		visitor = func(_ V, bs *RawIDs32) bool {
+		visitor = func(_ V, bs *lidx.RawIDs32) bool {
 			count++
 			if count > halfwayMark {
 				abortedForInversion = true
@@ -438,7 +440,7 @@ func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any
 		}
 	} else {
 		// The Lean & Mean Visitor (No counting, no branching!)
-		visitor = func(_ V, bs *RawIDs32) bool {
+		visitor = func(_ V, bs *lidx.RawIDs32) bool {
 			toMerge = append(toMerge, bs)
 			return true // Always keep going
 		}
@@ -475,14 +477,14 @@ func (si *SortedIndex[OBJ, V, H]) Match(allIDs *RawIDs32, op FilterOp, value any
 		return finalResult, true, nil
 	}
 
-	result := NewRawIDs[uint32]()
+	result := lidx.NewRawIDs[uint32]()
 	for _, ids := range toMerge {
 		result.Or(ids)
 	}
 	return result, true, nil
 }
 
-func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
@@ -498,8 +500,8 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 			return nil, false, InvalidValueTypeError[V]{values[1]}
 		}
 
-		result := NewRawIDs[uint32]()
-		si.skipList.Range(min, max, func(_ V, bs *RawIDs32) bool {
+		result := lidx.NewRawIDs[uint32]()
+		si.skipList.Range(min, max, func(_ V, bs *lidx.RawIDs32) bool {
 			result.Or(bs)
 			return true
 		})
@@ -508,7 +510,7 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 		// fast path for 0 or 1 values
 		switch len(values) {
 		case 0:
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		case 1:
 			key, err := ValueFromAny[V](values[0])
 			if err != nil {
@@ -518,10 +520,10 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 				// not copied
 				return rid, false, nil
 			}
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 
-		matched := make([]*RawIDs32, 0, len(values))
+		matched := make([]*lidx.RawIDs32, 0, len(values))
 		var maxLen int
 
 		for _, v := range values {
@@ -542,13 +544,13 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*RawIDs
 		// fast path for 0 or 1 matches
 		switch len(matched) {
 		case 0:
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		case 1:
 			// not copied
 			return matched[0], false, nil
 		}
 
-		result := NewRawIDsWithCapacity[uint32](maxLen)
+		result := lidx.NewRawIDsWithCapacity[uint32](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}
@@ -608,14 +610,14 @@ func (si *StringIndex[OBJ, H]) UnSet(obj *OBJ, lidx uint32)       { si.composite
 func (si *StringIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 	return si.compositeIndex.HasChanged(oldItem, newItem)
 }
-func (si *StringIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
+func (si *StringIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	return si.compositeIndex.Equal(value)
 }
-func (si *StringIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (si *StringIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	return si.compositeIndex.Match(allIDs, op, value)
 }
 
-func (si *StringIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (si *StringIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	return si.compositeIndex.MatchMany(op, values...)
 }
 
@@ -672,11 +674,11 @@ func (ci *CompositeIndex[OBJ, IDX]) HasChanged(oldItem, newItem *OBJ) bool {
 	return ci.mainIndex.HasChanged(oldItem, newItem)
 }
 
-func (ci *CompositeIndex[OBJ, IDX]) Equal(value any) (*RawIDs32, error) {
+func (ci *CompositeIndex[OBJ, IDX]) Equal(value any) (*lidx.RawIDs32, error) {
 	return ci.mainIndex.Equal(value)
 }
 
-func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	if idx, ok := ci.routes[op]; ok {
 		return idx.Match(allIDs, op, value)
 	}
@@ -684,7 +686,7 @@ func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *RawIDs32, op FilterOp, value a
 	return ci.mainIndex.Match(allIDs, op, value)
 }
 
-func (ci *CompositeIndex[OBJ, IDX]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (ci *CompositeIndex[OBJ, IDX]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 
 	if idx, ok := ci.routes[op]; ok {
 		return idx.MatchMany(op, values...)
@@ -712,7 +714,7 @@ func (p *ParserExt[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
 	return p.inner.HasChanged(oldItem, newItem)
 }
 
-func (p *ParserExt[OBJ]) Equal(value any) (*RawIDs32, error) {
+func (p *ParserExt[OBJ]) Equal(value any) (*lidx.RawIDs32, error) {
 	if s, ok := value.(string); ok {
 		return p.inner.Equal(p.parse(s))
 	}
@@ -720,7 +722,7 @@ func (p *ParserExt[OBJ]) Equal(value any) (*RawIDs32, error) {
 	return nil, InvalidValueTypeError[string]{value}
 }
 
-func (p *ParserExt[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (p *ParserExt[OBJ]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	if s, ok := value.(string); ok {
 		return p.inner.Match(allIDs, op, p.parse(s))
 	}
@@ -728,7 +730,7 @@ func (p *ParserExt[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawID
 	return nil, false, InvalidValueTypeError[string]{value}
 }
 
-func (p *ParserExt[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (p *ParserExt[OBJ]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	pvalues := make([]any, len(values))
 	for i, v := range values {
 		s, ok := v.(string)

@@ -3,6 +3,8 @@ package mind
 import (
 	"iter"
 	"strings"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 const TrigramIndexName = "TrigramIndex"
@@ -25,7 +27,7 @@ type TrigramIndex[OBJ any] struct {
 	//   unigrams:   pack(0, 0, a)
 	//   bigrams:    pack(0, a, b)
 	//   trigrams:   pack(a, b, c)
-	rawIDs  map[uint32]*RawIDs32
+	rawIDs  map[uint32]*lidx.RawIDs32
 	buckets []strBucket // save the strings for filtering out the false positives
 	len     int
 	handler SingleValueHandler[OBJ, string]
@@ -37,7 +39,7 @@ func NewTrigramIndex[OBJ any](fieldGetFn FromField[OBJ, string]) Index[OBJ] {
 
 func NewTrigramIndexWithCapacity[OBJ any](fieldGetFn FromField[OBJ, string], size int) Index[OBJ] {
 	return &TrigramIndex[OBJ]{
-		rawIDs:  make(map[uint32]*RawIDs32, size),
+		rawIDs:  make(map[uint32]*lidx.RawIDs32, size),
 		buckets: make([]strBucket, 0, size),
 		handler: SingleValueHandler[OBJ, string]{fieldGetFn},
 	}
@@ -51,40 +53,40 @@ func NewTrigramIndexFrom(ss ...string) *TrigramIndex[string] {
 	return ti.(*TrigramIndex[string])
 }
 
-func (ti *TrigramIndex[OBJ]) Get(s string) (*RawIDs32, bool) {
+func (ti *TrigramIndex[OBJ]) Get(s string) (*lidx.RawIDs32, bool) {
 	slen := len(s)
 
 	switch len(s) {
 	case 0:
-		return NewRawIDs[uint32](), true
+		return lidx.NewRawIDs[uint32](), true
 	case 1:
 		bs, ok := ti.rawIDs[pack(0, 0, s[0])]
 		if !ok {
-			return NewRawIDs[uint32](), true
+			return lidx.NewRawIDs[uint32](), true
 		}
 		return bs, false
 	case 2:
 		bs, ok := ti.rawIDs[pack(0, s[0], s[1])]
 		if !ok {
-			return NewRawIDs[uint32](), true
+			return lidx.NewRawIDs[uint32](), true
 		}
 		return bs, false
 	case 3:
 		bs, ok := ti.rawIDs[pack(s[0], s[1], s[2])]
 		if !ok {
-			return NewRawIDs[uint32](), true
+			return lidx.NewRawIDs[uint32](), true
 		}
 		return bs, false
 
 	default:
-		var allIDs []*RawIDs32
+		var allIDs []*lidx.RawIDs32
 		// collect all raw IDs
 		for i := 0; i < slen-2; i++ {
 			tri := pack(s[i], s[i+1], s[i+2])
 			entry, ok := ti.rawIDs[tri]
 			if !ok {
 				// break, is NOT a substring
-				return NewRawIDs[uint32](), true
+				return lidx.NewRawIDs[uint32](), true
 			}
 			allIDs = append(allIDs, entry)
 		}
@@ -124,10 +126,10 @@ func (ti *TrigramIndex[OBJ]) Get(s string) (*RawIDs32, bool) {
 // - '%ab%' => contains: 'ab'
 // - '%ab%cd%' => contains: 'ab' and 'cd', in this order
 // - ” => empty, reutrn the empty IDs
-func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, bool) {
+func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *lidx.RawIDs32) (*lidx.RawIDs32, bool) {
 	// empty string
 	if len(pattern) == 0 {
-		return NewRawIDs[uint32](), true
+		return lidx.NewRawIDs[uint32](), true
 	}
 
 	var parts []string
@@ -156,7 +158,7 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 			return allIDs, false
 		}
 
-		result := NewRawIDs[uint32]()
+		result := lidx.NewRawIDs[uint32]()
 		for i, b := range ti.buckets {
 			if b.occupied {
 				result.Set(uint32(i))
@@ -170,7 +172,7 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 		part := parts[0]
 		bs, canMutate := ti.Get(part)
 		if bs.IsEmpty() {
-			return NewRawIDs[uint32](), true
+			return lidx.NewRawIDs[uint32](), true
 		}
 
 		switch {
@@ -227,7 +229,7 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 		count2 := get2.Count()
 
 		// copy and use the smaller one
-		var result *RawIDs32
+		var result *lidx.RawIDs32
 		if count1 < count2 {
 			if canMutate1 {
 				result = get1
@@ -282,7 +284,7 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 		return result, true
 
 	default:
-		var reqBuf [8]*RawIDs32
+		var reqBuf [8]*lidx.RawIDs32
 		required := reqBuf[:0]
 
 		// calculate total string length of all parts
@@ -296,14 +298,14 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 				if bs, ok := ti.rawIDs[key]; ok {
 					required = append(required, bs)
 				} else {
-					return NewRawIDs[uint32](), true
+					return lidx.NewRawIDs[uint32](), true
 				}
 			case 2:
 				key := pack(0, part[0], part[1])
 				if bs, ok := ti.rawIDs[key]; ok {
 					required = append(required, bs)
 				} else {
-					return NewRawIDs[uint32](), true
+					return lidx.NewRawIDs[uint32](), true
 				}
 			default: // >= 3
 				// For long chunks, don't grab every single trigram step blindly.
@@ -312,7 +314,7 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 				keyFirst := pack(part[0], part[1], part[2])
 				bsFirst, ok1 := ti.rawIDs[keyFirst]
 				if !ok1 {
-					return NewRawIDs[uint32](), true
+					return lidx.NewRawIDs[uint32](), true
 				}
 				required = append(required, bsFirst)
 
@@ -322,7 +324,7 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 					if bsLast, ok2 := ti.rawIDs[keyLast]; ok2 {
 						required = append(required, bsLast)
 					} else {
-						return NewRawIDs[uint32](), true
+						return lidx.NewRawIDs[uint32](), true
 					}
 				}
 			}
@@ -392,9 +394,9 @@ func (ti *TrigramIndex[OBJ]) Like(pattern string, allIDs *RawIDs32) (*RawIDs32, 
 	}
 }
 
-func (ti *TrigramIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
+func (ti *TrigramIndex[OBJ]) Set(obj *OBJ, idx uint32) {
 	ti.handler.Handle(obj, func(s string) {
-		li := int(lidx)
+		li := int(idx)
 		wasOccupied := false
 		if li < len(ti.buckets) {
 			wasOccupied = ti.buckets[li].occupied
@@ -426,7 +428,7 @@ func (ti *TrigramIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 			uni := pack(0, 0, s[j])
 			bs, found := ti.rawIDs[uni]
 			if !found {
-				bs = NewRawIDs[uint32]()
+				bs = lidx.NewRawIDs[uint32]()
 				ti.rawIDs[uni] = bs
 			}
 			bs.Set(uint32(li))
@@ -437,7 +439,7 @@ func (ti *TrigramIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 			bi := pack(0, s[j], s[j+1])
 			bs, found := ti.rawIDs[bi]
 			if !found {
-				bs = NewRawIDs[uint32]()
+				bs = lidx.NewRawIDs[uint32]()
 				ti.rawIDs[bi] = bs
 			}
 			bs.Set(uint32(li))
@@ -448,7 +450,7 @@ func (ti *TrigramIndex[OBJ]) Set(obj *OBJ, lidx uint32) {
 			tri := pack(s[j], s[j+1], s[j+2])
 			bs, found := ti.rawIDs[tri]
 			if !found {
-				bs = NewRawIDs[uint32]()
+				bs = lidx.NewRawIDs[uint32]()
 				ti.rawIDs[tri] = bs
 			}
 			bs.Set(uint32(li))
@@ -523,11 +525,11 @@ func (ti *TrigramIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
 	return ti.handler.HasChanged(oldItem, newItem)
 }
 
-func (ti *TrigramIndex[OBJ]) Equal(value any) (*RawIDs32, error) {
+func (ti *TrigramIndex[OBJ]) Equal(value any) (*lidx.RawIDs32, error) {
 	return nil, InvalidOperationError{TrigramIndexName, OpEq}
 }
 
-func (ti *TrigramIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (ti *TrigramIndex[OBJ]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	// only support for Like match
 	if op.Op != OpLike {
 		return nil, false, InvalidOperationError{TrigramIndexName, op.Op}
@@ -542,7 +544,7 @@ func (ti *TrigramIndex[OBJ]) Match(allIDs *RawIDs32, op FilterOp, value any) (*R
 	return result, canMutate, nil
 }
 
-func (ti *TrigramIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (ti *TrigramIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{TrigramIndexName, op.Op}
 }
 

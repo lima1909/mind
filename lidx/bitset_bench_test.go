@@ -1,9 +1,14 @@
-package mind
+package lidx
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+)
+
+const (
+	count     = 3_000_000
+	found_val = 990_000
 )
 
 func BenchmarkBitSet_Contains(b *testing.B) {
@@ -167,7 +172,7 @@ func BenchmarkBitSet_Shrink(b *testing.B) {
 
 	for b.Loop() {
 		bs.Shrink()
-		assert.Equal(b, 0, bs.MaxSetIndex())
+		assert.Equal(b, 0, bs.MaxIndex())
 
 	}
 }
@@ -217,6 +222,6 @@ func BenchmarkBitSet_MaxSetIndex(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		assert.Equal(b, 46875, bs.MaxSetIndex())
+		assert.Equal(b, 46875, bs.MaxIndex())
 	}
 }

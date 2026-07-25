@@ -3,6 +3,8 @@ package mind
 import (
 	"fmt"
 	"iter"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 type idIndex[OBJ any, ID comparable] interface {
@@ -53,7 +55,7 @@ func (mi *idMapIndex[OBJ, ID]) GetIndex(id ID) (uint32, bool) {
 
 func (mi *idMapIndex[OBJ, ID]) GetID(item *OBJ) ID { return mi.fieldGetFn(item) }
 
-func (mi *idMapIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
+func (mi *idMapIndex[OBJ, ID]) Equal(value any) (*lidx.RawIDs32, error) {
 	id, ok := value.(ID)
 	if !ok {
 		return nil, InvalidValueTypeError[ID]{value}
@@ -64,15 +66,15 @@ func (mi *idMapIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
 		return nil, ValueNotFoundError{id}
 	}
 
-	return NewRawIDsFrom(uint32(idx)), nil
+	return lidx.NewRawIDsFrom(uint32(idx)), nil
 }
 
-func (mi *idMapIndex[OBJ, ID]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, bool, error) {
+func (mi *idMapIndex[OBJ, ID]) Match(_ *lidx.RawIDs32, op FilterOp, _ any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
 // MatchMany is not supported by idMapIndex, so that always returns an error
-func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (mi *idMapIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{IDMapIndexName, op.Op}
 }
 
@@ -162,7 +164,7 @@ func (si *idSliceIndex[OBJ, ID]) GetIndex(id ID) (uint32, bool) {
 
 func (si *idSliceIndex[OBJ, ID]) GetID(item *OBJ) ID { return si.fieldGetFn(item) }
 
-func (si *idSliceIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
+func (si *idSliceIndex[OBJ, ID]) Equal(value any) (*lidx.RawIDs32, error) {
 	id, ok := value.(ID)
 	if !ok {
 		return nil, InvalidValueTypeError[ID]{value}
@@ -173,13 +175,13 @@ func (si *idSliceIndex[OBJ, ID]) Equal(value any) (*RawIDs32, error) {
 		return nil, ValueNotFoundError{id}
 	}
 
-	return NewRawIDsFrom(uint32(idx)), nil
+	return lidx.NewRawIDsFrom(uint32(idx)), nil
 }
 
-func (*idSliceIndex[OBJ, ID]) Match(_ *RawIDs32, op FilterOp, _ any) (*RawIDs32, bool, error) {
+func (*idSliceIndex[OBJ, ID]) Match(_ *lidx.RawIDs32, op FilterOp, _ any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{IDSliceIndexName, op.Op}
 }
 
-func (*idSliceIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (*idSliceIndex[OBJ, ID]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{IDSliceIndexName, op.Op}
 }

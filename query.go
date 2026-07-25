@@ -1,8 +1,10 @@
 package mind
 
+import "github.com/lima1909/mind/lidx"
+
 // Query is a filter function, find the correct Index an execute the Index.Get method
 // and returns a BitSet pointer
-type Query func(l FilterByName, allIDs *RawIDs32) (bs *RawIDs32, canMutate bool, err error)
+type Query func(l FilterByName, allIDs *lidx.RawIDs32) (bs *lidx.RawIDs32, canMutate bool, err error)
 
 // FilterByName finds the Filter by a given field-name
 type FilterByName = func(string) (Filter, error)
@@ -14,7 +16,7 @@ func All() Expr { return TrueExpr{} }
 //
 //go:inline
 func matchAll() Query {
-	return func(_ FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(_ FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		return allIDs, false, nil
 	}
 }
@@ -23,8 +25,8 @@ func matchAll() Query {
 //
 //go:inline
 func matchEmpty() Query {
-	return func(_ FilterByName, _ *RawIDs32) (*RawIDs32, bool, error) {
-		return NewRawIDs[uint32](), true, nil
+	return func(_ FilterByName, _ *lidx.RawIDs32) (*lidx.RawIDs32, bool, error) {
+		return lidx.NewRawIDs[uint32](), true, nil
 	}
 }
 
@@ -32,7 +34,7 @@ func matchEmpty() Query {
 //
 //go:inline
 func matchEqual(fieldName string, value any) Query {
-	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, _ *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -47,7 +49,7 @@ func matchEqual(fieldName string, value any) Query {
 //
 //go:inline
 func matchOne(fieldName string, op FilterOp, value any) Query {
-	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -61,7 +63,7 @@ func matchOne(fieldName string, op FilterOp, value any) Query {
 //
 //go:inline
 func matchMany(fieldName string, op FilterOp, values ...any) Query {
-	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, _ *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -132,7 +134,7 @@ func NotEq(fieldName string, val any) Expr { return TermExpr{fieldName, FOpNeq, 
 
 //go:inline
 func matchNotEq(fieldName string, val any) Query {
-	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
 		if err != nil {
 			return nil, false, err
@@ -161,7 +163,7 @@ func Not(expr Expr) Expr { return NotExpr{expr} }
 //
 //go:inline
 func matchNot(q Query) Query {
-	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		// can Mutate is not relevant, because allIDs are copied
 		qres, _, err := q(l, allIDs)
 		if err != nil {
@@ -180,7 +182,7 @@ func And(left Expr, right Expr) Expr { return AndExpr{left, right} }
 
 //go:inline
 func matchAnd(a Query, b Query) Query {
-	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		left, canMutate, err := a(l, allIDs)
 		if err != nil {
 			return nil, false, err
@@ -210,7 +212,7 @@ func Or(left Expr, right Expr) Expr { return OrExpr{left, right} }
 
 //go:inline
 func matchOr(a Query, b Query) Query {
-	return func(l FilterByName, allIDs *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
+	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		left, canMutate, err := a(l, allIDs)
 		if err != nil {
 			return nil, false, err
@@ -245,7 +247,7 @@ func AndNot(left Expr, right Expr) Expr { return AndNotExpr{left, right} }
 
 //go:inline
 func matchAndNot(base Query, sub Query) Query {
-	return func(l FilterByName, allIDs *RawIDs32) (*RawIDs32, bool, error) {
+	return func(l FilterByName, allIDs *lidx.RawIDs32) (*lidx.RawIDs32, bool, error) {
 		// base result (e.g., the 'active')
 		result, canMutate, err := base(l, allIDs)
 		if err != nil {

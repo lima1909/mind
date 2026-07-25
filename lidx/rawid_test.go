@@ -1,4 +1,4 @@
-package mind
+package lidx
 
 import (
 	"testing"
@@ -37,7 +37,7 @@ func TestRawID_Empty(t *testing.T) {
 	assert.Equal(t, 0, s.Len())
 	assert.Equal(t, -1, s.Min())
 	assert.Equal(t, -1, s.Max())
-	assert.Equal(t, -1, s.MaxSetIndex())
+	assert.Equal(t, -1, s.MaxIndex())
 	assert.False(t, s.Contains(0))
 	assert.Equal(t, []uint32{}, s.ToSlice())
 }
@@ -46,7 +46,7 @@ func TestRawID_PromotionToBitSet(t *testing.T) {
 	s := NewRawIDs[uint32]()
 
 	// Insert enough dense values to trigger promotion
-	for i := uint32(0); i < 100; i++ {
+	for i := range uint32(100) {
 		s.Set(i)
 	}
 
@@ -56,7 +56,7 @@ func TestRawID_PromotionToBitSet(t *testing.T) {
 	assert.Equal(t, 99, s.Max())
 
 	// All values should still be accessible
-	for i := uint32(0); i < 100; i++ {
+	for i := range uint32(100) {
 		assert.True(t, s.Contains(i))
 	}
 }
@@ -65,7 +65,7 @@ func TestRawID_SparseDataStaysSlice(t *testing.T) {
 	s := NewRawIDs[uint32]()
 
 	// Insert sparse values (large gaps, few elements)
-	for i := uint32(0); i < 30; i++ {
+	for i := range uint32(30) {
 		s.Set(i * 1000) // values: 0, 1000, 2000, ..., 29000
 	}
 

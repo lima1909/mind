@@ -2,6 +2,8 @@ package mind
 
 import (
 	"iter"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 const PhoneticIndexName = "PhoneticIndex"
@@ -13,7 +15,7 @@ const PhoneticIndexName = "PhoneticIndex"
 // packed into a uint32: this keeps coding allocation-free and makes the map lookups
 // integer-keyed. A code of 0 means "no phonetic code" (empty / non-alphabetic input).
 type PhoneticIndex[OBJ any, H ValueHandler[OBJ, string]] struct {
-	codes     map[uint32]*RawIDs32
+	codes     map[uint32]*lidx.RawIDs32
 	soundexFn func(string) uint32
 	handler   H
 }
@@ -22,7 +24,7 @@ func NewPhoneticIndex[OBJ any](fieldGetFn FromField[OBJ, string]) Index[OBJ] {
 	return &PhoneticIndex[OBJ, SingleValueHandler[OBJ, string]]{
 		handler:   SingleValueHandler[OBJ, string]{fieldGetFn},
 		soundexFn: soundex,
-		codes:     make(map[uint32]*RawIDs32),
+		codes:     make(map[uint32]*lidx.RawIDs32),
 	}
 }
 
@@ -30,11 +32,11 @@ func NewPhoneticIndexSlice[OBJ any](fieldGetFn FromFieldSlice[OBJ, string]) Inde
 	return &PhoneticIndex[OBJ, MultiValueHandler[OBJ, string]]{
 		handler:   MultiValueHandler[OBJ, string]{fieldGetFn},
 		soundexFn: soundex,
-		codes:     make(map[uint32]*RawIDs32),
+		codes:     make(map[uint32]*lidx.RawIDs32),
 	}
 }
 
-func (pi *PhoneticIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
+func (pi *PhoneticIndex[OBJ, H]) Set(obj *OBJ, idx uint32) {
 	pi.handler.Handle(obj, func(s string) {
 		code := pi.soundexFn(s)
 		if code == 0 {
@@ -42,10 +44,10 @@ func (pi *PhoneticIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
 		}
 		ids, found := pi.codes[code]
 		if !found {
-			ids = NewRawIDs[uint32]()
+			ids = lidx.NewRawIDs[uint32]()
 			pi.codes[code] = ids
 		}
-		ids.Set(lidx)
+		ids.Set(idx)
 	})
 }
 
@@ -61,7 +63,7 @@ func (pi *PhoneticIndex[OBJ, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	}
 
 	for code, ids := range batch {
-		pi.codes[code] = NewRawIDsFrom(ids...)
+		pi.codes[code] = lidx.NewRawIDsFrom(ids...)
 	}
 }
 
@@ -81,11 +83,11 @@ func (pi *PhoneticIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 	return pi.handler.HasChanged(oldItem, newItem)
 }
 
-func (pi *PhoneticIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
+func (pi *PhoneticIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	return nil, InvalidOperationError{PhoneticIndexName, OpEq}
 }
 
-func (pi *PhoneticIndex[OBJ, H]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (pi *PhoneticIndex[OBJ, H]) Match(_ *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	// only support for Sounds match
 	if op.Op != OpSounds {
 		return nil, false, InvalidOperationError{PhoneticIndexName, op.Op}
@@ -98,12 +100,12 @@ func (pi *PhoneticIndex[OBJ, H]) Match(_ *RawIDs32, op FilterOp, value any) (*Ra
 	code := pi.soundexFn(s)
 	ids, found := pi.codes[code]
 	if !found {
-		return NewRawIDs[uint32](), true, nil
+		return lidx.NewRawIDs[uint32](), true, nil
 	}
 	return ids, false, nil
 }
 
-func (pi *PhoneticIndex[OBJ, H]) MatchMany(op FilterOp, _ ...any) (*RawIDs32, bool, error) {
+func (pi *PhoneticIndex[OBJ, H]) MatchMany(op FilterOp, _ ...any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{PhoneticIndexName, op.Op}
 }
 

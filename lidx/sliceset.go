@@ -1,4 +1,4 @@
-package mind
+package lidx
 
 import (
 	"slices"
@@ -125,8 +125,8 @@ func (s *SliceSet[U]) Max() int {
 	return int(s.data[l-1])
 }
 
-// MaxSetIndex return the max index the Set
-func (s *SliceSet[U]) MaxSetIndex() int {
+// MaxIndex return the max index the Set
+func (s *SliceSet[U]) MaxIndex() int {
 	l := len(s.data)
 	if l == 0 {
 		return -1

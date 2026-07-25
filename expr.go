@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 type Expr interface {
@@ -396,7 +398,7 @@ func (t *Tracer) Trace(query Query, expr Expr, children ...*Tracer) Query {
 	t.Expr = expr
 	t.Children = children
 
-	return func(l FilterByName, allIDs *RawIDs32) (*RawIDs32, bool, error) {
+	return func(l FilterByName, allIDs *lidx.RawIDs32) (*lidx.RawIDs32, bool, error) {
 		start := time.Now()
 		ids, canMutate, err := query(l, allIDs)
 		if err != nil {

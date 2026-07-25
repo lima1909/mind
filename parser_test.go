@@ -6,6 +6,7 @@ import (
 	"iter"
 	"testing"
 
+	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -589,25 +590,25 @@ func TestParser_UDF(t *testing.T) {
 
 var udfOp = FilterOp{Op: -1, Name: "my_eq"}
 
-type udfIndex[OBJ any, V comparable, LI UInt] struct {
-	data       map[any]*RawIDs[LI]
+type udfIndex[OBJ any, V comparable, LI lidx.UInt] struct {
+	data       map[any]*lidx.RawIDs[LI]
 	fieldGetFn FromField[OBJ, V]
 }
 
 func newUdfIndex[OBJ any, V comparable](fromField FromField[OBJ, V]) Index[OBJ] {
 	return &udfIndex[OBJ, V, uint32]{
-		data:       make(map[any]*RawIDs32),
+		data:       make(map[any]*lidx.RawIDs32),
 		fieldGetFn: fromField,
 	}
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Set(obj *OBJ, lidx LI) {
+func (mi *udfIndex[OBJ, V, LI]) Set(obj *OBJ, idx LI) {
 	value := mi.fieldGetFn(obj)
 	bs, found := mi.data[value]
 	if !found {
-		bs = NewRawIDs[LI]()
+		bs = lidx.NewRawIDs[LI]()
 	}
-	bs.Set(lidx)
+	bs.Set(idx)
 	mi.data[value] = bs
 }
 
@@ -629,7 +630,7 @@ func (mi *udfIndex[OBJ, V, LI]) HasChanged(oldItem, newItem *OBJ) bool {
 	return mi.fieldGetFn(oldItem) != mi.fieldGetFn(newItem)
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Equal(value any) (*RawIDs[LI], error) {
+func (mi *udfIndex[OBJ, V, LI]) Equal(value any) (*lidx.RawIDs[LI], error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[V]{value}
@@ -637,12 +638,12 @@ func (mi *udfIndex[OBJ, V, LI]) Equal(value any) (*RawIDs[LI], error) {
 
 	bs, found := mi.data[v]
 	if !found {
-		return NewRawIDs[LI](), nil
+		return lidx.NewRawIDs[LI](), nil
 	}
 	return bs, nil
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Match(_ *RawIDs32, op FilterOp, value any) (*RawIDs[LI], bool, error) {
+func (mi *udfIndex[OBJ, V, LI]) Match(_ *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs[LI], bool, error) {
 	if op != udfOp {
 		return nil, false, InvalidOperationError{MapIndexName, op.Op}
 	}
@@ -652,14 +653,14 @@ func (mi *udfIndex[OBJ, V, LI]) Match(_ *RawIDs32, op FilterOp, value any) (*Raw
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[LI], bool, error) {
+func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs[LI], bool, error) {
 	switch op {
 	case udfOp, FOpIn:
 		if len(values) == 0 {
-			return NewRawIDs[LI](), true, nil
+			return lidx.NewRawIDs[LI](), true, nil
 		}
 
-		matched := make([]*RawIDs[LI], 0, len(values))
+		matched := make([]*lidx.RawIDs[LI], 0, len(values))
 		var maxLen int
 
 		for _, v := range values {
@@ -678,10 +679,10 @@ func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*RawIDs[L
 		}
 
 		if len(matched) == 0 {
-			return NewRawIDs[LI](), true, nil
+			return lidx.NewRawIDs[LI](), true, nil
 		}
 
-		result := NewRawIDsWithCapacity[LI](maxLen)
+		result := lidx.NewRawIDsWithCapacity[LI](maxLen)
 		for _, bs := range matched {
 			result.Or(bs)
 		}

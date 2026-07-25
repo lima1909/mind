@@ -1,4 +1,4 @@
-package mind
+package lidx
 
 import (
 	"math/bits"
@@ -7,9 +7,6 @@ import (
 type UInt interface {
 	~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64
 }
-
-// BitSet32 is the default BitSet
-type BitSet32 = BitSet[uint32]
 
 type BitSet[U UInt] struct {
 	data  []uint64
@@ -255,8 +252,8 @@ func (b *BitSet[U]) Max() int {
 	return -1
 }
 
-// MaxSetIndex return the max index where an Bit is set
-func (b *BitSet[U]) MaxSetIndex() int {
+// MaxIndex return the max index where an Bit is set
+func (b *BitSet[U]) MaxIndex() int {
 	bl := len(b.data)
 	bd := b.data
 

@@ -2,6 +2,8 @@ package mind
 
 import (
 	"iter"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 const RangeIndexName = "RangeIndex"
@@ -15,7 +17,7 @@ const RangeIndexName = "RangeIndex"
 // - Boolean flags (0 or 1)
 // - Any small, discrete domain where values change often.
 type RangeIndex[OBJ any, H ValueHandler[OBJ, uint8]] struct {
-	data [256]*RawIDs32
+	data [256]*lidx.RawIDs32
 	// the length of the data (the max value)
 	// max can be: 256 if the data is full from 0-255
 	max          int
@@ -25,7 +27,7 @@ type RangeIndex[OBJ any, H ValueHandler[OBJ, uint8]] struct {
 func NewRangeIndex[OBJ any](fieldGetFn FromField[OBJ, uint8]) Index[OBJ] {
 	return &RangeIndex[OBJ, SingleValueHandler[OBJ, uint8]]{
 		// Array size must be 256 to cover indices 0-255
-		data:         [256]*RawIDs32{},
+		data:         [256]*lidx.RawIDs32{},
 		valueHandler: SingleValueHandler[OBJ, uint8]{fieldGetFn},
 	}
 }
@@ -33,21 +35,21 @@ func NewRangeIndex[OBJ any](fieldGetFn FromField[OBJ, uint8]) Index[OBJ] {
 func NewRangeIndexSlice[OBJ any](fieldGetFn FromFieldSlice[OBJ, uint8]) Index[OBJ] {
 	return &RangeIndex[OBJ, MultiValueHandler[OBJ, uint8]]{
 		// Array size must be 256 to cover indices 0-255
-		data:         [256]*RawIDs32{},
+		data:         [256]*lidx.RawIDs32{},
 		valueHandler: MultiValueHandler[OBJ, uint8]{fieldGetFn},
 	}
 }
 
-func (ri *RangeIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
+func (ri *RangeIndex[OBJ, H]) Set(obj *OBJ, idx uint32) {
 	ri.valueHandler.Handle(obj, func(value uint8) {
 		valInt := int(value)
 
 		ids := ri.data[valInt]
 		if ids == nil {
-			ids = NewRawIDs[uint32]()
+			ids = lidx.NewRawIDs[uint32]()
 			ri.data[valInt] = ids
 		}
-		ids.Set(lidx)
+		ids.Set(idx)
 
 		// new max value, if value greater the old max value
 		if ri.max < valInt+1 {
@@ -58,14 +60,14 @@ func (ri *RangeIndex[OBJ, H]) Set(obj *OBJ, lidx uint32) {
 
 func (ri *RangeIndex[OBJ, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 	for i, obj := range objs {
-		lidx := uint32(i)
+		idx := uint32(i)
 		ri.valueHandler.Handle(obj, func(value uint8) {
 			ids := ri.data[value]
 			if ids == nil {
-				ids = NewRawIDs[uint32]()
+				ids = lidx.NewRawIDs[uint32]()
 				ri.data[value] = ids
 			}
-			ids.Set(lidx)
+			ids.Set(idx)
 
 			// new max value, if value greater the old max value
 			if ri.max < int(value)+1 {
@@ -106,7 +108,7 @@ func (ri *RangeIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 	return ri.valueHandler.HasChanged(oldItem, newItem)
 }
 
-func (ri *RangeIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
+func (ri *RangeIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, InvalidValueTypeError[uint8]{value}
@@ -114,13 +116,13 @@ func (ri *RangeIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
 
 	ids := ri.data[v]
 	if ids == nil {
-		return NewRawIDs[uint32](), nil
+		return lidx.NewRawIDs[uint32](), nil
 	}
 
 	return ids, nil
 }
 
-func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (ri *RangeIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[uint8]{value}
@@ -152,7 +154,7 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*
 		end = ri.max
 	}
 	if start >= end {
-		return NewRawIDs[uint32](), true, nil
+		return lidx.NewRawIDs[uint32](), true, nil
 	}
 
 	// Query Inversion Optimization
@@ -171,7 +173,7 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*
 		return finalResult, true, nil
 	}
 
-	result := NewRawIDs[uint32]()
+	result := lidx.NewRawIDs[uint32]()
 	for i := start; i < end; i++ {
 		data := ri.data[i]
 		if data != nil && !data.IsEmpty() {
@@ -182,7 +184,7 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*
 	return result, true, nil
 }
 
-func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
@@ -201,7 +203,7 @@ func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, 
 		// Use ints to prevent infinite loop on maxVal == 255
 		min, max := int(minVal), int(maxVal)
 
-		result := NewRawIDs[uint32]()
+		result := lidx.NewRawIDs[uint32]()
 		for i := min; i <= max; i++ {
 			if i >= ri.max {
 				break
@@ -212,7 +214,7 @@ func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, 
 		}
 		return result, true, nil
 	case OpIn:
-		result := NewRawIDs[uint32]()
+		result := lidx.NewRawIDs[uint32]()
 		for _, v := range values {
 			i, err := ValueFromAny[uint8](v)
 			if err != nil {
@@ -250,7 +252,7 @@ const RangeEncodedIndexName = "RangeEncodedIndex"
 // - It is completely unusable for unbounded or massive fields (like unique timestamps, UUIDs, or floating-point prices)
 // - used a lot of memory
 type RangeEncodedIndex[OBJ any, H ValueHandler[OBJ, uint8]] struct {
-	prefixTree []*RawIDs32
+	prefixTree []*lidx.RawIDs32
 	// the max length of the prefixTree
 	// max can be: 256 if the data is full from 0-255
 	max     int
@@ -259,9 +261,9 @@ type RangeEncodedIndex[OBJ any, H ValueHandler[OBJ, uint8]] struct {
 
 func NewRangeEncodedIndex[OBJ any](fieldGetFn FromField[OBJ, uint8], max uint8) Index[OBJ] {
 	// Array size must be 256 to cover indices 0-255
-	slices := make([]*RawIDs32, int(max)+1)
+	slices := make([]*lidx.RawIDs32, int(max)+1)
 	for i := range slices {
-		slices[i] = NewRawIDs[uint32]()
+		slices[i] = lidx.NewRawIDs[uint32]()
 	}
 	return &RangeEncodedIndex[OBJ, SingleValueHandler[OBJ, uint8]]{
 		prefixTree: slices,
@@ -294,11 +296,11 @@ func (ri *RangeEncodedIndex[OBJ, H]) BulkSet(objs iter.Seq2[int, *OBJ]) {
 func (ri *RangeEncodedIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 	return ri.handler.HasChanged(oldItem, newItem)
 }
-func (ri *RangeEncodedIndex[OBJ, H]) Equal(value any) (*RawIDs32, error) {
+func (ri *RangeEncodedIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	return nil, InvalidOperationError{RangeEncodedIndexName, OpEq}
 }
 
-func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value any) (*RawIDs32, bool, error) {
+func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[uint8]{value}
@@ -309,7 +311,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value 
 	case OpLt:
 		target := iv - 1
 		if target < 0 {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if target > ri.max {
 			target = ri.max
@@ -318,7 +320,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value 
 
 	case OpLe:
 		if iv < 0 {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if iv > ri.max {
 			iv = ri.max
@@ -327,7 +329,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value 
 
 	case OpGt:
 		if iv > ri.max-1 {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if iv < 0 {
 			return allIDs, false, nil
@@ -338,7 +340,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value 
 
 	case OpGe:
 		if iv > ri.max {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 		if iv <= 0 {
 			return allIDs, false, nil
@@ -352,7 +354,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *RawIDs32, op FilterOp, value 
 	}
 }
 
-func (ri *RangeEncodedIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*RawIDs32, bool, error) {
+func (ri *RangeEncodedIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
 	case OpBetween:
 		if len(values) != 2 {
@@ -368,7 +370,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*Raw
 		}
 
 		if maxVal < minVal {
-			return NewRawIDs[uint32](), true, nil
+			return lidx.NewRawIDs[uint32](), true, nil
 		}
 
 		imax := min(int(maxVal), ri.max)

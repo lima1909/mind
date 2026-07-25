@@ -1,6 +1,10 @@
 package mind
 
-import "iter"
+import (
+	"iter"
+
+	"github.com/lima1909/mind/lidx"
+)
 
 // Slot holds the data or the pointer to the next free space
 type slot[T any] struct {
@@ -178,8 +182,8 @@ func (l *FreeList[T]) filter(predicat func(item *T) bool, yield func(idx int) bo
 	}
 }
 
-func (l *FreeList[T]) filterBS(predicat func(item *T) bool) *RawIDs32 {
-	bs := NewRawIDs[uint32]()
+func (l *FreeList[T]) filterBS(predicat func(item *T) bool) *lidx.RawIDs32 {
+	bs := lidx.NewRawIDs[uint32]()
 
 	for i, item := range l.slots {
 		if item.occupied {

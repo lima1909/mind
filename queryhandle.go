@@ -1,5 +1,7 @@
 package mind
 
+import "github.com/lima1909/mind/lidx"
+
 type Opion func(*queryOptions)
 
 type queryOptions struct {
@@ -12,7 +14,7 @@ func NoOptimizer() Opion                  { return func(o *queryOptions) { o.wit
 func WithTracer(t *Tracer) Opion          { return func(o *queryOptions) { o.withTracer = t } }
 
 type getItemFn[T any] func(lidx uint32) (T, bool)
-type executorFn[T any] func(Query, func(*RawIDs32, getItemFn[T])) error
+type executorFn[T any] func(Query, func(*lidx.RawIDs32, getItemFn[T])) error
 
 type QHandle[T any] struct {
 	query Query
@@ -51,7 +53,7 @@ func (h QHandle[T]) Count() (int, error) {
 		return count, h.err
 	}
 
-	return count, h.exec(h.query, func(rids *RawIDs32, _ getItemFn[T]) {
+	return count, h.exec(h.query, func(rids *lidx.RawIDs32, _ getItemFn[T]) {
 		count = rids.Count()
 	})
 }
@@ -62,7 +64,7 @@ func (h QHandle[T]) Values() ([]T, error) {
 		return result, h.err
 	}
 
-	return result, h.exec(h.query, func(rids *RawIDs32, getItem getItemFn[T]) {
+	return result, h.exec(h.query, func(rids *lidx.RawIDs32, getItem getItemFn[T]) {
 		result = make([]T, 0, rids.Count())
 
 		rids.Values(func(idx uint32) bool {
@@ -83,7 +85,7 @@ func (h QHandle[T]) Paginate(offset, limit uint32) ([]T, PageInfo, error) {
 		return result, pi, h.err
 	}
 
-	return result, pi, h.exec(h.query, func(rids *RawIDs32, getItem getItemFn[T]) {
+	return result, pi, h.exec(h.query, func(rids *lidx.RawIDs32, getItem getItemFn[T]) {
 		total := uint32(rids.Count())
 		pi = Paginate{offset, limit}.computePageInfo(total)
 		result = make([]T, 0, rids.Count())

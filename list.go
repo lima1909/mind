@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+
+	"github.com/lima1909/mind/lidx"
 )
 
 // List is a fast in-memory store, which is extended by Indices for fast finding Items.
@@ -161,7 +163,7 @@ func (l *List[T]) Query(query Expr, opts ...Opion) QHandle[T] {
 
 // implements the QHandle interface
 // ------------------------------------------
-func (l *List[T]) execQuery(query Query, exec func(*RawIDs32, getItemFn[T])) error {
+func (l *List[T]) execQuery(query Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
