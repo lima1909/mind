@@ -4,6 +4,7 @@ import (
 	"iter"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 const RangeIndexName = "RangeIndex"
@@ -122,7 +123,7 @@ func (ri *RangeIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	return ids, nil
 }
 
-func (ri *RangeIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (ri *RangeIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[uint8]{value}
@@ -131,21 +132,21 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value an
 
 	// Define the Range Bounds
 	start, end := 0, ri.max
-	var invOp FilterOp
+	var invOp query.FilterOp
 
 	switch op.Op {
-	case OpLt:
+	case query.OpLt:
 		end = valInt
-		invOp = FilterOp{Op: OpGe}
-	case OpLe:
+		invOp = query.FilterOp{Op: query.OpGe}
+	case query.OpLe:
 		end = valInt + 1
-		invOp = FilterOp{Op: OpGt}
-	case OpGt:
+		invOp = query.FilterOp{Op: query.OpGt}
+	case query.OpGt:
 		start = valInt + 1
-		invOp = FilterOp{Op: OpLe}
-	case OpGe:
+		invOp = query.FilterOp{Op: query.OpLe}
+	case query.OpGe:
 		start = valInt
-		invOp = FilterOp{Op: OpLt}
+		invOp = query.FilterOp{Op: query.OpLt}
 	default:
 		return nil, false, InvalidOperationError{RangeIndexName, op.Op}
 	}
@@ -184,9 +185,9 @@ func (ri *RangeIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value an
 	return result, true, nil
 }
 
-func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (ri *RangeIndex[OBJ, H]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
-	case OpBetween:
+	case query.OpBetween:
 		if len(values) != 2 {
 			return nil, false, InvalidArgsLenError{Defined: "2", Got: len(values)}
 		}
@@ -213,7 +214,7 @@ func (ri *RangeIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawID
 			}
 		}
 		return result, true, nil
-	case OpIn:
+	case query.OpIn:
 		result := lidx.NewRawIDs[uint32]()
 		for _, v := range values {
 			i, err := ValueFromAny[uint8](v)
@@ -297,10 +298,10 @@ func (ri *RangeEncodedIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 	return ri.handler.HasChanged(oldItem, newItem)
 }
 func (ri *RangeEncodedIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
-	return nil, InvalidOperationError{RangeEncodedIndexName, OpEq}
+	return nil, InvalidOperationError{RangeEncodedIndexName, query.OpEq}
 }
 
-func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[uint8](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[uint8]{value}
@@ -308,7 +309,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, v
 	iv := int(v)
 
 	switch op.Op {
-	case OpLt:
+	case query.OpLt:
 		target := iv - 1
 		if target < 0 {
 			return lidx.NewRawIDs[uint32](), true, nil
@@ -318,7 +319,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, v
 		}
 		return ri.prefixTree[target], false, nil
 
-	case OpLe:
+	case query.OpLe:
 		if iv < 0 {
 			return lidx.NewRawIDs[uint32](), true, nil
 		}
@@ -327,7 +328,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, v
 		}
 		return ri.prefixTree[iv], false, nil
 
-	case OpGt:
+	case query.OpGt:
 		if iv > ri.max-1 {
 			return lidx.NewRawIDs[uint32](), true, nil
 		}
@@ -338,7 +339,7 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, v
 		result.AndNot(ri.prefixTree[iv])
 		return result, true, nil
 
-	case OpGe:
+	case query.OpGe:
 		if iv > ri.max {
 			return lidx.NewRawIDs[uint32](), true, nil
 		}
@@ -354,9 +355,9 @@ func (ri *RangeEncodedIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, v
 	}
 }
 
-func (ri *RangeEncodedIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (ri *RangeEncodedIndex[OBJ, H]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
-	case OpBetween:
+	case query.OpBetween:
 		if len(values) != 2 {
 			return nil, false, InvalidArgsLenError{Defined: "2", Got: len(values)}
 		}

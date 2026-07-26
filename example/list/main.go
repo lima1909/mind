@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lima1909/mind"
+	"github.com/lima1909/mind/query"
 )
 
 type Car struct {
@@ -38,7 +39,7 @@ func main() {
 	l.Insert(Car{name: "Mercedes", age: 5})
 	l.Insert(Car{name: "Dacia", age: 22, tags: []string{"blue", "old"}})
 
-	t := &mind.Tracer{}
+	t := &query.Tracer{}
 	values, err := l.QueryStr(
 		`(name = "Opel" or name = "Dacia") and age >= 2 and tag = "old"`,
 		mind.WithTracer(t),

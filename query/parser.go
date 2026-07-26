@@ -1,4 +1,4 @@
-package mind
+package query
 
 import (
 	"fmt"
@@ -7,19 +7,19 @@ import (
 )
 
 func Parse(input string) (Expr, error) {
-	p := parser{input: input, lex: lexer{input: input, pos: 0}}
+	p := parser{input: input, lex: NewLexer(input)}
 	return p.parse()
 }
 
 // Parser impl starts
 type parser struct {
 	input string
-	lex   lexer
-	cur   token
+	lex   Lexer
+	cur   Token
 }
 
 //go:inline
-func (p *parser) next() { p.cur = p.lex.nextToken() }
+func (p *parser) next() { p.cur = p.lex.NextToken() }
 
 func (p *parser) parse() (Expr, error) {
 	p.next()
@@ -384,49 +384,49 @@ var powersOf10 = [...]float64{
 
 // --- parse error ---
 func (p *parser) unexpected(expected Op) error {
-	return UnexpectedTokenError{input: p.input, token: p.cur, expected: expected}
+	return UnexpectedTokenError{Input: p.input, Token: p.cur, Expected: expected}
 }
 
 func (p *parser) unexpectedWithMsg(msg string) error {
-	return UnexpectedTokenError{input: p.input, token: p.cur, msg: msg, expected: OpUndefined}
+	return UnexpectedTokenError{Input: p.input, Token: p.cur, Msg: msg, Expected: OpUndefined}
 }
 
 type UnexpectedTokenError struct {
-	input    string
-	msg      string
-	token    token
-	expected Op
+	Input    string
+	Msg      string
+	Token    Token
+	Expected Op
 }
 
 func (e UnexpectedTokenError) Error() string {
 	var msg string
-	if e.msg != "" {
-		msg = fmt.Sprintf("%s at position %d", e.msg, e.token.Start)
-	} else if e.expected == OpUndefined {
-		msg = fmt.Sprintf("unexpected token %q at position %d", e.token.Op, e.token.Start)
+	if e.Msg != "" {
+		msg = fmt.Sprintf("%s at position %d", e.Msg, e.Token.Start)
+	} else if e.Expected == OpUndefined {
+		msg = fmt.Sprintf("unexpected token %q at position %d", e.Token.Op, e.Token.Start)
 	} else {
-		msg = fmt.Sprintf("expected %q, got %q at position %d", e.expected, e.token.Op, e.token.Start)
+		msg = fmt.Sprintf("expected %q, got %q at position %d", e.Expected, e.Token.Op, e.Token.Start)
 	}
 
-	if e.input == "" {
+	if e.Input == "" {
 		return msg
 	}
 
 	// Build a visual pointer: show the input and a caret line under the error position.
-	start := e.token.Start
-	end := e.token.End
-	if start > len(e.input) {
-		start = len(e.input)
+	start := e.Token.Start
+	end := e.Token.End
+	if start > len(e.Input) {
+		start = len(e.Input)
 	}
-	if end > len(e.input) {
-		end = len(e.input)
+	if end > len(e.Input) {
+		end = len(e.Input)
 	}
 
 	caretLen := max(end-start, 1)
 
 	return fmt.Sprintf("%s\n  %s\n  %s%s",
 		msg,
-		e.input,
+		e.Input,
 		strings.Repeat(" ", start),
 		strings.Repeat("^", caretLen),
 	)

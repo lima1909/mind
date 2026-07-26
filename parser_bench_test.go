@@ -2,13 +2,16 @@ package mind
 
 import (
 	"testing"
+
+	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 func BenchmarkLexer(b *testing.B) {
 
 	for b.Loop() {
-		l := &lexer{input: `role = "admin" OR status = 1 AND deleted = 1`, pos: 0}
-		for l.nextToken().Op != OpEOF {
+		l := query.NewLexer(`role = "admin" OR status = 1 AND deleted = 1`)
+		for l.NextToken().Op != query.OpEOF {
 		}
 	}
 }
@@ -20,7 +23,7 @@ func BenchmarkLexer(b *testing.B) {
 func BenchmarkParser(b *testing.B) {
 	user := User{name: "Alice", role: "admin", ok: false, price: 1.2}
 
-	indexMap := newIndexMap[User]()
+	indexMap := NewIndexMap[User](lidx.NewRawIDsFrom[uint32](0, 1))
 	indexMap.index["name"] = NewSortedIndex((*User).Name)
 	indexMap.index["name"].Set(&user, 1)
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
@@ -33,7 +36,7 @@ func BenchmarkParser(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		ast, err := Parse(`role = "admin" OR ok = false AND price = 0.0`)
+		ast, err := query.Parse(`role = "admin" OR ok = false AND price = 0.0`)
 		if err != nil {
 			b.Fatal(err)
 		}

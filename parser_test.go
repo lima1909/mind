@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +27,7 @@ func (u *User) Price() float64 { return u.price }
 func (u *User) ID() int64      { return u.id }
 
 func TestParser_Base(t *testing.T) {
-	indexMap := newIndexMap[User]()
+	indexMap := NewIndexMap[User](lidx.NewRawIDs[uint32]())
 
 	indexMap.index["id"] = NewMapIndex((*User).ID)
 	indexMap.index["id"].Set(&User{id: 40}, 0)
@@ -133,7 +134,7 @@ func TestParser_Base(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			ast, err := Parse(tt.query)
+			ast, err := query.Parse(tt.query)
 			require.NoError(t, err)
 			ast = ast.Optimize()
 			query := ast.Compile(nil)
@@ -148,26 +149,26 @@ func TestParser_Base(t *testing.T) {
 func TestParser_String(t *testing.T) {
 	tests := []struct {
 		query string
-		ast   Expr
+		ast   query.Expr
 	}{
 
-		{query: `name = "Paul"`, ast: TermExpr{"name", FOpEq, "Paul"}},
-		{query: `name = "Pa\"ul"`, ast: TermExpr{"name", FOpEq, "Pa\"ul"}},
-		{query: `name = "Pa\\ul"`, ast: TermExpr{"name", FOpEq, "Pa\\ul"}},
-		{query: `name = "Pa\"u\"l"`, ast: TermExpr{"name", FOpEq, "Pa\"u\"l"}},
+		{query: `name = "Paul"`, ast: query.TermExpr{Field: "name", Op: query.FOpEq, Value: "Paul"}},
+		{query: `name = "Pa\"ul"`, ast: query.TermExpr{Field: "name", Op: query.FOpEq, Value: "Pa\"ul"}},
+		{query: `name = "Pa\\ul"`, ast: query.TermExpr{Field: "name", Op: query.FOpEq, Value: "Pa\\ul"}},
+		{query: `name = "Pa\"u\"l"`, ast: query.TermExpr{Field: "name", Op: query.FOpEq, Value: "Pa\"u\"l"}},
 
 		// all possible escapes in one string
-		{query: `name = "\\\"\t\r\n\\'"`, ast: TermExpr{"name", FOpEq, "\\\"\t\r\n\\'"}},
+		{query: `name = "\\\"\t\r\n\\'"`, ast: query.TermExpr{Field: "name", Op: query.FOpEq, Value: "\\\"\t\r\n\\'"}},
 
-		{query: `name like "Pau%"`, ast: TermExpr{"name", FOpLike, "Pau%"}},
-		{query: `name sounds "Paul"`, ast: TermExpr{"name", FOpSounds, "Paul"}},
-		{query: `name fuzzy "Paul"`, ast: TermExpr{"name", FOpFuzzy, "Paul"}},
-		{query: `name fuzzy ("Paul", 1)`, ast: TermManyExpr{"name", FOpFuzzy, []any{"Paul", int64(1)}}},
+		{query: `name like "Pau%"`, ast: query.TermExpr{Field: "name", Op: query.FOpLike, Value: "Pau%"}},
+		{query: `name sounds "Paul"`, ast: query.TermExpr{Field: "name", Op: query.FOpSounds, Value: "Paul"}},
+		{query: `name fuzzy "Paul"`, ast: query.TermExpr{Field: "name", Op: query.FOpFuzzy, Value: "Paul"}},
+		{query: `name fuzzy ("Paul", 1)`, ast: query.TermManyExpr{Field: "name", Op: query.FOpFuzzy, Values: []any{"Paul", int64(1)}}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			ast, err := Parse(tt.query)
+			ast, err := query.Parse(tt.query)
 			require.NoError(t, err)
 			assert.Equal(t, ast, tt.ast)
 		})
@@ -182,63 +183,63 @@ func TestParser_Error(t *testing.T) {
 	}{
 		{
 			query: `name like 2`,
-			err: UnexpectedTokenError{
-				input:    "name like 2",
-				msg:      "only string are supported for 'LIKE'",
-				token:    token{Start: 10, End: 11, Op: OpNumberInt},
-				expected: OpUndefined,
+			err: query.UnexpectedTokenError{
+				Input:    "name like 2",
+				Msg:      "only string are supported for 'LIKE'",
+				Token:    query.Token{Start: 10, End: 11, Op: query.OpNumberInt},
+				Expected: query.OpUndefined,
 			},
 		},
 		{
 			query: `name like true`,
-			err: UnexpectedTokenError{
-				input:    "name like true",
-				msg:      "only string are supported for 'LIKE'",
-				token:    token{Start: 10, End: 14, Op: OpBool},
-				expected: OpUndefined,
+			err: query.UnexpectedTokenError{
+				Input:    "name like true",
+				Msg:      "only string are supported for 'LIKE'",
+				Token:    query.Token{Start: 10, End: 14, Op: query.OpBool},
+				Expected: query.OpUndefined,
 			},
 		},
 		{
 			query: `name sounds true`,
-			err: UnexpectedTokenError{
-				input:    "name sounds true",
-				msg:      "only string are supported for 'SOUNDS'",
-				token:    token{Start: 12, End: 16, Op: OpBool},
-				expected: OpUndefined,
+			err: query.UnexpectedTokenError{
+				Input:    "name sounds true",
+				Msg:      "only string are supported for 'SOUNDS'",
+				Token:    query.Token{Start: 12, End: 16, Op: query.OpBool},
+				Expected: query.OpUndefined,
 			},
 		},
 		{
 			query: `name fuzzy("Paul"`,
-			err: UnexpectedTokenError{
-				input:    `name fuzzy("Paul"`,
-				msg:      "",
-				token:    token{Start: 17, End: 17, Op: OpEOF},
-				expected: OpComma,
+			err: query.UnexpectedTokenError{
+				Input:    `name fuzzy("Paul"`,
+				Msg:      "",
+				Token:    query.Token{Start: 17, End: 17, Op: query.OpEOF},
+				Expected: query.OpComma,
 			},
 		},
 		{
 			query: `name fuzzy(true, 1)`,
-			err: UnexpectedTokenError{
-				input:    `name fuzzy(true, 1)`,
-				msg:      "",
-				token:    token{Start: 11, End: 15, Op: OpBool},
-				expected: OpString,
+			err: query.UnexpectedTokenError{
+				Input:    `name fuzzy(true, 1)`,
+				Msg:      "",
+				Token:    query.Token{Start: 11, End: 15, Op: query.OpBool},
+				Expected: query.OpString,
 			},
 		},
 		{
 			query: `name fuzzy("Paul", true)`,
-			err: UnexpectedTokenError{
-				input:    `name fuzzy("Paul", true)`,
-				msg:      "",
-				token:    token{Start: 19, End: 23, Op: OpBool},
-				expected: OpNumberInt,
+			err: query.UnexpectedTokenError{
+				Input:    `name fuzzy("Paul", true)`,
+				Msg:      "",
+				Token:    query.Token{Start: 19, End: 23, Op: query.OpBool},
+				Expected: query.OpNumberInt,
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			_, err := Parse(tt.query)
+			_, err := query.Parse(tt.query)
 			assert.ErrorIs(t, err, tt.err)
 		})
 	}
@@ -248,81 +249,81 @@ func TestParser_Op_Error(t *testing.T) {
 
 	tests := []struct {
 		query       string
-		expected_op Op
-		err_op      Op
+		expected_op query.Op
+		err_op      query.Op
 	}{
 		{
 			query:       ``,
-			expected_op: OpIdent,
-			err_op:      OpEOF,
+			expected_op: query.OpIdent,
+			err_op:      query.OpEOF,
 		},
 		{
 			query:       `role`,
-			expected_op: OpUndefined,
-			err_op:      OpEOF,
+			expected_op: query.OpUndefined,
+			err_op:      query.OpEOF,
 		},
 		{
 			query:       `role ~`,
-			expected_op: OpUndefined,
-			err_op:      OpEOF,
+			expected_op: query.OpUndefined,
+			err_op:      query.OpEOF,
 		},
 		{
 			query:       `false`,
-			expected_op: OpIdent,
-			err_op:      OpBool,
+			expected_op: query.OpIdent,
+			err_op:      query.OpBool,
 		},
 		{
 			query:       `role = `,
-			expected_op: OpUndefined,
-			err_op:      OpEOF,
+			expected_op: query.OpUndefined,
+			err_op:      query.OpEOF,
 		},
 		{
 			query:       `(role = 3`,
-			expected_op: OpRParen,
-			err_op:      OpEOF,
+			expected_op: query.OpRParen,
+			err_op:      query.OpEOF,
 		},
 		{
 			query:       `role = 3   and `,
-			expected_op: OpIdent,
-			err_op:      OpEOF,
+			expected_op: query.OpIdent,
+			err_op:      query.OpEOF,
 		},
 		{
 			query:       `role = 3   and 5 `,
-			expected_op: OpIdent,
-			err_op:      OpNumberInt,
+			expected_op: query.OpIdent,
+			err_op:      query.OpNumberInt,
 		},
 		{
 			query:       `not 3 `,
-			expected_op: OpIdent,
-			err_op:      OpNumberInt,
+			expected_op: query.OpIdent,
+			err_op:      query.OpNumberInt,
 		},
 		{
 			query:       `role between("1", 2) `,
-			expected_op: OpString,
-			err_op:      OpNumberInt,
+			expected_op: query.OpString,
+			err_op:      query.OpNumberInt,
 		},
 		{
 			query:       `role In(1, "2") `,
-			expected_op: OpNumberInt,
-			err_op:      OpString,
+			expected_op: query.OpNumberInt,
+			err_op:      query.OpString,
 		},
 		{
 			query:       `role = - `,
-			expected_op: OpUndefined, // the first expected value
-			err_op:      OpUndefined, // unexpected end
+			expected_op: query.OpUndefined, // the first expected value
+			err_op:      query.OpUndefined, // unexpected end
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			_, err := Parse(tt.query)
-			var parseErr UnexpectedTokenError
+			_, err := query.Parse(tt.query)
+			var parseErr query.UnexpectedTokenError
 			assert.True(t, errors.As(err, &parseErr))
-			assert.Equal(t, tt.err_op, parseErr.token.Op)
+			assert.Equal(t, tt.err_op, parseErr.Token.Op)
 			assert.Equal(
 				t,
-				tt.expected_op, parseErr.expected,
-				fmt.Sprintf("%q != %q", tt.expected_op, parseErr.expected),
+				tt.expected_op, parseErr.Expected,
+				fmt.Sprintf("%q != %q", tt.expected_op, parseErr.Expected),
 			)
 		})
 	}
@@ -346,7 +347,7 @@ func TestParser_Cast(t *testing.T) {
 		F64 float64
 	}
 
-	indexMap := newIndexMap[data]()
+	indexMap := NewIndexMap[data](lidx.NewRawIDs[uint32]())
 	indexMap.index["u"] = NewSortedIndex(FromName[data, uint]("U"))
 	indexMap.index["u"].Set(&data{U: 42}, 1)
 	indexMap.index["u8"] = NewSortedIndex(FromName[data, uint8]("U8"))
@@ -396,7 +397,7 @@ func TestParser_Cast(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			ast, err := Parse(tt.query)
+			ast, err := query.Parse(tt.query)
 			require.NoError(t, err)
 			ast = ast.Optimize()
 			query := ast.Compile(nil)
@@ -450,8 +451,7 @@ func TestParser_Optimize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			p := parser{input: tt.input, lex: lexer{input: tt.input, pos: 0}}
-			ast, err := p.parse()
+			ast, err := query.Parse(tt.input)
 			require.NoError(t, err)
 			optimized := ast.Optimize()
 
@@ -494,8 +494,7 @@ func TestParser_ConstantFolding(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			p := parser{input: tt.input, lex: lexer{input: tt.input, pos: 0}}
-			ast, err := p.parse()
+			ast, err := query.Parse(tt.input)
 			require.NoError(t, err)
 			optimized := ast.Optimize()
 
@@ -505,7 +504,7 @@ func TestParser_ConstantFolding(t *testing.T) {
 }
 
 func TestParser_ImpossibleRange(t *testing.T) {
-	indexMap := newIndexMap[User]()
+	indexMap := NewIndexMap[User](lidx.NewRawIDs[uint32]())
 	indexMap.index["role"] = NewSortedIndex((*User).Role)
 	indexMap.index["role"].Set(&User{role: "developer"}, 0)
 	indexMap.index["role"].Set(&User{role: "admin"}, 1)
@@ -533,7 +532,7 @@ func TestParser_ImpossibleRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			ast, err := Parse(tt.query)
+			ast, err := query.Parse(tt.query)
 			assert.NoError(t, err)
 			ast = ast.Optimize()
 			query := ast.Compile(nil)
@@ -546,7 +545,7 @@ func TestParser_ImpossibleRange(t *testing.T) {
 }
 
 func TestParser_UDF(t *testing.T) {
-	indexMap := newIndexMap[User]()
+	indexMap := NewIndexMap[User](lidx.NewRawIDs[uint32]())
 	indexMap.index["name"] = newUdfIndex((*User).Name)
 	indexMap.index["name"].Set(&User{name: "Alice"}, 1)
 	indexMap.index["price"] = newUdfIndex((*User).Price)
@@ -576,7 +575,7 @@ func TestParser_UDF(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			ast, err := Parse(tt.query)
+			ast, err := query.Parse(tt.query)
 			assert.NoError(t, err)
 			ast = ast.Optimize()
 			query := ast.Compile(nil)
@@ -588,7 +587,7 @@ func TestParser_UDF(t *testing.T) {
 	}
 }
 
-var udfOp = FilterOp{Op: -1, Name: "my_eq"}
+var udfOp = query.FilterOp{Op: -1, Name: "my_eq"}
 
 type udfIndex[OBJ any, V comparable, LI lidx.UInt] struct {
 	data       map[any]*lidx.RawIDs[LI]
@@ -643,7 +642,7 @@ func (mi *udfIndex[OBJ, V, LI]) Equal(value any) (*lidx.RawIDs[LI], error) {
 	return bs, nil
 }
 
-func (mi *udfIndex[OBJ, V, LI]) Match(_ *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs[LI], bool, error) {
+func (mi *udfIndex[OBJ, V, LI]) Match(_ *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs[LI], bool, error) {
 	if op != udfOp {
 		return nil, false, InvalidOperationError{MapIndexName, op.Op}
 	}
@@ -653,9 +652,9 @@ func (mi *udfIndex[OBJ, V, LI]) Match(_ *lidx.RawIDs32, op FilterOp, value any) 
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *udfIndex[OBJ, V, LI]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs[LI], bool, error) {
+func (mi *udfIndex[OBJ, V, LI]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs[LI], bool, error) {
 	switch op {
-	case udfOp, FOpIn:
+	case udfOp, query.FOpIn:
 		if len(values) == 0 {
 			return lidx.NewRawIDs[LI](), true, nil
 		}

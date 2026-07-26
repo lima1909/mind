@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lima1909/mind"
+	"github.com/lima1909/mind/query"
 )
 
 type Car struct {
@@ -40,9 +41,9 @@ func main() {
 	// Output:
 	// true
 
-	t := &mind.Tracer{}
+	t := &query.Tracer{}
 	values, _ := l.Query(
-		mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)),
+		query.Or(query.Eq("name", "Opel"), query.Lt("age", 10)),
 		mind.WithTracer(t),
 	).Values()
 	fmt.Println(values)

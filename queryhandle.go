@@ -1,38 +1,41 @@
 package mind
 
-import "github.com/lima1909/mind/lidx"
+import (
+	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
+)
 
 type Opion func(*queryOptions)
 
 type queryOptions struct {
 	withOptimizer bool
-	withTracer    *Tracer
+	withTracer    *query.Tracer
 }
 
 func newDefaultQueryOption() queryOptions { return queryOptions{withOptimizer: true} }
 func NoOptimizer() Opion                  { return func(o *queryOptions) { o.withOptimizer = false } }
-func WithTracer(t *Tracer) Opion          { return func(o *queryOptions) { o.withTracer = t } }
+func WithTracer(t *query.Tracer) Opion    { return func(o *queryOptions) { o.withTracer = t } }
 
 type getItemFn[T any] func(lidx uint32) (T, bool)
-type executorFn[T any] func(Query, func(*lidx.RawIDs32, getItemFn[T])) error
+type executorFn[T any] func(query.Query, func(*lidx.RawIDs32, getItemFn[T])) error
 
 type QHandle[T any] struct {
-	query Query
+	query query.Query
 	exec  executorFn[T]
 	err   error
 }
 
 func NewQHandleFromStr[T any](queryExec executorFn[T], queryStr string, opts ...Opion) QHandle[T] {
-	ast, err := Parse(queryStr)
+	ast, err := query.Parse(queryStr)
 	if err != nil {
-		var query Query
+		var query query.Query
 		return QHandle[T]{exec: queryExec, query: query, err: err}
 	}
 
 	return NewQHandleFromExpr(queryExec, ast, opts...)
 }
 
-func NewQHandleFromExpr[T any](queryExec executorFn[T], query Expr, opts ...Opion) QHandle[T] {
+func NewQHandleFromExpr[T any](queryExec executorFn[T], query query.Expr, opts ...Opion) QHandle[T] {
 	opt := newDefaultQueryOption()
 	for _, o := range opts {
 		o(&opt)

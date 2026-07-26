@@ -1,4 +1,4 @@
-package mind
+package query
 
 import "fmt"
 
@@ -118,18 +118,20 @@ func (o Op) String() string {
 	}
 }
 
-type token struct {
+type Token struct {
 	Start int
 	End   int
 	Op    Op
 }
 
-type lexer struct {
+type Lexer struct {
 	input string
 	pos   int
 }
 
-func (l *lexer) nextToken() token {
+func NewLexer(input string) Lexer { return Lexer{input, 0} }
+
+func (l *Lexer) NextToken() Token {
 	// skip whitespace
 	for l.pos < len(l.input) {
 		ch := l.input[l.pos]
@@ -141,7 +143,7 @@ func (l *lexer) nextToken() token {
 	}
 
 	if l.pos >= len(l.input) {
-		return token{Op: OpEOF, Start: l.pos, End: l.pos}
+		return Token{Op: OpEOF, Start: l.pos, End: l.pos}
 	}
 
 	ch := l.input[l.pos]
@@ -150,34 +152,34 @@ func (l *lexer) nextToken() token {
 	case ch == '=':
 		start := l.pos
 		l.pos++
-		return token{Op: OpEq, Start: start, End: l.pos}
+		return Token{Op: OpEq, Start: start, End: l.pos}
 
 	case ch == '!':
 		start := l.pos
 		// Check if the next byte exists and is '='
 		if l.pos+1 < len(l.input) && l.input[l.pos+1] == '=' {
 			l.pos += 2 // Consume both '!' and '='
-			return token{Op: OpNeq, Start: start, End: l.pos}
+			return Token{Op: OpNeq, Start: start, End: l.pos}
 		}
 		l.pos++
 		// only the '!' means the same like 'NOT'
-		return token{Op: OpNot, Start: start, End: l.pos}
+		return Token{Op: OpNot, Start: start, End: l.pos}
 	case ch == '<':
 		start := l.pos
 		if l.pos+1 < len(l.input) && l.input[l.pos+1] == '=' {
 			l.pos += 2
-			return token{Op: OpLe, Start: start, End: l.pos}
+			return Token{Op: OpLe, Start: start, End: l.pos}
 		}
 		l.pos++
-		return token{Op: OpLt, Start: start, End: l.pos}
+		return Token{Op: OpLt, Start: start, End: l.pos}
 	case ch == '>':
 		start := l.pos
 		if l.pos+1 < len(l.input) && l.input[l.pos+1] == '=' {
 			l.pos += 2
-			return token{Op: OpGe, Start: start, End: l.pos}
+			return Token{Op: OpGe, Start: start, End: l.pos}
 		}
 		l.pos++
-		return token{Op: OpGt, Start: start, End: l.pos}
+		return Token{Op: OpGt, Start: start, End: l.pos}
 	case (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_':
 		return l.readKeyword()
 	case ch == '"', ch == '\'':
@@ -187,19 +189,19 @@ func (l *lexer) nextToken() token {
 	case ch == '(':
 		start := l.pos
 		l.pos++
-		return token{Op: OpLParen, Start: start, End: l.pos}
+		return Token{Op: OpLParen, Start: start, End: l.pos}
 	case ch == ')':
 		start := l.pos
 		l.pos++
-		return token{Op: OpRParen, Start: start, End: l.pos}
+		return Token{Op: OpRParen, Start: start, End: l.pos}
 	case ch == ',':
 		start := l.pos
 		l.pos++
-		return token{Op: OpComma, Start: start, End: l.pos}
+		return Token{Op: OpComma, Start: start, End: l.pos}
 	}
 
 	l.pos++
-	return token{Op: OpEOF, Start: l.pos, End: l.pos}
+	return Token{Op: OpEOF, Start: l.pos, End: l.pos}
 }
 
 // readIdentOrKeyword checks if the word is AND / OR without allocating memory
@@ -208,7 +210,7 @@ func (l *lexer) nextToken() token {
 // - Logical: or, and, not
 // - ident: fieldname
 // - operation: between
-func (l *lexer) readKeyword() token {
+func (l *Lexer) readKeyword() Token {
 	start := l.pos
 	// read while are there letters, numbers or _
 	// it starts with a letter
@@ -235,29 +237,29 @@ func (l *lexer) readKeyword() token {
 	case 2:
 		// OR
 		if b[0]|0x20 == 'o' && b[1]|0x20 == 'r' {
-			return token{Op: OpOr, Start: start, End: l.pos}
+			return Token{Op: OpOr, Start: start, End: l.pos}
 		}
 		// IN
 		if b[0]|0x20 == 'i' && b[1]|0x20 == 'n' {
-			return token{Op: OpIn, Start: start, End: l.pos}
+			return Token{Op: OpIn, Start: start, End: l.pos}
 		}
 	case 3:
 		// AND
 		if b[0]|0x20 == 'a' && b[1]|0x20 == 'n' && b[2]|0x20 == 'd' {
-			return token{Op: OpAnd, Start: start, End: l.pos}
+			return Token{Op: OpAnd, Start: start, End: l.pos}
 		}
 		// NOT
 		if b[0]|0x20 == 'n' && b[1]|0x20 == 'o' && b[2]|0x20 == 't' {
-			return token{Op: OpNot, Start: start, End: l.pos}
+			return Token{Op: OpNot, Start: start, End: l.pos}
 		}
 	case 4:
 		// TRUE
 		if b[0]|0x20 == 't' && b[1]|0x20 == 'r' && b[2]|0x20 == 'u' && b[3]|0x20 == 'e' {
-			return token{Op: OpBool, Start: start, End: l.pos}
+			return Token{Op: OpBool, Start: start, End: l.pos}
 		}
 		// LIKE
 		if b[0]|0x20 == 'l' && b[1]|0x20 == 'i' && b[2]|0x20 == 'k' && b[3]|0x20 == 'e' {
-			return token{Op: OpLike, Start: start, End: l.pos}
+			return Token{Op: OpLike, Start: start, End: l.pos}
 		}
 	case 5:
 		// FALSE
@@ -266,7 +268,7 @@ func (l *lexer) readKeyword() token {
 			b[2]|0x20 == 'l' &&
 			b[3]|0x20 == 's' &&
 			b[4]|0x20 == 'e' {
-			return token{Op: OpBool, Start: start, End: l.pos}
+			return Token{Op: OpBool, Start: start, End: l.pos}
 		}
 		// FUZZY
 		if b[0]|0x20 == 'f' &&
@@ -274,7 +276,7 @@ func (l *lexer) readKeyword() token {
 			b[2]|0x20 == 'z' &&
 			b[3]|0x20 == 'z' &&
 			b[4]|0x20 == 'y' {
-			return token{Op: OpFuzzy, Start: start, End: l.pos}
+			return Token{Op: OpFuzzy, Start: start, End: l.pos}
 		}
 	case 6:
 		// SOUNDS
@@ -284,7 +286,7 @@ func (l *lexer) readKeyword() token {
 			b[3]|0x20 == 'n' &&
 			b[4]|0x20 == 'd' &&
 			b[5]|0x20 == 's' {
-			return token{Op: OpSounds, Start: start, End: l.pos}
+			return Token{Op: OpSounds, Start: start, End: l.pos}
 		}
 	case 7:
 		// BETWEEN
@@ -295,16 +297,16 @@ func (l *lexer) readKeyword() token {
 			b[4]|0x20 == 'e' &&
 			b[5]|0x20 == 'e' &&
 			b[6]|0x20 == 'n' {
-			return token{Op: OpBetween, Start: start, End: l.pos}
+			return Token{Op: OpBetween, Start: start, End: l.pos}
 		}
 	}
 
 	// If it didn't match any of the keywords, it's just a normal identifier
 	// return token{Type: tokIdent, Start: start, End: l.pos}
-	return token{Op: OpIdent, Start: start, End: l.pos}
+	return Token{Op: OpIdent, Start: start, End: l.pos}
 }
 
-func (l *lexer) readNumber() token {
+func (l *Lexer) readNumber() Token {
 	input := l.input
 	inputLen := len(input)
 	start := l.pos
@@ -335,7 +337,7 @@ func (l *lexer) readNumber() token {
 
 	// if no digits were found (e.g., input was just "-" or "."),
 	if !digitsFound {
-		return token{Op: OpUndefined, Start: start, End: l.pos}
+		return Token{Op: OpUndefined, Start: start, End: l.pos}
 	}
 
 	var op Op
@@ -346,10 +348,10 @@ func (l *lexer) readNumber() token {
 		op = OpNumberInt
 	}
 
-	return token{Op: op, Start: start, End: l.pos}
+	return Token{Op: op, Start: start, End: l.pos}
 }
 
-func (l *lexer) readString(quote byte) token {
+func (l *Lexer) readString(quote byte) Token {
 	l.pos++ // skip the opening quote
 	start := l.pos
 
@@ -380,7 +382,7 @@ func (l *lexer) readString(quote byte) token {
 
 	// input[start:end] will still contain the backslashes.
 	// the parser will "Unescape" the string
-	return token{Op: OpString, Start: start, End: end}
+	return Token{Op: OpString, Start: start, End: end}
 }
 
 func IsValidName(s string) error {
@@ -388,9 +390,9 @@ func IsValidName(s string) error {
 		return fmt.Errorf("empty input is not allowed")
 	}
 
-	lexer := lexer{input: s, pos: 0}
+	lexer := Lexer{input: s, pos: 0}
 
-	token := lexer.nextToken()
+	token := lexer.NextToken()
 	if token.Op != OpIdent {
 		return fmt.Errorf("invalid input: %q", s)
 	}

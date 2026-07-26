@@ -3,16 +3,16 @@ package mind
 import (
 	"testing"
 
-	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
-func createIndexMap() indexMap[User] {
-	indexMap := indexMap[User]{
-		index:  make(map[string]Index[User]),
-		allIDs: lidx.NewRawIDs[uint32](),
-	}
+func createIndexMap() IndexMap[User] {
+	indexMap := NewIndexMap[User](lidx.NewRawIDsFrom[uint32](0, 1, 2))
+
 	indexMap.index["name"] = NewSortedIndex((*User).Name)
 	indexMap.index["name"].Set(&User{name: "a"}, 0)
 	indexMap.index["name"].Set(&User{name: "b"}, 1)
@@ -28,118 +28,102 @@ func createIndexMap() indexMap[User] {
 func TestExpr_Trace(t *testing.T) {
 	indexMap := createIndexMap()
 
-	tracer := &Tracer{}
-	nameEq := TermExpr{Field: "name", Op: FOpEq, Value: "a"}
+	tracer := &query.Tracer{}
+	nameEq := query.TermExpr{Field: "name", Op: query.FOpEq, Value: "a"}
 	query := nameEq.Compile(tracer)
 
 	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
 	require.NoError(t, err)
-	assert.True(t, bs.Count() > 0)
-
-	// fmt.Println(tracer)
+	assert.Equal(t, 1, bs.Count())
+	assert.True(t, tracer.Duration > 0)
+	assert.Nil(t, tracer.Children)
+	assert.Equal(t, 1, tracer.Matches)
 }
 
-// func TestExpr_TraceAnd(t *testing.T) {
-// 	indexMap := createIndexMap()
-//
-// 	tracer := &Tracer{}
-// 	left := TermExpr{Field: "name", Op: FOpEq, Value: "b"}
-// 	right := TermExpr{Field: "price", Op: FOpEq, Value: 2.}
-// 	and := BinaryExpr{Ekind: ExprAnd, Left: left, Right: right}
-// 	query := and.Compile(tracer)
-//
-// 	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-// 	require.NoError(t, err)
-// 	assert.True(t, bs.Count() > 0)
-//
-// 	fmt.Println(tracer)
-// }
+func TestExpr_TraceAnd(t *testing.T) {
+	indexMap := createIndexMap()
 
-// func TestExpr_TraceOr(t *testing.T) {
-// 	indexMap := createIndexMap()
-//
-// 	tracer := &Tracer{}
-// 	left := TermExpr{Field: "name", Op: FOpEq, Value: "a"}
-// 	right := TermExpr{Field: "price", Op: FOpEq, Value: 2.}
-// 	or := BinaryExpr{Ekind: ExprOr, Left: left, Right: right}
-//
-// 	start := time.Now()
-// 	query := or.Compile(tracer)
-//
-// 	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-// 	fmt.Println("___", time.Since(start))
-// 	require.NoError(t, err)
-// 	assert.True(t, bs.Count() > 0)
-//
-// 	fmt.Println(tracer)
-// }
-//
-// func TestExpr_TraceAnd(t *testing.T) {
-// 	indexMap := createIndexMap()
-//
-// 	tracer := &Tracer{}
-// 	left := TermExpr{Field: "price", Op: FOpGe, Value: 1.}
-// 	right := TermExpr{Field: "price", Op: FOpLe, Value: 2.}
-// 	and := BinaryExpr{Ekind: ExprAnd, Left: left, Right: right}
-// 	query := and.Compile(tracer)
-//
-// 	s := time.Now()
-// 	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-// 	require.NoError(t, err)
-// 	assert.True(t, bs.Count() > 0)
-//
-// 	fmt.Println("**", time.Since(s))
-// 	fmt.Println(tracer)
-// }
-//
-// func TestExpr_TraceBetween(t *testing.T) {
-// 	indexMap := createIndexMap()
-//
-// 	tracer := &Tracer{}
-// 	left := TermExpr{Field: "price", Op: FOpGe, Value: 1.}
-// 	right := TermExpr{Field: "price", Op: FOpLe, Value: 2.}
-// 	and := BinaryExpr{Ekind: ExprAnd, Left: left, Right: right}
-// 	exp := optimize(and)
-// 	query := exp.Compile(tracer)
-//
-// 	s := time.Now()
-// 	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-// 	require.NoError(t, err)
-// 	assert.True(t, bs.Count() > 0)
-//
-// 	fmt.Println("**", time.Since(s))
-// 	fmt.Println(tracer)
-// }
-//
-// func TestExpr_TraceNot(t *testing.T) {
-// 	indexMap := createIndexMap()
-//
-// 	tracer := &Tracer{}
-// 	// RULE: NOT (A != B)  -->  A = B
-// 	child := TermExpr{Field: "name", Op: FOpNeq, Value: "a"}
-// 	not := NotExpr{Child: child}
-// 	exp := optimize(not)
-// 	query := exp.Compile(tracer)
-//
-// 	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-// 	require.NoError(t, err)
-// 	assert.True(t, bs.Count() > 0)
-//
-// 	fmt.Println(tracer)
-// }
-//
-// func TestExpr_TraceNotNoOptimize(t *testing.T) {
-// 	indexMap := createIndexMap()
-//
-// 	tracer := &Tracer{}
-// 	// RULE: NOT (A != B)  -->  A = B
-// 	child := TermExpr{Field: "name", Op: FOpNeq, Value: "a"}
-// 	not := NotExpr{Child: child}
-// 	query := not.Compile(tracer)
-//
-// 	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
-// 	require.NoError(t, err)
-// 	assert.True(t, bs.Count() > 0)
-//
-// 	fmt.Println(tracer)
-// }
+	tracer := &query.Tracer{}
+	left := query.TermExpr{Field: "name", Op: query.FOpEq, Value: "b"}
+	right := query.TermExpr{Field: "price", Op: query.FOpEq, Value: 2.}
+	and := query.AndExpr{Left: left, Right: right}
+	query := and.Compile(tracer)
+
+	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 1, bs.Count())
+	assert.True(t, tracer.Duration > 0)
+	assert.Equal(t, 2, len(tracer.Children))
+	assert.Equal(t, 1, tracer.Matches)
+}
+
+func TestExpr_TraceOr(t *testing.T) {
+	indexMap := createIndexMap()
+
+	tracer := &query.Tracer{}
+	left := query.TermExpr{Field: "name", Op: query.FOpEq, Value: "a"}
+	right := query.TermExpr{Field: "price", Op: query.FOpEq, Value: 2.}
+	or := query.OrExpr{Left: left, Right: right}
+
+	query := or.Compile(tracer)
+
+	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 2, bs.Count())
+	assert.True(t, tracer.Duration > 0)
+	assert.Equal(t, 2, len(tracer.Children))
+	assert.Equal(t, 2, tracer.Matches)
+}
+
+func TestExpr_TraceBetween(t *testing.T) {
+	indexMap := createIndexMap()
+
+	tracer := &query.Tracer{}
+	left := query.TermExpr{Field: "price", Op: query.FOpGe, Value: 1.}
+	right := query.TermExpr{Field: "price", Op: query.FOpLe, Value: 2.}
+	and := query.AndExpr{Left: left, Right: right}
+	exp := and.Optimize()
+	query := exp.Compile(tracer)
+
+	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 2, bs.Count())
+	assert.True(t, tracer.Duration > 0)
+	assert.Equal(t, 0, len(tracer.Children))
+	assert.Equal(t, 2, tracer.Matches)
+}
+
+func TestExpr_TraceNot(t *testing.T) {
+	indexMap := createIndexMap()
+
+	tracer := &query.Tracer{}
+	// RULE: NOT (A != B)  -->  A = B
+	child := query.TermExpr{Field: "name", Op: query.FOpNeq, Value: "a"}
+	not := query.NotExpr{Child: child}
+	exp := not.Optimize()
+	query := exp.Compile(tracer)
+
+	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 1, bs.Count())
+	assert.True(t, tracer.Duration > 0)
+	assert.Equal(t, 0, len(tracer.Children))
+	assert.Equal(t, 1, tracer.Matches)
+}
+
+func TestExpr_TraceNotNoOptimize(t *testing.T) {
+	indexMap := createIndexMap()
+
+	tracer := &query.Tracer{}
+	// RULE: NOT (A != B)  -->  A = B
+	child := query.TermExpr{Field: "name", Op: query.FOpNeq, Value: "a"}
+	not := query.NotExpr{Child: child}
+	query := not.Compile(tracer)
+
+	bs, _, err := query(indexMap.FilterByName, indexMap.allIDs)
+	require.NoError(t, err)
+	assert.Equal(t, 1, bs.Count())
+	assert.True(t, tracer.Duration > 0)
+	assert.Equal(t, 1, len(tracer.Children))
+	assert.Equal(t, 1, tracer.Matches)
+}

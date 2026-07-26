@@ -1,4 +1,4 @@
-package mind
+package query
 
 import (
 	"fmt"

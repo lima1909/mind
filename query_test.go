@@ -4,14 +4,15 @@ import (
 	"testing"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 	"github.com/stretchr/testify/assert"
 )
 
 func set[T any](idx Index[T], t T, r uint32)   { idx.Set(&t, r) }
 func unSet[T any](idx Index[T], t T, r uint32) { idx.UnSet(&t, r) }
 
-func fieldIndexMapFn[T any](mi Index[T]) FilterByName {
-	return func(fieldName string) (Filter, error) {
+func fieldIndexMapFn[T any](mi Index[T]) query.FilterByName {
+	return func(fieldName string) (query.Filter, error) {
 		if fieldName == "val" {
 			return mi, nil
 		}
@@ -85,8 +86,8 @@ func TestMapIndex_Get(t *testing.T) {
 	assert.True(t, bs.IsEmpty())
 
 	// invalid relation
-	_, _, err = mi.Match(nil, FOpGt, 1)
-	assert.ErrorIs(t, InvalidOperationError{MapIndexName, OpGt}, err)
+	_, _, err = mi.Match(nil, query.FOpGt, 1)
+	assert.ErrorIs(t, InvalidOperationError{MapIndexName, query.OpGt}, err)
 }
 
 func TestMapIndex_Query(t *testing.T) {
@@ -98,50 +99,50 @@ func TestMapIndex_Query(t *testing.T) {
 
 	fi := fieldIndexMapFn(mi)
 
-	result, canMutate, err := Eq("val", 3).Compile(nil)(fi, nil)
+	result, canMutate, err := query.Eq("val", 3).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{3, 5}, result.ToSlice())
 
 	// repeat the Eq with the same paramter, to check the result RawIDs is not changed
-	result, _, err = Eq("val", 3).Compile(nil)(fi, nil)
+	result, _, err = query.Eq("val", 3).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{3, 5}, result.ToSlice())
 
 	// not found
-	result, _, err = Eq("val", 99).Compile(nil)(fi, nil)
+	result, _, err = query.Eq("val", 99).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, result.Count())
 
 	// invalid field
-	result, _, err = Eq("bad", 1).Compile(nil)(fi, nil)
+	result, _, err = query.Eq("bad", 1).Compile(nil)(fi, nil)
 	assert.ErrorIs(t, InvalidNameError{"bad"}, err)
 	assert.Nil(t, result)
 
 	// OR
-	result, canMutate, err = Or(Or(Eq("val", 3), Eq("val", 42)), Eq("val", 1)).Compile(nil)(fi, nil)
+	result, canMutate, err = query.Or(query.Or(query.Eq("val", 3), query.Eq("val", 42)), query.Eq("val", 1)).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5, 42}, result.ToSlice())
 	// three ORs
-	result, canMutate, err = Or(Eq("val", 3), Eq("val", 1)).Compile(nil)(fi, nil)
+	result, canMutate, err = query.Or(query.Eq("val", 3), query.Eq("val", 1)).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5}, result.ToSlice())
 
 	// AND
-	result, canMutate, err = And(Eq("val", 3), Not(Eq("val", 3))).Compile(nil)(fi, lidx.NewRawIDsFrom[uint32](1, 3, 5, 42))
+	result, canMutate, err = query.And(query.Eq("val", 3), query.Not(query.Eq("val", 3))).Compile(nil)(fi, lidx.NewRawIDsFrom[uint32](1, 3, 5, 42))
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{}, result.ToSlice())
 	// three Ands
-	result, canMutate, err = And(And(Eq("val", 3), Eq("val", 3)), Eq("val", 3)).Compile(nil)(fi, nil)
+	result, canMutate, err = query.And(query.And(query.Eq("val", 3), query.Eq("val", 3)), query.Eq("val", 3)).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{3, 5}, result.ToSlice())
 
 	// combine OR and AND
-	result, canMutate, err = Or(Eq("val", 1), And(Eq("val", 3), Eq("val", 3))).Compile(nil)(fi, nil)
+	result, canMutate, err = query.Or(query.Eq("val", 1), query.And(query.Eq("val", 3), query.Eq("val", 3))).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5}, result.ToSlice())
@@ -167,13 +168,13 @@ func TestMapIndex_Query_Not(t *testing.T) {
 	allIDs := lidx.NewRawIDsFrom[uint32](1, 3, 5, 42)
 
 	// Not
-	result, canMutate, err := Not(Eq("val", 3)).Compile(nil)(fi, allIDs)
+	result, canMutate, err := query.Not(query.Eq("val", 3)).Compile(nil)(fi, allIDs)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
 
 	// NotEq
-	result, canMutate, err = NotEq("val", 3).Optimize().Compile(nil)(fi, allIDs)
+	result, canMutate, err = query.NotEq("val", 3).Optimize().Compile(nil)(fi, allIDs)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
@@ -199,13 +200,13 @@ func TestSortedIndex_Query_Not(t *testing.T) {
 	allIDs := lidx.NewRawIDsFrom[uint32](1, 3, 5, 42)
 
 	// Not
-	result, canMutate, err := Not(Eq("val", 3)).Compile(nil)(fi, allIDs)
+	result, canMutate, err := query.Not(query.Eq("val", 3)).Compile(nil)(fi, allIDs)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
 
 	// NotEq
-	result, canMutate, err = NotEq("val", 3).Optimize().Compile(nil)(fi, allIDs)
+	result, canMutate, err = query.NotEq("val", 3).Optimize().Compile(nil)(fi, allIDs)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
@@ -229,19 +230,19 @@ func TestMapIndex_Query_In(t *testing.T) {
 	fi := fieldIndexMapFn(mi)
 
 	// In empty
-	result, canMutate, err := In("val").Compile(nil)(fi, nil)
+	result, canMutate, err := query.In("val").Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{}, result.ToSlice())
 
 	// In one
-	result, canMutate, err = In("val", 1).Compile(nil)(fi, nil)
+	result, canMutate, err = query.In("val", 1).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{1}, result.ToSlice())
 
 	// In many
-	result, canMutate, err = In("val", 42, 1).Compile(nil)(fi, nil)
+	result, canMutate, err = query.In("val", 42, 1).Compile(nil)(fi, nil)
 	assert.NoError(t, err)
 	assert.True(t, canMutate)
 	assert.Equal(t, []uint32{1, 42}, result.ToSlice())
@@ -263,7 +264,7 @@ func TestMapIndex_QueryAll(t *testing.T) {
 	set(mi, 42, 42)
 
 	fi := fieldIndexMapFn(mi)
-	result, canMutate, err := All().Compile(nil)(fi, lidx.NewRawIDsFrom[uint32](1, 3, 5, 42))
+	result, canMutate, err := query.All().Compile(nil)(fi, lidx.NewRawIDsFrom[uint32](1, 3, 5, 42))
 	assert.NoError(t, err)
 	assert.False(t, canMutate)
 	assert.Equal(t, []uint32{1, 3, 5, 42}, result.ToSlice())

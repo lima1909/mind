@@ -4,6 +4,7 @@ import (
 	"iter"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 const (
@@ -106,11 +107,11 @@ func (fi *FuzzyIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
 }
 
 func (fi *FuzzyIndex[OBJ]) Equal(value any) (*lidx.RawIDs32, error) {
-	return nil, InvalidOperationError{FuzzyIndexName, OpEq}
+	return nil, InvalidOperationError{FuzzyIndexName, query.OpEq}
 }
 
-func (fi *FuzzyIndex[OBJ]) Match(_ *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
-	if op.Op != OpFuzzy {
+func (fi *FuzzyIndex[OBJ]) Match(_ *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+	if op.Op != query.OpFuzzy {
 		return nil, false, InvalidOperationError{FuzzyIndexName, op.Op}
 	}
 
@@ -121,8 +122,8 @@ func (fi *FuzzyIndex[OBJ]) Match(_ *lidx.RawIDs32, op FilterOp, value any) (*lid
 	return bkSearch(fi.root, s, defaultFuzzyMaxDist), true, nil
 }
 
-func (fi *FuzzyIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
-	if op.Op != OpFuzzy {
+func (fi *FuzzyIndex[OBJ]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+	if op.Op != query.OpFuzzy {
 		return nil, false, InvalidOperationError{FuzzyIndexName, op.Op}
 	}
 

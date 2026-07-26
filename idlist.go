@@ -7,9 +7,8 @@ import (
 	"sync"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
-
-const IDIndexFieldName = "id"
 
 // IDList is a fast in-memory store, which is extended by Indices for fast finding Items.
 //
@@ -18,7 +17,7 @@ const IDIndexFieldName = "id"
 type IDList[T any, ID comparable] struct {
 	list     FreeList[T]
 	idIndex  idIndex[T, ID]
-	indexMap indexMap[T]
+	indexMap IndexMap[T]
 
 	lock sync.RWMutex
 }
@@ -28,7 +27,7 @@ func NewIDList[T any, ID comparable](fieldIDGetFn func(*T) ID) *IDList[T, ID] {
 	return &IDList[T, ID]{
 		list:     NewFreeList[T](),
 		idIndex:  newIDMapIndex(fieldIDGetFn),
-		indexMap: newIndexMap[T](),
+		indexMap: NewIndexMap[T](lidx.NewRawIDs[uint32]()),
 	}
 }
 
@@ -38,11 +37,11 @@ func NewIDList[T any, ID comparable](fieldIDGetFn func(*T) ID) *IDList[T, ID] {
 //
 // Hint: empty field-name or the field-name ID are not allowed!
 func (l *IDList[T, ID]) CreateIndex(fieldName string, index Index[T]) error {
-	if strings.ToLower(fieldName) == IDIndexFieldName {
+	if strings.ToLower(fieldName) == query.IDIndexFieldName {
 		return fmt.Errorf("ID is a reserved field name")
 	}
 
-	if err := IsValidName(fieldName); err != nil {
+	if err := query.IsValidName(fieldName); err != nil {
 		return err
 	}
 
@@ -235,21 +234,21 @@ func (l *IDList[T, ID]) QueryStr(queryStr string, opts ...Opion) QHandle[T] {
 }
 
 // Query execute the given Query.
-func (l *IDList[T, ID]) Query(query Expr, opts ...Opion) QHandle[T] {
+func (l *IDList[T, ID]) Query(query query.Expr, opts ...Opion) QHandle[T] {
 	return NewQHandleFromExpr(l.execQuery, query, opts...)
 }
 
 // implements the QHandle interface
 // -----------------------------------------
-func (l *IDList[T, ID]) filterByName(fieldName string) (Filter, error) {
-	if strings.ToLower(fieldName) == IDIndexFieldName {
+func (l *IDList[T, ID]) filterByName(fieldName string) (query.Filter, error) {
+	if strings.ToLower(fieldName) == query.IDIndexFieldName {
 		return l.idIndex, nil
 	}
 
 	return l.indexMap.FilterByName(fieldName)
 }
 
-func (l *IDList[T, ID]) execQuery(query Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
+func (l *IDList[T, ID]) execQuery(query query.Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 

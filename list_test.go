@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lima1909/mind/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,35 +34,35 @@ func TestList_Base(t *testing.T) {
 	_, found = il.list.Get(99)
 	assert.False(t, found)
 
-	qr := il.Query(Eq("name", "Opel"))
+	qr := il.Query(query.Eq("name", "Opel"))
 	count, err := qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, count)
 
 	// with cast uint8
-	qr = il.Query(Eq("age", uint8(5)))
+	qr = il.Query(query.Eq("age", uint8(5)))
 	count, err = qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, count)
 
 	// without cast
-	qr = il.Query(Eq("age", 5))
+	qr = il.Query(query.Eq("age", 5))
 	count, err = qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, count)
 
-	qr = il.Query(Eq("isnew", false))
+	qr = il.Query(query.Eq("isnew", false))
 	count, err = qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 3, count)
 
-	qr = il.Query(Eq("isnew", true))
+	qr = il.Query(query.Eq("isnew", true))
 	count, err = qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, count)
 
 	// wrong field name, expected: age, got wrong
-	qr = il.Query(Eq("wrong", 5))
+	qr = il.Query(query.Eq("wrong", 5))
 	_, err = qr.Count()
 	assert.Error(t, err)
 }
@@ -92,7 +93,7 @@ func TestList_RemoveIndex(t *testing.T) {
 	assert.Equal(t, 1, len(il.indexMap.index))
 
 	// check the filter/index
-	qr := il.Query(Eq("age", uint8(22)))
+	qr := il.Query(query.Eq("age", uint8(22)))
 	count, err := qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, count)
@@ -103,7 +104,7 @@ func TestList_RemoveIndex(t *testing.T) {
 
 	il.RemoveIndex("age")
 	assert.Equal(t, 0, len(il.indexMap.index))
-	qr = il.Query(Eq("age", uint8(22)))
+	qr = il.Query(query.Eq("age", uint8(22)))
 	_, err = qr.Values()
 	assert.ErrorIs(t, InvalidNameError{"age"}, err)
 	// the index is removed, but not the data
@@ -121,12 +122,12 @@ func TestList_QueryResult(t *testing.T) {
 	il.Insert(car{name: "Dacia", age: 22})
 	il.Insert(car{name: "Audi", age: 22})
 
-	qr := il.Query(Eq("age", uint8(22)))
+	qr := il.Query(query.Eq("age", uint8(22)))
 	count, err := qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 4, count)
 
-	qr = il.Query(Eq("age", uint8(22)))
+	qr = il.Query(query.Eq("age", uint8(22)))
 	result, err := qr.Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
@@ -178,7 +179,7 @@ func TestList_Remove(t *testing.T) {
 	il.Insert(car{name: "Audi", age: 22})
 	assert.Equal(t, 5, il.Count())
 
-	qr := il.Query(All())
+	qr := il.Query(query.All())
 	count, err := qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 5, count)
@@ -189,7 +190,7 @@ func TestList_Remove(t *testing.T) {
 	assert.Equal(t, 4, il.Count())
 
 	// try to find item on index 3
-	qr = il.Query(And(Eq("name", "Dacia"), Eq("age", uint8(22))))
+	qr = il.Query(query.And(query.Eq("name", "Dacia"), query.Eq("age", uint8(22))))
 	count, err = qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, count)
@@ -197,13 +198,13 @@ func TestList_Remove(t *testing.T) {
 	removed = removeByIdxNoLock(il, 99)
 	assert.False(t, removed)
 
-	qr = il.Query(Eq("name", "Dacia"))
+	qr = il.Query(query.Eq("name", "Dacia"))
 	result, err := qr.Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result))
 	assert.Equal(t, []car{{name: "Dacia", age: 5, isNew: true}}, result)
 
-	qr = il.Query(Eq("age", uint8(22)))
+	qr = il.Query(query.Eq("age", uint8(22)))
 	count, err = qr.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 3, count)
@@ -216,14 +217,14 @@ func TestList_CreateIndex(t *testing.T) {
 	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
 	il.Insert(car{name: "Dacia", age: 22})
 
-	_, err := il.Query(Eq("name", "Opel")).Values()
+	_, err := il.Query(query.Eq("name", "Opel")).Values()
 	assert.Error(t, err)
 	assert.Equal(t, "could not found index for field name: name", err.Error())
 
 	// create Index for name
 	err = il.CreateIndex("name", NewMapIndex((*car).Name))
 	assert.NoError(t, err)
-	result, err := il.Query(Eq("name", "Opel")).Values()
+	result, err := il.Query(query.Eq("name", "Opel")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result))
 	assert.Equal(t, []car{{name: "Opel", age: 22}}, result)
@@ -241,12 +242,12 @@ func TestList_CreateIndexVarious(t *testing.T) {
 	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
 	il.Insert(car{name: "Dacia", age: 22})
 
-	result, err := il.Query(Eq("name", "Opel")).Values()
+	result, err := il.Query(query.Eq("name", "Opel")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result))
 	assert.Equal(t, []car{{name: "Opel", age: 12}}, result)
 
-	result, err = il.Query(Lt("age", uint8(13))).Values()
+	result, err = il.Query(query.Lt("age", uint8(13))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(result))
 	assert.Equal(t, []car{
@@ -255,7 +256,7 @@ func TestList_CreateIndexVarious(t *testing.T) {
 		{name: "Mercedes", age: 5, isNew: true},
 	}, result)
 
-	result, err = il.Query(Le("age", uint8(12))).Values()
+	result, err = il.Query(query.Le("age", uint8(12))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 3, len(result))
 	assert.Equal(t, []car{
@@ -264,7 +265,7 @@ func TestList_CreateIndexVarious(t *testing.T) {
 		{name: "Mercedes", age: 5, isNew: true},
 	}, result)
 
-	result, err = il.Query(Gt("age", uint8(11))).Values()
+	result, err = il.Query(query.Gt("age", uint8(11))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result))
 	assert.Equal(t, []car{
@@ -272,7 +273,7 @@ func TestList_CreateIndexVarious(t *testing.T) {
 		{name: "Dacia", age: 22},
 	}, result)
 
-	result, err = il.Query(Ge("age", uint8(12))).Values()
+	result, err = il.Query(query.Ge("age", uint8(12))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result))
 	assert.Equal(t, []car{
@@ -291,7 +292,7 @@ func TestList_StringItem(t *testing.T) {
 	il.Insert("Mercedes")
 	il.Insert("Dacia")
 
-	result, err := il.Query(Eq("val", "Dacia")).Values()
+	result, err := il.Query(query.Eq("val", "Dacia")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result))
 	assert.Equal(t, []string{"Dacia", "Dacia"}, result)
@@ -307,13 +308,13 @@ func TestList_StringPtrItemWithNil(t *testing.T) {
 	il.Insert(nil)
 	il.Insert(&dacia)
 
-	result, err := il.Query(Eq("val", &dacia)).Values()
+	result, err := il.Query(query.Eq("val", &dacia)).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result))
 	assert.Equal(t, []*string{&dacia, &dacia}, result)
 
 	// Eq = nil
-	result, err = il.Query(Eq("val", (*string)(nil))).Values()
+	result, err = il.Query(query.Eq("val", (*string)(nil))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result))
 	assert.Equal(t, []*string{nil}, result)

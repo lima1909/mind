@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 const TrigramIndexName = "TrigramIndex"
@@ -526,12 +527,12 @@ func (ti *TrigramIndex[OBJ]) HasChanged(oldItem, newItem *OBJ) bool {
 }
 
 func (ti *TrigramIndex[OBJ]) Equal(value any) (*lidx.RawIDs32, error) {
-	return nil, InvalidOperationError{TrigramIndexName, OpEq}
+	return nil, InvalidOperationError{TrigramIndexName, query.OpEq}
 }
 
-func (ti *TrigramIndex[OBJ]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (ti *TrigramIndex[OBJ]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	// only support for Like match
-	if op.Op != OpLike {
+	if op.Op != query.OpLike {
 		return nil, false, InvalidOperationError{TrigramIndexName, op.Op}
 	}
 
@@ -544,7 +545,7 @@ func (ti *TrigramIndex[OBJ]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any
 	return result, canMutate, nil
 }
 
-func (ti *TrigramIndex[OBJ]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (ti *TrigramIndex[OBJ]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{TrigramIndexName, op.Op}
 }
 

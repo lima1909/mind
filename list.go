@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 // List is a fast in-memory store, which is extended by Indices for fast finding Items.
@@ -14,7 +15,7 @@ import (
 // will corrupt the database indexes. Always use Update() to modify data.
 type List[T any] struct {
 	list     FreeList[T]
-	indexMap indexMap[T]
+	indexMap IndexMap[T]
 
 	lock sync.RWMutex
 }
@@ -23,7 +24,7 @@ type List[T any] struct {
 func NewList[T any]() *List[T] {
 	return &List[T]{
 		list:     NewFreeList[T](),
-		indexMap: newIndexMap[T](),
+		indexMap: NewIndexMap[T](lidx.NewRawIDs[uint32]()),
 	}
 }
 
@@ -33,7 +34,7 @@ func NewList[T any]() *List[T] {
 //
 // Hint: empty field-name are not allowed!
 func (l *List[T]) CreateIndex(fieldName string, index Index[T]) error {
-	if err := IsValidName(fieldName); err != nil {
+	if err := query.IsValidName(fieldName); err != nil {
 		return err
 	}
 
@@ -157,13 +158,13 @@ func (l *List[T]) QueryStr(queryStr string, opts ...Opion) QHandle[T] {
 }
 
 // Query execute the given Query.
-func (l *List[T]) Query(query Expr, opts ...Opion) QHandle[T] {
+func (l *List[T]) Query(query query.Expr, opts ...Opion) QHandle[T] {
 	return NewQHandleFromExpr(l.execQuery, query, opts...)
 }
 
 // implements the QHandle interface
 // ------------------------------------------
-func (l *List[T]) execQuery(query Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
+func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 

@@ -3,6 +3,8 @@ package mind
 import (
 	"fmt"
 	"reflect"
+
+	"github.com/lima1909/mind/query"
 )
 
 type InvalidNameError struct{ FieldName string }
@@ -19,7 +21,7 @@ func (e InvalidValueTypeError[V]) Error() string {
 
 type InvalidOperationError struct {
 	IndexName string
-	Op        Op
+	Op        query.Op
 }
 
 func (e InvalidOperationError) Error() string {

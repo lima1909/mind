@@ -72,6 +72,7 @@ import (
 	"fmt"
 
 	"github.com/lima1909/mind"
+	"github.com/lima1909/mind/query"
 )
 
 type Car struct {
@@ -106,14 +107,11 @@ func main() {
 	l.Insert(Car{name: "Mercedes", age: 5})
 	l.Insert(Car{name: "Dacia", age: 22, tags: []string{"blue", "old"}})
 
-	t := &mind.Tracer{}
-	values, err := l.QueryStr(
+	t := &query.Tracer{}
+	values, _ := l.QueryStr(
 		`(name = "Opel" or name = "Dacia") and age >= 2 and tag = "old"`,
 		mind.WithTracer(t),
 	).Values()
-	if err != nil {
-		panic(err)
-	}
 
 	fmt.Println(values)
 	// Output:
@@ -143,6 +141,7 @@ import (
 	"fmt"
 
 	"github.com/lima1909/mind"
+	"github.com/lima1909/mind/query"
 )
 
 type Car struct {
@@ -179,9 +178,13 @@ func main() {
 	// Output:
 	// true
 
-	t := &mind.Tracer{}
-	result := l.Query(mind.Or(mind.Eq("name", "Opel"), mind.Lt("age", 10)), mind.WithTracer(t))
-	fmt.Println(result.Values())
+	t := &query.Tracer{}
+	values, _ := l.Query(
+		query.Or(query.Eq("name", "Opel"), query.Lt("age", 10)), 
+		mind.WithTracer(t),
+	).Values()
+
+	fmt.Println(values)
 	// Output:
 	// [{1 Dacia 2} {2 Opel 12} {3 Mercedes 5}]
 

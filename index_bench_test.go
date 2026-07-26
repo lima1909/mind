@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 	"github.com/stretchr/testify/require"
 )
 
@@ -118,7 +119,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"range_<40",
 			func() int {
-				count, err := l.Query(Lt("range", 40)).Count()
+				count, err := l.Query(query.Lt("range", 40)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -127,7 +128,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"range_>60",
 			func() int {
-				count, err := l.Query(Gt("range", 60)).Count()
+				count, err := l.Query(query.Gt("range", 60)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -136,7 +137,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"range_>40<60",
 			func() int {
-				count, err := l.Query(Between("range", 40, 60)).Count()
+				count, err := l.Query(query.Between("range", 40, 60)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -147,7 +148,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"sorted_<40",
 			func() int {
-				count, err := l.Query(Lt("sorted", 40)).Count()
+				count, err := l.Query(query.Lt("sorted", 40)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -156,7 +157,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"sorted_>60",
 			func() int {
-				count, err := l.Query(Gt("sorted", 60)).Count()
+				count, err := l.Query(query.Gt("sorted", 60)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -165,7 +166,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"sorted_>40<60",
 			func() int {
-				count, err := l.Query(Between("sorted", 40, 60)).Count()
+				count, err := l.Query(query.Between("sorted", 40, 60)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -176,7 +177,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"fenwick_<40",
 			func() int {
-				count, err := l.Query(Lt("fenwick", 40)).Count()
+				count, err := l.Query(query.Lt("fenwick", 40)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -185,7 +186,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"fenwick_>60",
 			func() int {
-				count, err := l.Query(Gt("fenwick", 60)).Count()
+				count, err := l.Query(query.Gt("fenwick", 60)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -194,7 +195,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"fenwick_>40<60",
 			func() int {
-				count, err := l.Query(Between("fenwick", 40, 60)).Count()
+				count, err := l.Query(query.Between("fenwick", 40, 60)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -205,7 +206,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"rangeenc_<40",
 			func() int {
-				count, err := l.Query(Lt("rangeenc", 40)).Count()
+				count, err := l.Query(query.Lt("rangeenc", 40)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -214,7 +215,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"rangeenc_>60",
 			func() int {
-				count, err := l.Query(Gt("rangeenc", 60)).Count()
+				count, err := l.Query(query.Gt("rangeenc", 60)).Count()
 				require.NoError(b, err)
 				return count
 			},
@@ -223,7 +224,7 @@ func BenchmarkRanges(b *testing.B) {
 		{
 			"rangeenc_>40<60",
 			func() int {
-				count, err := l.Query(Between("rangeenc", 40, 60)).Count()
+				count, err := l.Query(query.Between("rangeenc", 40, 60)).Count()
 				require.NoError(b, err)
 				return count
 			},

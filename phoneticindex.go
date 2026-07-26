@@ -4,6 +4,7 @@ import (
 	"iter"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 const PhoneticIndexName = "PhoneticIndex"
@@ -84,12 +85,12 @@ func (pi *PhoneticIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 }
 
 func (pi *PhoneticIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
-	return nil, InvalidOperationError{PhoneticIndexName, OpEq}
+	return nil, InvalidOperationError{PhoneticIndexName, query.OpEq}
 }
 
-func (pi *PhoneticIndex[OBJ, H]) Match(_ *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (pi *PhoneticIndex[OBJ, H]) Match(_ *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	// only support for Sounds match
-	if op.Op != OpSounds {
+	if op.Op != query.OpSounds {
 		return nil, false, InvalidOperationError{PhoneticIndexName, op.Op}
 	}
 
@@ -105,7 +106,7 @@ func (pi *PhoneticIndex[OBJ, H]) Match(_ *lidx.RawIDs32, op FilterOp, value any)
 	return ids, false, nil
 }
 
-func (pi *PhoneticIndex[OBJ, H]) MatchMany(op FilterOp, _ ...any) (*lidx.RawIDs32, bool, error) {
+func (pi *PhoneticIndex[OBJ, H]) MatchMany(op query.FilterOp, _ ...any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{PhoneticIndexName, op.Op}
 }
 

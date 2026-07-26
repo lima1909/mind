@@ -1,6 +1,10 @@
-package mind
+package query
 
-import "github.com/lima1909/mind/lidx"
+import (
+	"github.com/lima1909/mind/lidx"
+)
+
+const IDIndexFieldName = "id"
 
 // Query is a filter function, find the correct Index an execute the Index.Get method
 // and returns a BitSet pointer
@@ -127,7 +131,9 @@ func In(fieldName string, vals ...any) Expr { return TermManyExpr{fieldName, FOp
 
 // Between
 // Between("age", 21, 42) => age >= 21 Or age <= 42
-func Between(fieldName string, vals ...any) Expr { return TermManyExpr{fieldName, FOpBetween, vals} }
+func Between(fieldName string, vals ...any) Expr {
+	return TermManyExpr{fieldName, FOpBetween, vals}
+}
 
 // NotEq is a shorcut for Not(Eq(...)) and means for example age != 42
 func NotEq(fieldName string, val any) Expr { return TermExpr{fieldName, FOpNeq, val} }

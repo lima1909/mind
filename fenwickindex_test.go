@@ -3,8 +3,10 @@ package mind
 import (
 	"testing"
 
-	"github.com/lima1909/mind/lidx"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 func TestFenwickIndex_Base(t *testing.T) {
@@ -20,63 +22,63 @@ func TestFenwickIndex_Base(t *testing.T) {
 	allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 4, 5, 6)
 
 	t.Run("Operation: OpLe (<=)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpLe}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpLe}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLe}, -20)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLe}, -20)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLe}, 20)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLe}, 20)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3, 4, 5, 6}, res.ToSlice())
 	})
 
 	t.Run("Operation: OpLt (<)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpLt}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpLt}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLt}, -10)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLt}, -10)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 	})
 
 	t.Run("Operation: OpGt (>)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpGt}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpGt}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{4, 5, 6}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpGt}, -15)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpGt}, -15)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3, 4, 5, 6}, res.ToSlice())
 	})
 
 	t.Run("Operation: OpGe (>=)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpGe}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpGe}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{2, 3, 4, 5, 6}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpGe}, 15)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpGe}, 15)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 	})
 
 	t.Run("Operation: OpBetween", func(t *testing.T) {
-		res, _, err := idx.MatchMany(FilterOp{Op: OpBetween}, -10, -5)
+		res, _, err := idx.MatchMany(query.FilterOp{Op: query.OpBetween}, -10, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3}, res.ToSlice())
 
-		res, _, err = idx.MatchMany(FilterOp{Op: OpBetween}, -5, 5)
+		res, _, err = idx.MatchMany(query.FilterOp{Op: query.OpBetween}, -5, 5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{2, 3, 4, 5}, res.ToSlice())
 
-		res, _, err = idx.MatchMany(FilterOp{Op: OpBetween}, 5, -5)
+		res, _, err = idx.MatchMany(query.FilterOp{Op: query.OpBetween}, 5, -5)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 
-		res, _, err = idx.MatchMany(FilterOp{Op: OpBetween}, -50, -5)
+		res, _, err = idx.MatchMany(query.FilterOp{Op: query.OpBetween}, -50, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3}, res.ToSlice())
 	})
@@ -95,75 +97,75 @@ func TestFenwickIndex_MinMax_negative(t *testing.T) {
 	allIDs := lidx.NewRawIDsFrom[uint32](1, 2, 3, 4, 5)
 
 	t.Run("Operation: OpLe (<=)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpLe}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpLe}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3, 5}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLe}, -200)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLe}, -200)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLe}, -1)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLe}, -1)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3, 4, 5}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLe}, 100)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLe}, 100)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3, 4, 5}, res.ToSlice())
 	})
 
 	t.Run("Operation: OpLt (<)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpLt}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpLt}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 5}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLt}, -100)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLt}, -100)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpLt}, 100)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpLt}, 100)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3, 4, 5}, res.ToSlice())
 	})
 
 	t.Run("Operation: OpGt (>)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpGt}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpGt}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{4}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpGt}, -100)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpGt}, -100)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3, 4}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpGt}, 0)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpGt}, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{}, res.ToSlice())
 	})
 
 	t.Run("Operation: OpGe (>=)", func(t *testing.T) {
-		res, _, err := idx.Match(allIDs, FilterOp{Op: OpGe}, -5)
+		res, _, err := idx.Match(allIDs, query.FilterOp{Op: query.OpGe}, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{2, 3, 4}, res.ToSlice())
 
-		res, _, err = idx.Match(allIDs, FilterOp{Op: OpGe}, 15)
+		res, _, err = idx.Match(allIDs, query.FilterOp{Op: query.OpGe}, 15)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 	})
 
 	t.Run("Operation: OpBetween", func(t *testing.T) {
-		res, _, err := idx.MatchMany(FilterOp{Op: OpBetween}, -10, -5)
+		res, _, err := idx.MatchMany(query.FilterOp{Op: query.OpBetween}, -10, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3}, res.ToSlice())
 
-		res, _, err = idx.MatchMany(FilterOp{Op: OpBetween}, -5, 5)
+		res, _, err = idx.MatchMany(query.FilterOp{Op: query.OpBetween}, -5, 5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{2, 3, 4}, res.ToSlice())
 
-		res, _, err = idx.MatchMany(FilterOp{Op: OpBetween}, 5, -5)
+		res, _, err = idx.MatchMany(query.FilterOp{Op: query.OpBetween}, 5, -5)
 		assert.NoError(t, err)
 		assert.True(t, res.IsEmpty())
 
-		res, _, err = idx.MatchMany(FilterOp{Op: OpBetween}, -50, -5)
+		res, _, err = idx.MatchMany(query.FilterOp{Op: query.OpBetween}, -50, -5)
 		assert.NoError(t, err)
 		assert.Equal(t, []uint32{1, 2, 3}, res.ToSlice())
 	})

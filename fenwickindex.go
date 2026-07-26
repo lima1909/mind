@@ -4,6 +4,7 @@ import (
 	"iter"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
 const FenwickIndexName = "FenwickIndex"
@@ -118,10 +119,10 @@ func (fx *FenwickIndex[OBJ, V]) prefixUnion(shiftedV int) *lidx.RawIDs32 {
 }
 
 func (fx *FenwickIndex[OBJ, V]) Equal(value any) (*lidx.RawIDs32, error) {
-	return nil, InvalidOperationError{FenwickIndexName, OpEq}
+	return nil, InvalidOperationError{FenwickIndexName, query.OpEq}
 }
 
-func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[V]{value}
@@ -129,7 +130,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op FilterOp, value 
 	iv := int(v)
 
 	switch op.Op {
-	case OpLe:
+	case query.OpLe:
 		if iv < fx.minVal {
 			return lidx.NewRawIDs[uint32](), true, nil
 		}
@@ -138,7 +139,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op FilterOp, value 
 		}
 		return fx.prefixUnion(fx.shift(iv)), true, nil
 
-	case OpLt:
+	case query.OpLt:
 		if iv <= fx.minVal {
 			return lidx.NewRawIDs[uint32](), true, nil
 		}
@@ -147,7 +148,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op FilterOp, value 
 		}
 		return fx.prefixUnion(fx.shift(iv) - 1), true, nil
 
-	case OpGt:
+	case query.OpGt:
 		if iv >= fx.maxVal {
 			return lidx.NewRawIDs[uint32](), true, nil
 		}
@@ -158,7 +159,7 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op FilterOp, value 
 		result.AndNot(fx.prefixUnion(fx.shift(iv)))
 		return result, true, nil
 
-	case OpGe:
+	case query.OpGe:
 		if iv > fx.maxVal {
 			return lidx.NewRawIDs[uint32](), true, nil
 		}
@@ -174,9 +175,9 @@ func (fx *FenwickIndex[OBJ, V]) Match(allIDs *lidx.RawIDs32, op FilterOp, value 
 	}
 }
 
-func (fx *FenwickIndex[OBJ, V]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (fx *FenwickIndex[OBJ, V]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
-	case OpBetween:
+	case query.OpBetween:
 		if len(values) != 2 {
 			return nil, false, InvalidArgsLenError{Defined: "2", Got: len(values)}
 		}

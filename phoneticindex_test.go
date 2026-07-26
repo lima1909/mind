@@ -3,6 +3,7 @@ package mind
 import (
 	"testing"
 
+	"github.com/lima1909/mind/query"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -271,23 +272,23 @@ func TestPhoneticIndex_SoundsLike(t *testing.T) {
 	}
 
 	// Meier → "67": should find indices 0-3
-	ids, canMut, err := idx.Match(nil, FOpSounds, "Meier")
+	ids, canMut, err := idx.Match(nil, query.FOpSounds, "Meier")
 	assert.NoError(t, err)
 	assert.False(t, canMut)
 	assert.Equal(t, []uint32{0, 1, 2, 3}, ids.ToSlice())
 
 	// Schmidt → "862": should find 4 and 5
-	ids, _, err = idx.Match(nil, FOpSounds, "Schmidt")
+	ids, _, err = idx.Match(nil, query.FOpSounds, "Schmidt")
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{4, 5}, ids.ToSlice())
 
 	// Müller / Mueller → "657": should find 7 and 8
-	ids, _, err = idx.Match(nil, FOpSounds, "Müller")
+	ids, _, err = idx.Match(nil, query.FOpSounds, "Müller")
 	assert.NoError(t, err)
 	assert.Equal(t, []uint32{7, 8}, ids.ToSlice())
 
 	// No match
-	ids, _, err = idx.Match(nil, FOpSounds, "Zzzz")
+	ids, _, err = idx.Match(nil, query.FOpSounds, "Zzzz")
 	assert.NoError(t, err)
 	assert.Equal(t, 0, ids.Count())
 }
@@ -301,18 +302,18 @@ func TestPhoneticIndex_UnSet(t *testing.T) {
 	idx.Set(&meier, 0)
 	idx.Set(&meyer, 1)
 
-	ids, _, _ := idx.Match(nil, FOpSounds, "Meier")
+	ids, _, _ := idx.Match(nil, query.FOpSounds, "Meier")
 	assert.Equal(t, []uint32{0, 1}, ids.ToSlice())
 
 	idx.UnSet(&meier, 0)
-	ids, _, _ = idx.Match(nil, FOpSounds, "Meier")
+	ids, _, _ = idx.Match(nil, query.FOpSounds, "Meier")
 	assert.Equal(t, []uint32{1}, ids.ToSlice())
 }
 
 func TestPhoneticIndex_InvalidOp(t *testing.T) {
 	type Person struct{ Name string }
 	idx := NewPhoneticIndex(func(p *Person) string { return p.Name })
-	_, _, err := idx.Match(nil, FOpLike, "x")
+	_, _, err := idx.Match(nil, query.FOpLike, "x")
 	assert.Error(t, err)
 }
 
@@ -327,11 +328,11 @@ func TestPhoneticIndex_WithList(t *testing.T) {
 	l.Insert("Schmidt")
 
 	// All four Meier-variants should be found via any of the spellings.
-	result, err := l.Query(Sounds("name", "Meier")).Values()
+	result, err := l.Query(query.Sounds("name", "Meier")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, 4, len(result))
 
-	result, err = l.Query(Sounds("name", "Schmitt")).Values()
+	result, err = l.Query(query.Sounds("name", "Schmitt")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Schmidt"}, result)
 }
@@ -348,7 +349,7 @@ func TestGermanPhoneticIndex_ParseQuery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Müller", "Mueller"}, result)
 
-	result, err = l.Query(Sounds("name", "'Müller'")).Values()
+	result, err = l.Query(query.Sounds("name", "'Müller'")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Müller", "Mueller"}, result)
 }
@@ -369,11 +370,11 @@ func TestPhoneticIndex_BulkSet(t *testing.T) {
 		}
 	})
 
-	ids, _, err := idx.Match(nil, FOpSounds, "Meier")
+	ids, _, err := idx.Match(nil, query.FOpSounds, "Meier")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, ids.Count()) // Meier + Meyer
 
-	ids, _, err = idx.Match(nil, FOpSounds, "Mueller")
+	ids, _, err = idx.Match(nil, query.FOpSounds, "Mueller")
 	assert.NoError(t, err)
 	assert.Equal(t, 2, ids.Count()) // Müller + Mueller
 }

@@ -1,4 +1,4 @@
-package mind
+package query
 
 import (
 	"fmt"
@@ -48,8 +48,8 @@ func TestLexer_OneOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			lex := lexer{input: tt.query, pos: 0}
-			lexerOpen := lex.nextToken().Op
+			lex := Lexer{input: tt.query, pos: 0}
+			lexerOpen := lex.NextToken().Op
 			assert.Equal(
 				t,
 				tt.expected,
@@ -193,9 +193,9 @@ func TestLexer_ManyOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			lex := lexer{input: tt.query, pos: 0}
+			lex := Lexer{input: tt.query, pos: 0}
 			for _, Open := range tt.expected {
-				lexerOpen := lex.nextToken().Op
+				lexerOpen := lex.NextToken().Op
 				assert.Equal(
 					t,
 					Open,
@@ -221,9 +221,9 @@ func TestLexer_Invalid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.query, func(t *testing.T) {
-			lex := lexer{input: tt.query, pos: 0}
+			lex := Lexer{input: tt.query, pos: 0}
 			for _, Open := range tt.expected {
-				lexerOpen := lex.nextToken().Op
+				lexerOpen := lex.NextToken().Op
 				assert.Equal(
 					t,
 					Open,

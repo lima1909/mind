@@ -6,23 +6,24 @@ import (
 	"sync"
 
 	"github.com/lima1909/mind/lidx"
+	"github.com/lima1909/mind/query"
 )
 
-// indexMap maps a given field name to an Index
-type indexMap[OBJ any] struct {
+// IndexMap maps a given field name to an Index
+type IndexMap[OBJ any] struct {
 	index  map[string]Index[OBJ]
 	allIDs *lidx.RawIDs32
 }
 
-func newIndexMap[OBJ any]() indexMap[OBJ] {
-	return indexMap[OBJ]{
+func NewIndexMap[OBJ any](allIDs *lidx.RawIDs32) IndexMap[OBJ] {
+	return IndexMap[OBJ]{
 		index:  make(map[string]Index[OBJ]),
-		allIDs: lidx.NewRawIDs[uint32](),
+		allIDs: allIDs,
 	}
 }
 
 // FilterByName finds the Filter by a given field-name
-func (i indexMap[OBJ]) FilterByName(fieldName string) (Filter, error) {
+func (i IndexMap[OBJ]) FilterByName(fieldName string) (query.Filter, error) {
 	if idx, found := i.index[fieldName]; found {
 		return idx, nil
 	}
@@ -31,7 +32,7 @@ func (i indexMap[OBJ]) FilterByName(fieldName string) (Filter, error) {
 }
 
 // insert to all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ]) insert(obj *OBJ, idx int) {
+func (i IndexMap[OBJ]) insert(obj *OBJ, idx int) {
 	uidx := uint32(idx)
 	i.allIDs.Set(uidx)
 
@@ -41,7 +42,7 @@ func (i indexMap[OBJ]) insert(obj *OBJ, idx int) {
 }
 
 // bulkInsert creates a go routine for every creating Index
-func (i indexMap[OBJ]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
+func (i IndexMap[OBJ]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
@@ -60,7 +61,7 @@ func (i indexMap[OBJ]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
 }
 
 // update update all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ]) update(oldObj, newObj *OBJ, idx int) {
+func (i IndexMap[OBJ]) update(oldObj, newObj *OBJ, idx int) {
 	uidx := uint32(idx)
 
 	i.allIDs.UnSet(uidx)
@@ -76,7 +77,7 @@ func (i indexMap[OBJ]) update(oldObj, newObj *OBJ, idx int) {
 }
 
 // delete remove all known indexes synchron the new value (including ID-index)
-func (i indexMap[OBJ]) delete(obj *OBJ, idx int) {
+func (i IndexMap[OBJ]) delete(obj *OBJ, idx int) {
 	uidx := uint32(idx)
 
 	i.allIDs.UnSet(uidx)
@@ -98,35 +99,8 @@ type Index[OBJ any] interface {
 	// HasChanged check for an old and an new Item OBJ value
 	HasChanged(oldItem, newItem *OBJ) bool
 	// Filter is quering the Index
-	Filter
+	query.Filter
 }
-
-// Filter returns the RawIDs or an error by a given Relation and Value
-type Filter interface {
-	// Equal is seperated from Match
-	// because the RawIDs result you can NOT mutable
-	Equal(value any) (*lidx.RawIDs32, error)
-	// Match execute a query (FilterOP) with one given value
-	// for example: age > 18
-	Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (ids *lidx.RawIDs32, canMutate bool, err error)
-	// MatchMany execute a query (FilterOp) for many given values
-	// for example: age between 18 and 80
-	MatchMany(op FilterOp, values ...any) (ids *lidx.RawIDs32, canMutate bool, err error)
-}
-
-var (
-	FOpEq      = FilterOp{Op: OpEq}
-	FOpNeq     = FilterOp{Op: OpNeq}
-	FOpLe      = FilterOp{Op: OpLe}
-	FOpLt      = FilterOp{Op: OpLt}
-	FOpGe      = FilterOp{Op: OpGe}
-	FOpGt      = FilterOp{Op: OpGt}
-	FOpLike    = FilterOp{Op: OpLike}
-	FOpSounds  = FilterOp{Op: OpSounds}
-	FOpFuzzy   = FilterOp{Op: OpFuzzy}
-	FOpIn      = FilterOp{Op: OpIn}
-	FOpBetween = FilterOp{Op: OpBetween}
-)
 
 // ValueHandler is a Strategy Pattern implementation that acts as an abstraction layer
 // between your Index and your Objects
@@ -179,21 +153,6 @@ func (h MultiValueHandler[OBJ, V]) HasChanged(oldItem, newItem *OBJ) bool {
 	return false
 }
 func (h MultiValueHandler[OBJ, V]) CanInvert() bool { return false }
-
-// FilterOp is a wrapper over the Op, which contains the Op and a String.
-// For User defined FilterOp is no Op defined, so the User defined Index can use the String.
-type FilterOp struct {
-	Op   Op
-	Name string
-}
-
-func (f FilterOp) String() string {
-	if f.Name != "" {
-		return f.Name
-	}
-	return f.Op.String()
-
-}
 
 const MapIndexName = "MapIndex"
 
@@ -274,14 +233,14 @@ func (mi *MapIndex[OBJ, V, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	return ids, nil
 }
 
-func (mi *MapIndex[OBJ, V, H]) Match(_ *lidx.RawIDs32, op FilterOp, _ any) (*lidx.RawIDs32, bool, error) {
+func (mi *MapIndex[OBJ, V, H]) Match(_ *lidx.RawIDs32, op query.FilterOp, _ any) (*lidx.RawIDs32, bool, error) {
 	return nil, false, InvalidOperationError{MapIndexName, op.Op}
 }
 
 // MatchMany is not supported by MapIndex, so that always returns an error
-func (mi *MapIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (mi *MapIndex[OBJ, V, H]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
-	case OpIn:
+	case query.OpIn:
 		// fast path for 0 or 1 values
 		switch len(values) {
 		case 0:
@@ -414,7 +373,7 @@ func (si *SortedIndex[OBJ, V, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	return ids, nil
 }
 
-func (si *SortedIndex[OBJ, V, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (si *SortedIndex[OBJ, V, H]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	v, err := ValueFromAny[V](value)
 	if err != nil {
 		return nil, false, InvalidValueTypeError[V]{value}
@@ -446,19 +405,19 @@ func (si *SortedIndex[OBJ, V, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, valu
 		}
 	}
 
-	var invOp FilterOp
+	var invOp query.FilterOp
 	switch op.Op {
-	case OpLt:
-		invOp = FilterOp{Op: OpGe}
+	case query.OpLt:
+		invOp = query.FilterOp{Op: query.OpGe}
 		si.skipList.Less(v, visitor)
-	case OpLe:
-		invOp = FilterOp{Op: OpGt}
+	case query.OpLe:
+		invOp = query.FilterOp{Op: query.OpGt}
 		si.skipList.LessEqual(v, visitor)
-	case OpGt:
-		invOp = FilterOp{Op: OpLe}
+	case query.OpGt:
+		invOp = query.FilterOp{Op: query.OpLe}
 		si.skipList.Greater(v, visitor)
-	case OpGe:
-		invOp = FilterOp{Op: OpLt}
+	case query.OpGe:
+		invOp = query.FilterOp{Op: query.OpLt}
 		si.skipList.GreaterEqual(v, visitor)
 	default:
 		return nil, false, InvalidOperationError{SortedIndexName, op.Op}
@@ -484,9 +443,9 @@ func (si *SortedIndex[OBJ, V, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, valu
 	return result, true, nil
 }
 
-func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (si *SortedIndex[OBJ, V, H]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	switch op.Op {
-	case OpBetween:
+	case query.OpBetween:
 		if len(values) != 2 {
 			return nil, false, InvalidArgsLenError{Defined: "2", Got: len(values)}
 		}
@@ -506,7 +465,7 @@ func (si *SortedIndex[OBJ, V, H]) MatchMany(op FilterOp, values ...any) (*lidx.R
 			return true
 		})
 		return result, true, nil
-	case OpIn:
+	case query.OpIn:
 		// fast path for 0 or 1 values
 		switch len(values) {
 		case 0:
@@ -572,7 +531,7 @@ func NewStringIndex[OBJ any](fieldGetFn FromField[OBJ, string]) *StringIndex[OBJ
 		fieldGetFn: fieldGetFn,
 		compositeIndex: CompositeIndex[OBJ, *MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
 			mainIndex: NewMapIndex(fieldGetFn).(*MapIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
-			routes:    make(map[FilterOp]Index[OBJ], 0),
+			routes:    make(map[query.FilterOp]Index[OBJ], 0),
 		},
 	}
 }
@@ -582,26 +541,26 @@ func NewStringSortedIndex[OBJ any](fieldGetFn FromField[OBJ, string]) *StringInd
 		fieldGetFn: fieldGetFn,
 		compositeIndex: CompositeIndex[OBJ, *SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]]{
 			mainIndex: NewSortedIndex(fieldGetFn).(*SortedIndex[OBJ, string, SingleValueHandler[OBJ, string]]),
-			routes:    make(map[FilterOp]Index[OBJ], 0),
+			routes:    make(map[query.FilterOp]Index[OBJ], 0),
 		},
 	}
 }
 
-func (si *StringIndex[OBJ, H]) Add(idx Index[OBJ], ops ...FilterOp) *StringIndex[OBJ, H] {
+func (si *StringIndex[OBJ, H]) Add(idx Index[OBJ], ops ...query.FilterOp) *StringIndex[OBJ, H] {
 	si.compositeIndex.Add(idx, ops...)
 	return si
 }
 
 func (si *StringIndex[OBJ, H]) AddPhoneticIndex() *StringIndex[OBJ, H] {
-	return si.Add(NewPhoneticIndex(si.fieldGetFn), FOpSounds)
+	return si.Add(NewPhoneticIndex(si.fieldGetFn), query.FOpSounds)
 }
 
 func (si *StringIndex[OBJ, H]) AddFuzzyIndex() *StringIndex[OBJ, H] {
-	return si.Add(NewFuzzyIndex(si.fieldGetFn), FOpFuzzy)
+	return si.Add(NewFuzzyIndex(si.fieldGetFn), query.FOpFuzzy)
 }
 
 func (si *StringIndex[OBJ, H]) AddTrigramIndex() *StringIndex[OBJ, H] {
-	return si.Add(NewTrigramIndex(si.fieldGetFn), FOpLike)
+	return si.Add(NewTrigramIndex(si.fieldGetFn), query.FOpLike)
 }
 
 func (si *StringIndex[OBJ, H]) Set(obj *OBJ, lidx uint32)         { si.compositeIndex.Set(obj, lidx) }
@@ -613,11 +572,11 @@ func (si *StringIndex[OBJ, H]) HasChanged(oldItem, newItem *OBJ) bool {
 func (si *StringIndex[OBJ, H]) Equal(value any) (*lidx.RawIDs32, error) {
 	return si.compositeIndex.Equal(value)
 }
-func (si *StringIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (si *StringIndex[OBJ, H]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	return si.compositeIndex.Match(allIDs, op, value)
 }
 
-func (si *StringIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (si *StringIndex[OBJ, H]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	return si.compositeIndex.MatchMany(op, values...)
 }
 
@@ -625,24 +584,24 @@ func (si *StringIndex[OBJ, H]) MatchMany(op FilterOp, values ...any) (*lidx.RawI
 // and routes each query operator to the single component that was registered for it.
 type CompositeIndex[OBJ any, IDX Index[OBJ]] struct {
 	mainIndex IDX
-	routes    map[FilterOp]Index[OBJ]
+	routes    map[query.FilterOp]Index[OBJ]
 }
 
 func NewCompositeIndex[OBJ any, IDX Index[OBJ]](mainIndex IDX) *CompositeIndex[OBJ, IDX] {
 	return &CompositeIndex[OBJ, IDX]{
 		mainIndex: mainIndex,
-		routes:    make(map[FilterOp]Index[OBJ], 0),
+		routes:    make(map[query.FilterOp]Index[OBJ], 0),
 	}
 }
 
 func NewMapCompositeIndex[OBJ any, V comparable](fieldGetFn FromField[OBJ, V]) *CompositeIndex[OBJ, *MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]] {
 	return &CompositeIndex[OBJ, *MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]]{
 		mainIndex: NewMapIndex(fieldGetFn).(*MapIndex[OBJ, V, SingleValueHandler[OBJ, V]]),
-		routes:    make(map[FilterOp]Index[OBJ], 0),
+		routes:    make(map[query.FilterOp]Index[OBJ], 0),
 	}
 }
 
-func (ci *CompositeIndex[OBJ, IDX]) Add(idx Index[OBJ], ops ...FilterOp) *CompositeIndex[OBJ, IDX] {
+func (ci *CompositeIndex[OBJ, IDX]) Add(idx Index[OBJ], ops ...query.FilterOp) *CompositeIndex[OBJ, IDX] {
 	for _, op := range ops {
 		ci.routes[op] = idx
 	}
@@ -678,7 +637,7 @@ func (ci *CompositeIndex[OBJ, IDX]) Equal(value any) (*lidx.RawIDs32, error) {
 	return ci.mainIndex.Equal(value)
 }
 
-func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	if idx, ok := ci.routes[op]; ok {
 		return idx.Match(allIDs, op, value)
 	}
@@ -686,7 +645,7 @@ func (ci *CompositeIndex[OBJ, IDX]) Match(allIDs *lidx.RawIDs32, op FilterOp, va
 	return ci.mainIndex.Match(allIDs, op, value)
 }
 
-func (ci *CompositeIndex[OBJ, IDX]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (ci *CompositeIndex[OBJ, IDX]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 
 	if idx, ok := ci.routes[op]; ok {
 		return idx.MatchMany(op, values...)
@@ -722,7 +681,7 @@ func (p *ParserExt[OBJ]) Equal(value any) (*lidx.RawIDs32, error) {
 	return nil, InvalidValueTypeError[string]{value}
 }
 
-func (p *ParserExt[OBJ]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*lidx.RawIDs32, bool, error) {
+func (p *ParserExt[OBJ]) Match(allIDs *lidx.RawIDs32, op query.FilterOp, value any) (*lidx.RawIDs32, bool, error) {
 	if s, ok := value.(string); ok {
 		return p.inner.Match(allIDs, op, p.parse(s))
 	}
@@ -730,7 +689,7 @@ func (p *ParserExt[OBJ]) Match(allIDs *lidx.RawIDs32, op FilterOp, value any) (*
 	return nil, false, InvalidValueTypeError[string]{value}
 }
 
-func (p *ParserExt[OBJ]) MatchMany(op FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
+func (p *ParserExt[OBJ]) MatchMany(op query.FilterOp, values ...any) (*lidx.RawIDs32, bool, error) {
 	pvalues := make([]any, len(values))
 	for i, v := range values {
 		s, ok := v.(string)

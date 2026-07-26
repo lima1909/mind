@@ -3,6 +3,7 @@ package mind
 import (
 	"testing"
 
+	"github.com/lima1909/mind/query"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,7 +39,7 @@ func TestIDList_Replace(t *testing.T) {
 	assert.Equal(t, car{name: "Dacia", age: 25}, dacia)
 
 	// check the age index
-	result, err := il.Query(Eq("age", uint8(25))).Values()
+	result, err := il.Query(query.Eq("age", uint8(25))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{{name: "Dacia", age: 25}}, result)
 
@@ -116,7 +117,7 @@ func TestIDList_WithID(t *testing.T) {
 
 func TestIDList_NoID_QueryIDs(t *testing.T) {
 	il := NewIDList((*car).Name)
-	_, err := il.Query(ID("Opel")).Values()
+	_, err := il.Query(query.ID("Opel")).Values()
 	assert.ErrorIs(t, err, ValueNotFoundError{"Opel"})
 }
 
@@ -127,20 +128,20 @@ func TestList_QueryIDs(t *testing.T) {
 	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
 	il.Insert(car{name: "Dacia", age: 22})
 
-	result, err := il.Query(ID("Opel")).Values()
+	result, err := il.Query(query.ID("Opel")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
 	}, result)
 
-	result, err = il.Query(Or(ID("Dacia"), ID("Opel"))).Values()
+	result, err = il.Query(query.Or(query.ID("Dacia"), query.ID("Opel"))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
 		{name: "Dacia", age: 22},
 	}, result)
 
-	result, err = il.Query(Not(ID("Mercedes"))).Values()
+	result, err = il.Query(query.Not(query.ID("Mercedes"))).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
@@ -155,12 +156,12 @@ func TestList_Pagination(t *testing.T) {
 	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
 	il.Insert(car{name: "Dacia", age: 22})
 
-	result, pi, err := il.Query(All()).Paginate(0, 1)
+	result, pi, err := il.Query(query.All()).Paginate(0, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, PageInfo{Offset: 0, Limit: 1, Count: 1, Total: 3}, pi)
 	assert.Equal(t, []car{{name: "Opel", age: 22}}, result)
 
-	result, pi, _ = il.Query(All()).Paginate(1, 2)
+	result, pi, _ = il.Query(query.All()).Paginate(1, 2)
 	assert.Equal(t, PageInfo{Offset: 1, Limit: 2, Count: 2, Total: 3}, pi)
 	assert.Equal(t, []car{
 		{name: "Mercedes", age: 5, isNew: true},
@@ -168,18 +169,18 @@ func TestList_Pagination(t *testing.T) {
 	}, result)
 
 	// offset = len(il), get the last one
-	result, pi, _ = il.Query(All()).Paginate(2, 1)
+	result, pi, _ = il.Query(query.All()).Paginate(2, 1)
 	assert.NoError(t, err)
 	assert.Equal(t, PageInfo{Offset: 2, Limit: 1, Count: 1, Total: 3}, pi)
 	assert.Equal(t, []car{{name: "Dacia", age: 22}}, result)
 
 	// offset = len(il) is on the end
-	result, pi, _ = il.Query(All()).Paginate(2, 2)
+	result, pi, _ = il.Query(query.All()).Paginate(2, 2)
 	assert.Equal(t, PageInfo{Offset: 2, Limit: 2, Count: 1, Total: 3}, pi)
 	assert.Equal(t, []car{{name: "Dacia", age: 22}}, result)
 
 	// limit > Total
-	result, pi, _ = il.Query(All()).Paginate(1, 5)
+	result, pi, _ = il.Query(query.All()).Paginate(1, 5)
 	assert.Equal(t, PageInfo{Offset: 1, Limit: 5, Count: 2, Total: 3}, pi)
 	assert.Equal(t, []car{
 		{name: "Mercedes", age: 5, isNew: true},
@@ -188,12 +189,12 @@ func TestList_Pagination(t *testing.T) {
 
 	// count = 0
 	// offset > Total
-	result, pi, _ = il.Query(All()).Paginate(5, 1)
+	result, pi, _ = il.Query(query.All()).Paginate(5, 1)
 	assert.Equal(t, PageInfo{Offset: 5, Limit: 1, Count: 0, Total: 3}, pi)
 	assert.Equal(t, []car{}, result)
 
 	// offset+limit > Total
-	result, pi, _ = il.Query(All()).Paginate(3, 1)
+	result, pi, _ = il.Query(query.All()).Paginate(3, 1)
 	assert.Equal(t, PageInfo{Offset: 3, Limit: 1, Count: 0, Total: 3}, pi)
 	assert.Equal(t, []car{}, result)
 }
