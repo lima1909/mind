@@ -72,6 +72,7 @@ import (
 	"fmt"
 
 	"github.com/lima1909/mind"
+	"github.com/lima1909/mind/index"
 	"github.com/lima1909/mind/query"
 )
 
@@ -89,15 +90,15 @@ func main() {
 
 	l := mind.NewList[Car]()
 
-	err := l.CreateIndex("name", mind.NewMapIndex((*Car).Name))
+	err := l.CreateIndex("name", index.NewMapIndex((*Car).Name))
 	if err != nil {
 		panic(err)
 	}
-	err = l.CreateIndex("age", mind.NewSortedIndex((*Car).Age))
+	err = l.CreateIndex("age", index.NewSortedIndex((*Car).Age))
 	if err != nil {
 		panic(err)
 	}
-	err = l.CreateIndex("tag", mind.NewSortedIndexSlice((*Car).Tags))
+	err = l.CreateIndex("tag", index.NewSortedIndexSlice((*Car).Tags))
 	if err != nil {
 		panic(err)
 	}
@@ -110,7 +111,7 @@ func main() {
 	t := &query.Tracer{}
 	values, _ := l.QueryStr(
 		`(name = "Opel" or name = "Dacia") and age >= 2 and tag = "old"`,
-		mind.WithTracer(t),
+		query.WithTracer(t),
 	).Values()
 
 	fmt.Println(values)
@@ -141,6 +142,7 @@ import (
 	"fmt"
 
 	"github.com/lima1909/mind"
+	"github.com/lima1909/mind/index"
 	"github.com/lima1909/mind/query"
 )
 
@@ -159,8 +161,8 @@ func main() {
 	l := mind.NewIDList((*Car).ID)
 
 	// ignore error
-	_ = l.CreateIndex("name", mind.NewMapIndex((*Car).Name))
-	_ = l.CreateIndex("age", mind.NewSortedIndex((*Car).Age))
+	_ = l.CreateIndex("name", index.NewMapIndex((*Car).Name))
+	_ = l.CreateIndex("age", index.NewSortedIndex((*Car).Age))
 
 	l.Insert(Car{id: 1, name: "Dacia", age: 2})
 	l.Insert(Car{id: 2, name: "Opel", age: 12})
@@ -174,14 +176,14 @@ func main() {
 	// {3 Mercedes 5
 
 	removed, _, _ := l.Remove(4)
-	fmt.Println(removed)
+	fmt.Println("Removed:", removed)
 	// Output:
 	// true
 
 	t := &query.Tracer{}
 	values, _ := l.Query(
-		query.Or(query.Eq("name", "Opel"), query.Lt("age", 10)), 
-		mind.WithTracer(t),
+		query.Or(query.Eq("name", "Opel"), query.Lt("age", 10)),
+		query.WithTracer(t),
 	).Values()
 
 	fmt.Println(values)

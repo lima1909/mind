@@ -2,6 +2,8 @@ package mind
 
 import (
 	"fmt"
+
+	"github.com/lima1909/mind/index"
 )
 
 type carType = int
@@ -30,8 +32,8 @@ func ExampleParserExt() {
 	il := NewList[car]()
 	// ignore error
 	_ = il.CreateIndex("type",
-		NewParserExt(
-			NewSortedIndex((*car).Type), func(s string) any {
+		index.NewParserExt(
+			index.NewSortedIndex((*car).Type), func(s string) any {
 				switch s {
 				case "van":
 					return van

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/lima1909/mind"
+	"github.com/lima1909/mind/index"
 	"github.com/lima1909/mind/query"
 )
 
@@ -21,15 +22,15 @@ func main() {
 
 	l := mind.NewList[Car]()
 
-	err := l.CreateIndex("name", mind.NewMapIndex((*Car).Name))
+	err := l.CreateIndex("name", index.NewMapIndex((*Car).Name))
 	if err != nil {
 		panic(err)
 	}
-	err = l.CreateIndex("age", mind.NewSortedIndex((*Car).Age))
+	err = l.CreateIndex("age", index.NewSortedIndex((*Car).Age))
 	if err != nil {
 		panic(err)
 	}
-	err = l.CreateIndex("tag", mind.NewSortedIndexSlice((*Car).Tags))
+	err = l.CreateIndex("tag", index.NewSortedIndexSlice((*Car).Tags))
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +43,7 @@ func main() {
 	t := &query.Tracer{}
 	values, err := l.QueryStr(
 		`(name = "Opel" or name = "Dacia") and age >= 2 and tag = "old"`,
-		mind.WithTracer(t),
+		query.WithTracer(t),
 	).Values()
 	if err != nil {
 		panic(err)

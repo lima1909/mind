@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lima1909/mind/errr"
+	"github.com/lima1909/mind/index"
 	"github.com/lima1909/mind/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,9 +15,9 @@ import (
 func TestList_Base(t *testing.T) {
 	il := NewList[car]()
 
-	err := il.CreateIndex("name", NewMapIndex((*car).Name))
+	err := il.CreateIndex("name", index.NewMapIndex((*car).Name))
 	assert.NoError(t, err)
-	err = il.CreateIndex("isnew", NewMapIndex((*car).IsNew))
+	err = il.CreateIndex("isnew", index.NewMapIndex((*car).IsNew))
 	assert.NoError(t, err)
 
 	il.Insert(car{name: "Dacia", age: 22, color: "red"})
@@ -24,7 +26,7 @@ func TestList_Base(t *testing.T) {
 	il.Insert(car{name: "Dacia", age: 22})
 	assert.Equal(t, 4, il.Count())
 
-	err = il.CreateIndex("age", NewMapIndex((*car).Age))
+	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
 
 	c, found := il.list.Get(1)
@@ -71,14 +73,14 @@ func TestList_CreateIndex_Err(t *testing.T) {
 	il := NewList[car]()
 
 	// empty field name
-	err := il.CreateIndex("", NewMapIndex((*car).Age))
+	err := il.CreateIndex("", index.NewMapIndex((*car).Age))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not allowed")
 
 	// field name already exist
-	err = il.CreateIndex("age", NewMapIndex((*car).Age))
+	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
-	err = il.CreateIndex("age", NewMapIndex((*car).Age))
+	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "age already exists")
 }
@@ -88,7 +90,7 @@ func TestList_RemoveIndex(t *testing.T) {
 	assert.Equal(t, 0, len(il.indexMap.index))
 	il.Insert(car{name: "Opel", age: 22})
 
-	err := il.CreateIndex("age", NewMapIndex((*car).Age))
+	err := il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(il.indexMap.index))
 
@@ -106,14 +108,14 @@ func TestList_RemoveIndex(t *testing.T) {
 	assert.Equal(t, 0, len(il.indexMap.index))
 	qr = il.Query(query.Eq("age", uint8(22)))
 	_, err = qr.Values()
-	assert.ErrorIs(t, InvalidNameError{"age"}, err)
+	assert.ErrorIs(t, errr.InvalidNameError{FieldName: "age"}, err)
 	// the index is removed, but not the data
 	assert.Equal(t, 1, il.Count())
 }
 
 func TestList_QueryResult(t *testing.T) {
 	il := NewList[car]()
-	err := il.CreateIndex("age", NewMapIndex((*car).Age))
+	err := il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
 
 	il.Insert(car{name: "Mercedes", age: 22, color: "red"})
@@ -160,16 +162,16 @@ func removeByIdxNoLock(l *List[car], index int) (removed bool) {
 	}
 
 	removed = l.list.Remove(index)
-	l.indexMap.delete(&item, index)
+	l.indexMap.Delete(&item, index)
 
 	return removed
 }
 
 func TestList_Remove(t *testing.T) {
 	il := NewList[car]()
-	err := il.CreateIndex("name", NewMapIndex((*car).Name))
+	err := il.CreateIndex("name", index.NewMapIndex((*car).Name))
 	assert.NoError(t, err)
-	err = il.CreateIndex("age", NewMapIndex((*car).Age))
+	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
 
 	il.Insert(car{name: "Mercedes", age: 22, color: "red"})
@@ -222,7 +224,7 @@ func TestList_CreateIndex(t *testing.T) {
 	assert.Equal(t, "could not found index for field name: name", err.Error())
 
 	// create Index for name
-	err = il.CreateIndex("name", NewMapIndex((*car).Name))
+	err = il.CreateIndex("name", index.NewMapIndex((*car).Name))
 	assert.NoError(t, err)
 	result, err := il.Query(query.Eq("name", "Opel")).Values()
 	assert.NoError(t, err)
@@ -232,9 +234,9 @@ func TestList_CreateIndex(t *testing.T) {
 
 func TestList_CreateIndexVarious(t *testing.T) {
 	il := NewList[car]()
-	err := il.CreateIndex("name", NewMapIndex((*car).Name))
+	err := il.CreateIndex("name", index.NewMapIndex((*car).Name))
 	assert.NoError(t, err)
-	err = il.CreateIndex("age", NewSortedIndex((*car).Age))
+	err = il.CreateIndex("age", index.NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
 	il.Insert(car{name: "Dacia", age: 2, color: "red"})
@@ -284,7 +286,7 @@ func TestList_CreateIndexVarious(t *testing.T) {
 
 func TestList_StringItem(t *testing.T) {
 	il := NewList[string]()
-	err := il.CreateIndex("val", NewMapIndex(FromValue[string]()))
+	err := il.CreateIndex("val", index.NewMapIndex(index.FromValue[string]()))
 	assert.NoError(t, err)
 
 	il.Insert("Dacia")
@@ -300,7 +302,7 @@ func TestList_StringItem(t *testing.T) {
 
 func TestList_StringPtrItemWithNil(t *testing.T) {
 	il := NewList[*string]()
-	err := il.CreateIndex("val", NewMapIndex(FromValue[*string]()))
+	err := il.CreateIndex("val", index.NewMapIndex(index.FromValue[*string]()))
 	assert.NoError(t, err)
 
 	dacia := "Dacia"
@@ -335,7 +337,7 @@ func TestList_StringPtrItemWithNil(t *testing.T) {
 func TestList_EscapedString(t *testing.T) {
 	il := NewList[car]()
 
-	err := il.CreateIndex("name", NewStringIndex((*car).Name).AddTrigramIndex())
+	err := il.CreateIndex("name", index.NewStringIndex((*car).Name).AddTrigramIndex())
 	require.NoError(t, err)
 
 	il.Insert(car{name: "Opel 1", age: 22})
@@ -368,7 +370,7 @@ func TestList_EscapedString(t *testing.T) {
 
 func TestList_GetRemove(t *testing.T) {
 	l := NewList[car]()
-	err := l.CreateIndex("name", NewSortedIndex((*car).Name))
+	err := l.CreateIndex("name", index.NewSortedIndex((*car).Name))
 	assert.NoError(t, err)
 
 	l.Insert(car{name: "Opel", age: 22})
@@ -413,7 +415,7 @@ func TestList_GetRemove(t *testing.T) {
 
 func TestList_Update(t *testing.T) {
 	l := NewList[car]()
-	err := l.CreateIndex("name", NewSortedIndex((*car).Name))
+	err := l.CreateIndex("name", index.NewSortedIndex((*car).Name))
 	assert.NoError(t, err)
 
 	l.Insert(car{name: "Opel", age: 22})
@@ -440,4 +442,41 @@ func TestList_Update(t *testing.T) {
 	cars, err := h.Values()
 	assert.NoError(t, err)
 	assert.Equal(t, car{name: "VW", age: 3, color: "blue"}, cars[0])
+}
+
+func TestPhoneticIndex_WithList(t *testing.T) {
+	l := NewList[string]()
+	assert.NoError(t, l.CreateIndex("name", index.NewPhoneticIndex(index.FromValue[string]())))
+
+	l.Insert("Meier")
+	l.Insert("Meyer")
+	l.Insert("Maier")
+	l.Insert("Mayer")
+	l.Insert("Schmidt")
+
+	// All four Meier-variants should be found via any of the spellings.
+	result, err := l.Query(query.Sounds("name", "Meier")).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, 4, len(result))
+
+	result, err = l.Query(query.Sounds("name", "Schmitt")).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"Schmidt"}, result)
+}
+
+func TestGermanPhoneticIndex_ParseQuery(t *testing.T) {
+	l := NewList[string]()
+	assert.NoError(t, l.CreateIndex("name",
+		index.NewPhoneticIndex(index.FromValue[string]())))
+	l.Insert("Müller")
+	l.Insert("Mueller")
+	l.Insert("Schmidt")
+
+	result, err := l.QueryStr("name sounds 'Müller'").Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"Müller", "Mueller"}, result)
+
+	result, err = l.Query(query.Sounds("name", "'Müller'")).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"Müller", "Mueller"}, result)
 }

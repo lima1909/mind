@@ -2,9 +2,9 @@ package mind
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
+	"github.com/lima1909/mind/index"
 	"github.com/lima1909/mind/lidx"
 	"github.com/lima1909/mind/query"
 )
@@ -24,7 +24,7 @@ type List[T any] struct {
 func NewList[T any]() *List[T] {
 	return &List[T]{
 		list:     NewFreeList[T](),
-		indexMap: NewIndexMap[T](lidx.NewRawIDs[uint32]()),
+		indexMap: NewIndexMap[T](),
 	}
 }
 
@@ -33,7 +33,7 @@ func NewList[T any]() *List[T] {
 //   - Index: a impl of the Index interface
 //
 // Hint: empty field-name are not allowed!
-func (l *List[T]) CreateIndex(fieldName string, index Index[T]) error {
+func (l *List[T]) CreateIndex(fieldName string, index index.Index[T]) error {
 	if err := query.IsValidName(fieldName); err != nil {
 		return err
 	}
@@ -41,14 +41,15 @@ func (l *List[T]) CreateIndex(fieldName string, index Index[T]) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	if _, exist := l.indexMap.index[fieldName]; exist {
-		return fmt.Errorf("field-name: %s already exists", fieldName)
+	// add index
+	if err := l.indexMap.AddIndex(fieldName, index); err != nil {
+		return err
 	}
 
+	// add index values from the list
 	for idx, item := range l.list.Iter() {
 		index.Set(item, uint32(idx))
 	}
-	l.indexMap.index[fieldName] = index
 
 	return nil
 }
@@ -88,7 +89,7 @@ func (l *List[T]) Insert(item T) int {
 	defer l.lock.Unlock()
 
 	idx := l.list.Insert(item)
-	l.indexMap.insert(&item, idx)
+	l.indexMap.Insert(&item, idx)
 
 	return idx
 }
@@ -104,7 +105,7 @@ func (l *List[T]) Update(index int, update func(*T)) bool {
 		update(&item)
 
 		l.list.Update(index, item)
-		l.indexMap.update(&oldItem, &item, index)
+		l.indexMap.Update(&oldItem, &item, index)
 		return true
 	}
 
@@ -116,7 +117,7 @@ func (l *List[T]) Remove(index int) bool {
 	defer l.lock.Unlock()
 
 	if item, found := l.list.Get(index); found {
-		l.indexMap.delete(&item, index)
+		l.indexMap.Delete(&item, index)
 		return l.list.Remove(index)
 	}
 
@@ -153,18 +154,18 @@ func (l *List[T]) Count() int {
 }
 
 // QueryStr execute the given Query-string.
-func (l *List[T]) QueryStr(queryStr string, opts ...Opion) QHandle[T] {
-	return NewQHandleFromStr(l.execQuery, queryStr, opts...)
+func (l *List[T]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
+	return query.NewQHandleFromStr(l.execQuery, queryStr, opts...)
 }
 
 // Query execute the given Query.
-func (l *List[T]) Query(query query.Expr, opts ...Opion) QHandle[T] {
-	return NewQHandleFromExpr(l.execQuery, query, opts...)
+func (l *List[T]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T] {
+	return query.NewQHandleFromExpr(l.execQuery, q, opts...)
 }
 
 // implements the QHandle interface
 // ------------------------------------------
-func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
+func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, query.GetItemFn[T])) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lima1909/mind/errr"
+	"github.com/lima1909/mind/index"
 	"github.com/lima1909/mind/lidx"
 	"github.com/lima1909/mind/query"
 )
@@ -16,7 +18,7 @@ import (
 // will corrupt the database indexes. Always use Update() or Replace() to modify data.
 type IDList[T any, ID comparable] struct {
 	list     FreeList[T]
-	idIndex  idIndex[T, ID]
+	idIndex  index.IdIndex[T, ID]
 	indexMap IndexMap[T]
 
 	lock sync.RWMutex
@@ -26,8 +28,8 @@ type IDList[T any, ID comparable] struct {
 func NewIDList[T any, ID comparable](fieldIDGetFn func(*T) ID) *IDList[T, ID] {
 	return &IDList[T, ID]{
 		list:     NewFreeList[T](),
-		idIndex:  newIDMapIndex(fieldIDGetFn),
-		indexMap: NewIndexMap[T](lidx.NewRawIDs[uint32]()),
+		idIndex:  index.NewIDMapIndex(fieldIDGetFn),
+		indexMap: NewIndexMap[T](),
 	}
 }
 
@@ -36,7 +38,7 @@ func NewIDList[T any, ID comparable](fieldIDGetFn func(*T) ID) *IDList[T, ID] {
 //   - Index: a impl of the Index interface
 //
 // Hint: empty field-name or the field-name ID are not allowed!
-func (l *IDList[T, ID]) CreateIndex(fieldName string, index Index[T]) error {
+func (l *IDList[T, ID]) CreateIndex(fieldName string, index index.Index[T]) error {
 	if strings.ToLower(fieldName) == query.IDIndexFieldName {
 		return fmt.Errorf("ID is a reserved field name")
 	}
@@ -48,15 +50,16 @@ func (l *IDList[T, ID]) CreateIndex(fieldName string, index Index[T]) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	if _, exist := l.indexMap.index[fieldName]; exist {
-		return fmt.Errorf("field-name: %s already exists", fieldName)
+	// add index
+	if err := l.indexMap.AddIndex(fieldName, index); err != nil {
+		return err
 	}
 
+	// add index values from the list
 	for idx, item := range l.list.Iter() {
 		index.Set(item, uint32(idx))
 	}
 
-	l.indexMap.index[fieldName] = index
 	return nil
 }
 
@@ -98,7 +101,7 @@ func (l *IDList[T, ID]) Insert(item T) int {
 
 	idx := l.list.Insert(item)
 	l.idIndex.Set(&item, uint32(idx))
-	l.indexMap.insert(&item, idx)
+	l.indexMap.Insert(&item, idx)
 
 	return idx
 }
@@ -114,14 +117,14 @@ func (l *IDList[T, ID]) Replace(item T) (T, error) {
 	idx, found := l.idIndex.GetIndex(id)
 	if !found {
 		var zero T
-		return zero, ValueNotFoundError{id}
+		return zero, errr.ValueNotFoundError{Value: id}
 	}
 
 	// overwrite the data in the main list
 	oldItem, ok := l.list.Update(int(idx), item)
 	if !ok {
 		var zero T
-		return zero, ValueNotFoundError{id}
+		return zero, errr.ValueNotFoundError{Value: id}
 	}
 
 	if l.idIndex.HasChanged(&oldItem, &item) {
@@ -129,7 +132,7 @@ func (l *IDList[T, ID]) Replace(item T) (T, error) {
 		l.idIndex.Set(&item, idx)
 	}
 	// update all indexes: re-index
-	l.indexMap.update(&oldItem, &item, int(idx))
+	l.indexMap.Update(&oldItem, &item, int(idx))
 
 	return oldItem, nil
 }
@@ -143,7 +146,7 @@ func (l *IDList[T, ID]) Update(id ID, update func(*T)) error {
 
 	idx, found := l.idIndex.GetIndex(id)
 	if !found {
-		return ValueNotFoundError{id}
+		return errr.ValueNotFoundError{Value: id}
 	}
 
 	if item, found := l.list.Get(int(idx)); found {
@@ -158,12 +161,12 @@ func (l *IDList[T, ID]) Update(id ID, update func(*T)) error {
 			l.idIndex.UnSet(&oldItem, idx)
 			l.idIndex.Set(&item, idx)
 		}
-		l.indexMap.update(&oldItem, &item, int(idx))
+		l.indexMap.Update(&oldItem, &item, int(idx))
 
 		return nil
 	}
 
-	return ValueNotFoundError{id}
+	return errr.ValueNotFoundError{Value: id}
 }
 
 // Remove an item by the given ID.
@@ -177,7 +180,7 @@ func (l *IDList[T, ID]) Remove(id ID) (bool, int, error) {
 
 	index, found := l.idIndex.GetIndex(id)
 	if !found {
-		return false, -1, ValueNotFoundError{id}
+		return false, -1, errr.ValueNotFoundError{Value: id}
 	}
 
 	idx := int(index)
@@ -185,7 +188,7 @@ func (l *IDList[T, ID]) Remove(id ID) (bool, int, error) {
 	removed := l.list.Remove(idx)
 
 	l.idIndex.UnSet(&item, index)
-	l.indexMap.delete(&item, idx)
+	l.indexMap.Delete(&item, idx)
 
 	return removed, int(index), nil
 }
@@ -203,7 +206,7 @@ func (l *IDList[T, ID]) Get(id ID) (T, error) {
 	idx, found := l.idIndex.GetIndex(id)
 	if !found {
 		var null T
-		return null, ValueNotFoundError{id}
+		return null, errr.ValueNotFoundError{Value: id}
 	}
 
 	// not found should be NOT possible
@@ -229,13 +232,13 @@ func (l *IDList[T, ID]) Count() int {
 }
 
 // QueryStr execute the given Query-string.
-func (l *IDList[T, ID]) QueryStr(queryStr string, opts ...Opion) QHandle[T] {
-	return NewQHandleFromStr(l.execQuery, queryStr, opts...)
+func (l *IDList[T, ID]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
+	return query.NewQHandleFromStr(l.execQuery, queryStr, opts...)
 }
 
 // Query execute the given Query.
-func (l *IDList[T, ID]) Query(query query.Expr, opts ...Opion) QHandle[T] {
-	return NewQHandleFromExpr(l.execQuery, query, opts...)
+func (l *IDList[T, ID]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T] {
+	return query.NewQHandleFromExpr(l.execQuery, q, opts...)
 }
 
 // implements the QHandle interface
@@ -248,7 +251,7 @@ func (l *IDList[T, ID]) filterByName(fieldName string) (query.Filter, error) {
 	return l.indexMap.FilterByName(fieldName)
 }
 
-func (l *IDList[T, ID]) execQuery(query query.Query, exec func(*lidx.RawIDs32, getItemFn[T])) error {
+func (l *IDList[T, ID]) execQuery(query query.Query, exec func(*lidx.RawIDs32, query.GetItemFn[T])) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
