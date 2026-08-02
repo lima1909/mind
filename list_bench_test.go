@@ -74,7 +74,7 @@ func BenchmarkQueryStr(b *testing.B) {
 	err = il.InitialBulkInsert(fl)
 	require.NoError(b, err)
 
-	fmt.Printf("- Count: %d, Time: %s\n", il.Count(), time.Since(start))
+	fmt.Printf("- Count: %d, Time: %s\n", il.Len(), time.Since(start))
 
 	b.ResetTimer()
 
@@ -339,7 +339,7 @@ func BenchmarkFuzzy_Phonetic_Index(b *testing.B) {
 	err = l.InitialBulkInsert(fl)
 	require.NoError(b, err)
 
-	fmt.Printf("- Count: %d, Time: %s\n", l.Count(), time.Since(start))
+	fmt.Printf("- Count: %d, Time: %s\n", l.Len(), time.Since(start))
 
 	b.ResetTimer()
 

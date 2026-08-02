@@ -24,7 +24,7 @@ func TestList_Base(t *testing.T) {
 	il.Insert(car{name: "Opel", age: 22})
 	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
 	il.Insert(car{name: "Dacia", age: 22})
-	assert.Equal(t, 4, il.Count())
+	assert.Equal(t, 4, il.Len())
 
 	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
@@ -110,7 +110,7 @@ func TestList_RemoveIndex(t *testing.T) {
 	_, err = qr.Values()
 	assert.ErrorIs(t, errr.InvalidNameError{FieldName: "age"}, err)
 	// the index is removed, but not the data
-	assert.Equal(t, 1, il.Count())
+	assert.Equal(t, 1, il.Len())
 }
 
 func TestList_QueryResult(t *testing.T) {
@@ -179,7 +179,7 @@ func TestList_Remove(t *testing.T) {
 	il.Insert(car{name: "Dacia", age: 5, isNew: true})
 	il.Insert(car{name: "Dacia", age: 22})
 	il.Insert(car{name: "Audi", age: 22})
-	assert.Equal(t, 5, il.Count())
+	assert.Equal(t, 5, il.Len())
 
 	qr := il.Query(query.All())
 	count, err := qr.Count()
@@ -189,7 +189,7 @@ func TestList_Remove(t *testing.T) {
 	// remove item on index 3
 	removed := removeByIdxNoLock(il, 3)
 	assert.True(t, removed)
-	assert.Equal(t, 4, il.Count())
+	assert.Equal(t, 4, il.Len())
 
 	// try to find item on index 3
 	qr = il.Query(query.And(query.Eq("name", "Dacia"), query.Eq("age", uint8(22))))
@@ -479,4 +479,34 @@ func TestGermanPhoneticIndex_ParseQuery(t *testing.T) {
 	result, err = l.Query(query.Sounds("name", "'Müller'")).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Müller", "Mueller"}, result)
+}
+
+func TestList_QueryRemove(t *testing.T) {
+	l := NewList[string]()
+	assert.NoError(t, l.CreateIndex("name",
+		index.NewPhoneticIndex(index.FromValue[string]())))
+
+	assert.Equal(t, 0, l.Insert("Müller"))
+	assert.Equal(t, 1, l.Insert("Mueller"))
+	assert.Equal(t, 2, l.Insert("Schmidt"))
+
+	assert.Equal(t, 3, l.Len())
+
+	count, err := l.QueryStr("name sounds 'Müller'").Remove()
+	assert.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 1, l.Len())
+	l.Values(func(i int, s string) bool {
+		switch i {
+		case 2:
+			assert.Equal(t, s, "Schmidt")
+		default:
+			t.Logf("invalid string: %q", s)
+		}
+		return true
+	})
+
+	count, err = l.QueryStr("name sounds 'Müller'").Count()
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 }

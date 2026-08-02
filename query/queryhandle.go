@@ -15,26 +15,29 @@ func newDefaultQueryOption() queryOptions { return queryOptions{withOptimizer: t
 func NoOptimizer() Opion                  { return func(o *queryOptions) { o.withOptimizer = false } }
 func WithTracer(t *Tracer) Opion          { return func(o *queryOptions) { o.withTracer = t } }
 
-type GetItemFn[T any] func(lidx uint32) (T, bool)
-type executorFn[T any] func(Query, func(*lidx.RawIDs32, GetItemFn[T])) error
+type HandleFNs[T any] struct {
+	Query      func(Query, func(*lidx.RawIDs32, bool)) error
+	GetItem    func(int) (T, bool)
+	RemoveItem func(int) bool
+}
 
 type QHandle[T any] struct {
 	query Query
-	exec  executorFn[T]
+	fns   HandleFNs[T]
 	err   error
 }
 
-func NewQHandleFromStr[T any](queryExec executorFn[T], queryStr string, opts ...Opion) QHandle[T] {
+func NewQHandleFromStr[T any](handleFNs HandleFNs[T], queryStr string, opts ...Opion) QHandle[T] {
 	ast, err := Parse(queryStr)
 	if err != nil {
 		var query Query
-		return QHandle[T]{exec: queryExec, query: query, err: err}
+		return QHandle[T]{query: query, fns: handleFNs, err: err}
 	}
 
-	return NewQHandleFromExpr(queryExec, ast, opts...)
+	return NewQHandleFromExpr(handleFNs, ast, opts...)
 }
 
-func NewQHandleFromExpr[T any](queryExec executorFn[T], query Expr, opts ...Opion) QHandle[T] {
+func NewQHandleFromExpr[T any](handleFNs HandleFNs[T], query Expr, opts ...Opion) QHandle[T] {
 	opt := newDefaultQueryOption()
 	for _, o := range opts {
 		o(&opt)
@@ -45,7 +48,7 @@ func NewQHandleFromExpr[T any](queryExec executorFn[T], query Expr, opts ...Opio
 	}
 
 	q := query.Compile(opt.withTracer)
-	return QHandle[T]{exec: queryExec, query: q}
+	return QHandle[T]{query: q, fns: handleFNs}
 }
 
 // QHandle a handle for executing queries which have NoIDs
@@ -55,7 +58,7 @@ func (h QHandle[T]) Count() (int, error) {
 		return count, h.err
 	}
 
-	return count, h.exec(h.query, func(rids *lidx.RawIDs32, _ GetItemFn[T]) {
+	return count, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
 		count = rids.Count()
 	})
 }
@@ -66,13 +69,29 @@ func (h QHandle[T]) Values() ([]T, error) {
 		return result, h.err
 	}
 
-	return result, h.exec(h.query, func(rids *lidx.RawIDs32, getItem GetItemFn[T]) {
+	return result, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
 		result = make([]T, 0, rids.Count())
 
 		rids.Values(func(idx uint32) bool {
-			item, _ := getItem(idx)
+			item, _ := h.fns.GetItem(int(idx))
 			result = append(result, item)
 
+			return true
+		})
+	})
+}
+
+func (h QHandle[T]) Remove() (int, error) {
+	if h.err != nil {
+		return 0, h.err
+	}
+
+	count := 0
+	return count, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
+		rids.Values(func(idx uint32) bool {
+			if h.fns.RemoveItem(int(idx)) {
+				count++
+			}
 			return true
 		})
 	})
@@ -87,13 +106,13 @@ func (h QHandle[T]) Paginate(offset, limit uint32) ([]T, PageInfo, error) {
 		return result, pi, h.err
 	}
 
-	return result, pi, h.exec(h.query, func(rids *lidx.RawIDs32, getItem GetItemFn[T]) {
+	return result, pi, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
 		total := uint32(rids.Count())
 		pi = Paginate{offset, limit}.computePageInfo(total)
 		result = make([]T, 0, rids.Count())
 
 		rids.ValuesSkipN(int(pi.Offset), func(idx uint32) bool {
-			item, _ := getItem(idx)
+			item, _ := h.fns.GetItem(int(idx))
 			result = append(result, item)
 
 			// run only until reach the limit

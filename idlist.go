@@ -81,7 +81,7 @@ func (l *IDList[T, ID]) RemoveIndex(fieldName string) {
 // InitialBulkInsert can be used for a more performant inserting of initial values.
 // The List MUST be empty!
 func (l *IDList[T, ID]) InitialBulkInsert(values FreeList[T]) error {
-	if l.list.count > 0 {
+	if l.list.len > 0 {
 		return errors.New("can not execute bulk insert for a non empty ID-list")
 	}
 
@@ -124,13 +124,19 @@ func (l *IDList[T, ID]) Remove(id ID) (bool, int, error) {
 	}
 
 	idx := int(index)
-	item, _ := l.list.Get(idx)
-	removed := l.list.Remove(idx)
+	return l.remove(idx), idx, nil
 
-	l.idIndex.UnSet(&item, index)
-	l.indexMap.Delete(&item, idx)
+}
 
-	return removed, int(index), nil
+func (l *IDList[T, ID]) remove(index int) bool {
+	if item, found := l.list.Get(index); found {
+		removed := l.list.Remove(index)
+		l.idIndex.UnSet(&item, uint32(index))
+		l.indexMap.Delete(&item, index)
+		return removed
+	}
+
+	return false
 
 }
 
@@ -225,26 +231,49 @@ func (l *IDList[T, ID]) Contains(id ID) bool {
 	return found
 }
 
-// Count the Items, which in this list exist
-func (l *IDList[T, ID]) Count() int {
+// Len the Items, which in this list exist
+func (l *IDList[T, ID]) Len() int {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	return l.list.Count()
+	return l.list.Len()
+}
+
+// Values iterate over the complete List and call the yield function, for every item
+// WARNING: While the Iterator is used, the List is locked.
+func (l *IDList[T, ID]) Values(yield func(int, T) bool) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	for i, item := range l.list.slots {
+		if item.occupied {
+			if !yield(i, item.value) {
+				return
+			}
+		}
+	}
 }
 
 // QueryStr execute the given Query-string.
 func (l *IDList[T, ID]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromStr(l.execQuery, queryStr, opts...)
+	return query.NewQHandleFromStr(l.hfns(), queryStr, opts...)
 }
 
 // Query execute the given Query.
 func (l *IDList[T, ID]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromExpr(l.execQuery, q, opts...)
+	return query.NewQHandleFromExpr(l.hfns(), q, opts...)
 }
 
 // implements the QHandle interface
 // -----------------------------------------
+func (l *IDList[T, ID]) hfns() query.HandleFNs[T] {
+	return query.HandleFNs[T]{
+		Query:      l.execQuery,
+		GetItem:    l.list.Get,
+		RemoveItem: l.remove,
+	}
+}
+
 func (l *IDList[T, ID]) filterByName(fieldName string) (query.Filter, error) {
 	if strings.ToLower(fieldName) == query.IDIndexFieldName {
 		return l.idIndex, nil
@@ -253,18 +282,16 @@ func (l *IDList[T, ID]) filterByName(fieldName string) (query.Filter, error) {
 	return l.indexMap.FilterByName(fieldName)
 }
 
-func (l *IDList[T, ID]) execQuery(query query.Query, exec func(*lidx.RawIDs32, query.GetItemFn[T])) error {
+func (l *IDList[T, ID]) execQuery(query query.Query, exec func(*lidx.RawIDs32, bool)) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	rids, _, err := query(l.filterByName, l.indexMap.allIDs)
+	rids, canMutate, err := query(l.filterByName, l.indexMap.allIDs)
 	if err != nil {
 		return err
 	}
 
-	exec(rids, func(lidx uint32) (T, bool) {
-		return l.list.Get(int(lidx))
-	})
+	exec(rids, canMutate)
 
 	return nil
 }

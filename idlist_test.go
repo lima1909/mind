@@ -13,7 +13,7 @@ func TestIDList_RemoveIndexWithId(t *testing.T) {
 	il := NewIDList((*car).Name)
 	assert.NotNil(t, il.idIndex)
 	il.Insert(car{name: "Opel", age: 22})
-	assert.Equal(t, 1, il.Count())
+	assert.Equal(t, 1, il.Len())
 
 	opel, err := il.Get("Opel")
 	assert.NoError(t, err)
@@ -107,7 +107,7 @@ func TestIDList_WithID(t *testing.T) {
 	dacia, err := il.Get("Dacia")
 	assert.NoError(t, err)
 	assert.Equal(t, car{name: "Dacia", age: 42}, dacia)
-	assert.Equal(t, 3, il.Count())
+	assert.Equal(t, 3, il.Len())
 	assert.True(t, il.Contains("Dacia"))
 	assert.False(t, il.Contains("NotFound"))
 
@@ -116,7 +116,7 @@ func TestIDList_WithID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, removed)
 	assert.Equal(t, 2, idx)
-	assert.Equal(t, 2, il.Count())
+	assert.Equal(t, 2, il.Len())
 
 	// check not found after remove
 	_, err = il.Get("Dacia")
@@ -270,4 +270,37 @@ func TestList_QueryStr(t *testing.T) {
 		{name: "Dacia", age: 22},
 		{name: "Opel", age: 5},
 	}, result)
+}
+
+func TestIDList_QueryRemove(t *testing.T) {
+	l := NewIDList((*car).Name)
+	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
+	assert.NoError(t, err)
+
+	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
+	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
+	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
+	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 5}))
+
+	assert.Equal(t, 4, l.Len())
+
+	count, err := l.QueryStr(`age = 22`).Remove()
+	assert.NoError(t, err)
+	assert.Equal(t, 2, count)
+	assert.Equal(t, 2, l.Len())
+	l.Values(func(i int, c car) bool {
+		switch i {
+		case 1:
+			assert.Equal(t, c, car{name: "Mercedes", age: 5})
+		case 3:
+			assert.Equal(t, c, car{name: "Audi", age: 5})
+		default:
+			t.Logf("invalid car: %v", c)
+		}
+		return true
+	})
+
+	count, err = l.QueryStr(`age = 22`).Count()
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
 }

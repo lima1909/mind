@@ -69,7 +69,7 @@ func (l *List[T]) RemoveIndex(fieldName string) {
 // InitialBulkInsert can be used for a more performant inserting of initial values.
 // The List MUST be empty!
 func (l *List[T]) InitialBulkInsert(values FreeList[T]) error {
-	if l.list.count > 0 {
+	if l.list.len > 0 {
 		return errors.New("can not execute bulk insert for a non empty list")
 	}
 
@@ -116,6 +116,10 @@ func (l *List[T]) Remove(index int) bool {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
+	return l.remove(index)
+}
+
+func (l *List[T]) remove(index int) bool {
 	if item, found := l.list.Get(index); found {
 		l.indexMap.Delete(&item, index)
 		return l.list.Remove(index)
@@ -131,7 +135,16 @@ func (l *List[T]) Get(index int) (T, bool) {
 	return l.list.Get(index)
 }
 
+// Len the Items, which in this list exist
+func (l *List[T]) Len() int {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	return l.list.Len()
+}
+
 // Values iterate over the complete List and call the yield function, for every item
+// WARNING: While the Iterator is used, the List is locked.
 func (l *List[T]) Values(yield func(int, T) bool) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
@@ -145,38 +158,35 @@ func (l *List[T]) Values(yield func(int, T) bool) {
 	}
 }
 
-// Count the Items, which in this list exist
-func (l *List[T]) Count() int {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-
-	return l.list.Count()
-}
-
 // QueryStr execute the given Query-string.
 func (l *List[T]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromStr(l.execQuery, queryStr, opts...)
+	return query.NewQHandleFromStr(l.hfns(), queryStr, opts...)
 }
 
 // Query execute the given Query.
 func (l *List[T]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromExpr(l.execQuery, q, opts...)
+	return query.NewQHandleFromExpr(l.hfns(), q, opts...)
 }
 
 // implements the QHandle interface
 // ------------------------------------------
-func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, query.GetItemFn[T])) error {
+func (l *List[T]) hfns() query.HandleFNs[T] {
+	return query.HandleFNs[T]{
+		Query:      l.execQuery,
+		GetItem:    l.list.Get,
+		RemoveItem: l.remove,
+	}
+}
+
+func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, bool)) error {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
 
-	rids, _, err := query(l.indexMap.FilterByName, l.indexMap.allIDs)
+	rids, canMutate, err := query(l.indexMap.FilterByName, l.indexMap.allIDs)
 	if err != nil {
 		return err
 	}
 
-	exec(rids, func(lidx uint32) (T, bool) {
-		return l.list.Get(int(lidx))
-	})
-
+	exec(rids, canMutate)
 	return nil
 }
