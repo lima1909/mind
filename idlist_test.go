@@ -60,30 +60,39 @@ func TestIDList_Update(t *testing.T) {
 	l.Insert(car{name: "Dacia", age: 22})
 	l.Insert(car{name: "Audi", age: 5})
 
+	// ID (Name) changed from "Opel" to "VW", what is not allowed
 	err = l.Update("Opel", func(c *car) { c.name = "VW"; c.age = 3; c.color = "blue" })
-	assert.NoError(t, err)
+	assert.Error(t, err)
 
 	err = l.Update("NotFound", func(*car) {})
 	assert.Error(t, err)
 
-	vw, err := l.Get("VW")
+	// second try to update
+	err = l.Update("Opel", func(c *car) { c.name = "Opel"; c.age = 3; c.color = "blue" })
 	assert.NoError(t, err)
-	assert.Equal(t, car{name: "VW", age: 3, color: "blue"}, vw)
+
+	opel, err := l.Get("Opel")
+	assert.NoError(t, err)
+	assert.Equal(t, car{name: "Opel", age: 3, color: "blue"}, opel)
+
+	cars, err := l.QueryStr(`age = 3`).Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []car{{name: "Opel", age: 3, color: "blue"}}, cars)
 
 	h := l.QueryStr(`id = "Opel"`)
 	count, err := h.Count()
-	assert.ErrorIs(t, errr.ValueNotFoundError{Value: "Opel"}, err)
-	assert.Equal(t, 0, count)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
 
 	h = l.QueryStr(`id = "VW"`)
-	cars, err := h.Values()
-	assert.NoError(t, err)
-	assert.Equal(t, car{name: "VW", age: 3, color: "blue"}, cars[0])
+	cars, err = h.Values()
+	assert.ErrorIs(t, errr.ValueNotFoundError{Value: "VW"}, err)
+	assert.Equal(t, 0, len(cars))
 
 	h = l.QueryStr(`age = 3`)
 	cars, err = h.Values()
 	assert.NoError(t, err)
-	assert.Equal(t, car{name: "VW", age: 3, color: "blue"}, cars[0])
+	assert.Equal(t, car{name: "Opel", age: 3, color: "blue"}, cars[0])
 }
 
 func TestIDList_WithID(t *testing.T) {

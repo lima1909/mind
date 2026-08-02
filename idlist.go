@@ -16,6 +16,9 @@ import (
 //
 // WARNING: If T is a pointer type, modifying the items returned by Get() or Query()
 // will corrupt the database indexes. Always use Update() or Replace() to modify data.
+//
+// WARNING: The list index, the position in the list (Slice Index) can be used again.
+// This means, after removing an Item and inserting a new Item, the new Item can reuse the index of the removed Item.
 type IDList[T any, ID comparable] struct {
 	list     FreeList[T]
 	idIndex  index.IdIndex[T, ID]
@@ -106,6 +109,31 @@ func (l *IDList[T, ID]) Insert(item T) int {
 	return idx
 }
 
+// Remove an item by the given ID.
+// Returns true, if the ID exist, the old Index in the List and an error, if occurred
+// errors:
+// - wrong datatype
+// - ID not found
+func (l *IDList[T, ID]) Remove(id ID) (bool, int, error) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	index, found := l.idIndex.GetIndex(id)
+	if !found {
+		return false, -1, errr.ValueNotFoundError{Value: id}
+	}
+
+	idx := int(index)
+	item, _ := l.list.Get(idx)
+	removed := l.list.Remove(idx)
+
+	l.idIndex.UnSet(&item, index)
+	l.indexMap.Delete(&item, idx)
+
+	return removed, int(index), nil
+
+}
+
 // Replace find the old item by the ID of the given item and
 // replace the old item with the new item and consistently updates all registered indexes.
 func (l *IDList[T, ID]) Replace(item T) (T, error) {
@@ -127,11 +155,8 @@ func (l *IDList[T, ID]) Replace(item T) (T, error) {
 		return zero, errr.ValueNotFoundError{Value: id}
 	}
 
-	if l.idIndex.HasChanged(&oldItem, &item) {
-		l.idIndex.UnSet(&oldItem, idx)
-		l.idIndex.Set(&item, idx)
-	}
 	// update all indexes: re-index
+	// NO Update in idIndex , because the id is on the same Idx
 	l.indexMap.Update(&oldItem, &item, int(idx))
 
 	return oldItem, nil
@@ -155,42 +180,19 @@ func (l *IDList[T, ID]) Update(id ID, update func(*T)) error {
 
 		update(&item)
 
-		l.list.Update(int(idx), item)
-
-		if l.idIndex.HasChanged(&oldItem, &item) {
-			l.idIndex.UnSet(&oldItem, idx)
-			l.idIndex.Set(&item, idx)
+		newID := l.idIndex.GetID(&item)
+		if id != newID {
+			return fmt.Errorf("changing the id from: %v to %v is not allowed", id, newID)
 		}
+
+		l.list.Update(int(idx), item)
+		// NO Update in idIndex , because the id is on the same Idx
 		l.indexMap.Update(&oldItem, &item, int(idx))
 
 		return nil
 	}
 
 	return errr.ValueNotFoundError{Value: id}
-}
-
-// Remove an item by the given ID.
-// Returns true, if the ID exist, the old Index in the List and an error, if occurred
-// errors:
-// - wrong datatype
-// - ID not found
-func (l *IDList[T, ID]) Remove(id ID) (bool, int, error) {
-	l.lock.Lock()
-	defer l.lock.Unlock()
-
-	index, found := l.idIndex.GetIndex(id)
-	if !found {
-		return false, -1, errr.ValueNotFoundError{Value: id}
-	}
-
-	idx := int(index)
-	item, _ := l.list.Get(idx)
-	removed := l.list.Remove(idx)
-
-	l.idIndex.UnSet(&item, index)
-	l.indexMap.Delete(&item, idx)
-
-	return removed, int(index), nil
 }
 
 // Get returns an item by the given ID.
