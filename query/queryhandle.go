@@ -19,6 +19,7 @@ type HandleFNs[T any] struct {
 	Query      func(Query, func(*lidx.RawIDs32, bool)) error
 	GetItem    func(int) (T, bool)
 	RemoveItem func(int) bool
+	UpdateItem func(index int, update func(*T)) error
 }
 
 type QHandle[T any] struct {
@@ -87,7 +88,12 @@ func (h QHandle[T]) Remove() (int, error) {
 	}
 
 	count := 0
-	return count, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
+	return count, h.fns.Query(h.query, func(rids *lidx.RawIDs32, canMutate bool) {
+
+		if !canMutate {
+			rids = rids.Copy()
+		}
+
 		rids.Values(func(idx uint32) bool {
 			if h.fns.RemoveItem(int(idx)) {
 				count++
@@ -95,6 +101,38 @@ func (h QHandle[T]) Remove() (int, error) {
 			return true
 		})
 	})
+}
+
+func (h QHandle[T]) Update(update func(*T)) (int, error) {
+	if h.err != nil {
+		return 0, h.err
+	}
+
+	count := 0
+	var errr error
+	err := h.fns.Query(h.query, func(rids *lidx.RawIDs32, canMutate bool) {
+
+		if !canMutate {
+			rids = rids.Copy()
+		}
+
+		rids.Values(func(idx uint32) bool {
+
+			errr = h.fns.UpdateItem(int(idx), update)
+			if errr != nil {
+				return false
+			}
+
+			count++
+			return true
+		})
+	})
+
+	if errr != nil {
+		return 0, errr
+	}
+
+	return count, err
 }
 
 // Paginate the result values of the Query, but in Pagination

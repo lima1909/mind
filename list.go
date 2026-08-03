@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/lima1909/mind/errr"
 	"github.com/lima1909/mind/index"
 	"github.com/lima1909/mind/lidx"
 	"github.com/lima1909/mind/query"
@@ -98,18 +99,24 @@ func (l *List[T]) Update(index int, update func(*T)) bool {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	if item, found := l.list.Get(index); found {
-		// save old value
-		oldItem := item
+	return l.update(index, update) == nil
+}
 
-		update(&item)
-
-		l.list.Update(index, item)
-		l.indexMap.Update(&oldItem, &item, index)
-		return true
+func (l *List[T]) update(index int, update func(*T)) error {
+	item, found := l.list.Get(index)
+	if !found {
+		return errr.ValueNotFoundError{Value: index}
 	}
 
-	return false
+	// save old value
+	oldItem := item
+
+	update(&item)
+
+	l.list.Update(index, item)
+	l.indexMap.Update(&oldItem, &item, index)
+
+	return nil
 }
 
 func (l *List[T]) Remove(index int) bool {
@@ -158,6 +165,21 @@ func (l *List[T]) Values(yield func(int, T) bool) {
 	}
 }
 
+func (l *List[T]) ToValues() []T {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	result := make([]T, 0, l.list.Len())
+
+	for _, item := range l.list.slots {
+		if item.occupied {
+			result = append(result, item.value)
+		}
+	}
+
+	return result
+}
+
 // QueryStr execute the given Query-string.
 func (l *List[T]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
 	return query.NewQHandleFromStr(l.hfns(), queryStr, opts...)
@@ -175,6 +197,7 @@ func (l *List[T]) hfns() query.HandleFNs[T] {
 		Query:      l.execQuery,
 		GetItem:    l.list.Get,
 		RemoveItem: l.remove,
+		UpdateItem: l.update,
 	}
 }
 

@@ -130,10 +130,9 @@ func (l *IDList[T, ID]) Remove(id ID) (bool, int, error) {
 
 func (l *IDList[T, ID]) remove(index int) bool {
 	if item, found := l.list.Get(index); found {
-		removed := l.list.Remove(index)
 		l.idIndex.UnSet(&item, uint32(index))
 		l.indexMap.Delete(&item, index)
-		return removed
+		return l.list.Remove(index)
 	}
 
 	return false
@@ -180,25 +179,31 @@ func (l *IDList[T, ID]) Update(id ID, update func(*T)) error {
 		return errr.ValueNotFoundError{Value: id}
 	}
 
-	if item, found := l.list.Get(int(idx)); found {
-		// save old value
-		oldItem := item
+	return l.update(int(idx), update)
+}
 
-		update(&item)
-
-		newID := l.idIndex.GetID(&item)
-		if id != newID {
-			return fmt.Errorf("changing the id from: %v to %v is not allowed", id, newID)
-		}
-
-		l.list.Update(int(idx), item)
-		// NO Update in idIndex , because the id is on the same Idx
-		l.indexMap.Update(&oldItem, &item, int(idx))
-
-		return nil
+func (l *IDList[T, ID]) update(index int, update func(*T)) error {
+	item, found := l.list.Get(index)
+	if !found {
+		return errr.ValueNotFoundError{Value: index}
 	}
 
-	return errr.ValueNotFoundError{Value: id}
+	// save old value
+	oldItem := item
+	oldID := l.idIndex.GetID(&oldItem)
+
+	update(&item)
+
+	newID := l.idIndex.GetID(&item)
+	if oldID != newID {
+		return fmt.Errorf("changing the id from: %v to %v is not allowed", oldID, newID)
+	}
+
+	l.list.Update(index, item)
+	// NO Update in idIndex , because the id is on the same Idx
+	l.indexMap.Update(&oldItem, &item, index)
+
+	return nil
 }
 
 // Get returns an item by the given ID.
@@ -254,6 +259,21 @@ func (l *IDList[T, ID]) Values(yield func(int, T) bool) {
 	}
 }
 
+func (l *IDList[T, ID]) ToValues() []T {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	result := make([]T, 0, l.list.Len())
+
+	for _, item := range l.list.slots {
+		if item.occupied {
+			result = append(result, item.value)
+		}
+	}
+
+	return result
+}
+
 // QueryStr execute the given Query-string.
 func (l *IDList[T, ID]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
 	return query.NewQHandleFromStr(l.hfns(), queryStr, opts...)
@@ -271,6 +291,7 @@ func (l *IDList[T, ID]) hfns() query.HandleFNs[T] {
 		Query:      l.execQuery,
 		GetItem:    l.list.Get,
 		RemoveItem: l.remove,
+		UpdateItem: l.update,
 	}
 }
 

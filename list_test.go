@@ -492,7 +492,9 @@ func TestList_QueryRemove(t *testing.T) {
 
 	assert.Equal(t, 3, l.Len())
 
-	count, err := l.QueryStr("name sounds 'Müller'").Remove()
+	qh := l.QueryStr("name sounds 'Müller'")
+
+	count, err := qh.Remove()
 	assert.NoError(t, err)
 	assert.Equal(t, 2, count)
 	assert.Equal(t, 1, l.Len())
@@ -506,7 +508,39 @@ func TestList_QueryRemove(t *testing.T) {
 		return true
 	})
 
-	count, err = l.QueryStr("name sounds 'Müller'").Count()
+	count, err = qh.Count()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, count)
+}
+
+func TestList_QueryUpdate(t *testing.T) {
+	l := NewList[string]()
+	assert.NoError(t, l.CreateIndex("name",
+		index.NewPhoneticIndex(index.FromValue[string]())))
+
+	assert.Equal(t, 0, l.Insert("Müller"))
+	assert.Equal(t, 1, l.Insert("Mueller"))
+	assert.Equal(t, 2, l.Insert("Schmidt"))
+	assert.Equal(t, 3, l.Insert("Mueler"))
+
+	assert.Equal(t, 4, l.Len())
+
+	qh := l.QueryStr("name sounds 'Müller'")
+
+	count, err := qh.Update(func(s *string) {
+		*s = *s + "_"
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 3, count)
+	assert.Equal(t, 4, l.Len())
+
+	values, err := qh.Values()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"Müller_", "Mueller_", "Mueler_"}, values)
+	assert.Equal(t, []string{"Müller_", "Mueller_", "Schmidt", "Mueler_"}, l.ToValues())
+
+	qh = l.QueryStr("name sounds 'Müller_'")
+	count, err = qh.Count()
+	assert.NoError(t, err)
+	assert.Equal(t, 3, count)
 }

@@ -280,20 +280,18 @@ func TestIDList_QueryRemove(t *testing.T) {
 	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
 	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
 	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
-	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 5}))
+	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 22}))
 
 	assert.Equal(t, 4, l.Len())
 
 	count, err := l.QueryStr(`age = 22`).Remove()
 	assert.NoError(t, err)
-	assert.Equal(t, 2, count)
-	assert.Equal(t, 2, l.Len())
+	assert.Equal(t, 3, count)
+	assert.Equal(t, 1, l.Len())
 	l.Values(func(i int, c car) bool {
 		switch i {
 		case 1:
 			assert.Equal(t, c, car{name: "Mercedes", age: 5})
-		case 3:
-			assert.Equal(t, c, car{name: "Audi", age: 5})
 		default:
 			t.Logf("invalid car: %v", c)
 		}
@@ -302,5 +300,51 @@ func TestIDList_QueryRemove(t *testing.T) {
 
 	count, err = l.QueryStr(`age = 22`).Count()
 	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestIDList_QueryUpdate(t *testing.T) {
+	l := NewIDList((*car).Name)
+	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
+	assert.NoError(t, err)
+
+	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
+	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
+	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
+	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 22}))
+
+	assert.Equal(t, 4, l.Len())
+
+	count, err := l.QueryStr(`age = 22`).Update(func(c *car) {
+		c.age = c.age + 1
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 3, count)
+	assert.Equal(t, 4, l.Len())
+	assert.Equal(t, []car{{name: "Opel", age: 23}, {name: "Mercedes", age: 5}, {name: "Dacia", age: 23}, {name: "Audi", age: 23}}, l.ToValues())
+
+	count, err = l.QueryStr(`age = 23`).Count()
+	assert.NoError(t, err)
+	assert.Equal(t, 3, count)
+}
+
+func TestIDList_QueryUpdateError(t *testing.T) {
+	l := NewIDList((*car).Name)
+	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
+	assert.NoError(t, err)
+
+	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
+	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
+	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
+	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 22}))
+
+	assert.Equal(t, 4, l.Len())
+
+	// Name is ID, so you can NOT change it
+	count, err := l.QueryStr(`age = 22`).Update(func(c *car) {
+		c.name = "FOO"
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "changing the id from:")
 	assert.Equal(t, 0, count)
 }
