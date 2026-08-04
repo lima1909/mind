@@ -304,8 +304,8 @@ func (l *IDList[T, ID]) filterByName(fieldName string) (query.Filter, error) {
 }
 
 func (l *IDList[T, ID]) execQuery(query query.Query, exec func(*lidx.RawIDs32, bool)) error {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
 	rids, canMutate, err := query(l.filterByName, l.indexMap.allIDs)
 	if err != nil {

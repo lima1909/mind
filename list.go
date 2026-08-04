@@ -202,8 +202,8 @@ func (l *List[T]) hfns() query.HandleFNs[T] {
 }
 
 func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, bool)) error {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
 	rids, canMutate, err := query(l.indexMap.FilterByName, l.indexMap.allIDs)
 	if err != nil {
