@@ -474,3 +474,24 @@ func TestBitSet_ValuesUnSetIter(t *testing.T) {
 	bs.Removes(func(id uint32) bool { return id == 0 || id == 1 })
 	assert.Equal(t, []uint32{2}, bs.ToSlice())
 }
+
+// Or with an empty receiver must COPY and must take over other's count.
+// Aliasing corrupts the source; a stale count makes Count()/IsEmpty() lie,
+// and the query engine early-exits on IsEmpty().
+func TestBitSet_Or_MustNotAliasOther(t *testing.T) {
+	empty := NewBitSet[uint32]()
+	src := NewBitSetFrom[uint32](1, 5, 100)
+
+	empty.Or(src)
+
+	assert.Equal(t, 3, empty.Count(), "Or did not take over the count")
+	assert.False(t, empty.IsEmpty(), "Or left a stale count, IsEmpty lies")
+	assert.Equal(t, []uint32{1, 5, 100}, empty.ToSlice())
+
+	empty.UnSet(5)
+	assert.Equal(t, []uint32{1, 100}, empty.ToSlice())
+
+	// src must be untouched
+	assert.Equal(t, []uint32{1, 5, 100}, src.ToSlice(), "Or aliased the source data")
+	assert.Equal(t, 3, src.Count())
+}

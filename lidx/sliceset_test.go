@@ -177,3 +177,64 @@ func TestSliceSet_ValuesUnSetIter(t *testing.T) {
 	ss.Removes(func(id uint32) bool { return id == 0 || id == 1 })
 	assert.Equal(t, []uint32{2}, ss.ToSlice())
 }
+
+func TestSliceSet_Removes(t *testing.T) {
+	tests := []struct {
+		name   string
+		in     []uint32
+		remove func(uint32) bool
+		want   []uint32
+	}{
+		{"empty", nil, func(uint32) bool { return true }, []uint32{}},
+		{"remove none", []uint32{1, 2, 3}, func(uint32) bool { return false }, []uint32{1, 2, 3}},
+		{"remove all", []uint32{1, 2, 3}, func(uint32) bool { return true }, []uint32{}},
+		{"remove first", []uint32{1, 2, 3}, func(v uint32) bool { return v == 1 }, []uint32{2, 3}},
+		{"remove middle", []uint32{1, 2, 3}, func(v uint32) bool { return v == 2 }, []uint32{1, 3}},
+		{"remove last", []uint32{1, 2, 3}, func(v uint32) bool { return v == 3 }, []uint32{1, 2}},
+		{"remove even", []uint32{1, 2, 3, 4, 5, 6}, func(v uint32) bool { return v%2 == 0 }, []uint32{1, 3, 5}},
+		{"sparse", []uint32{5, 100, 4096, 9999}, func(v uint32) bool { return v > 1000 }, []uint32{5, 100}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewSliceSetFrom(tt.in...)
+			s.Removes(tt.remove)
+
+			assert.Equal(t, tt.want, s.ToSlice())
+			assert.Equal(t, len(tt.want), s.Count())
+			// the set must stay sorted, Contains relies on binary search
+			for _, v := range tt.want {
+				assert.True(t, s.Contains(v), "Contains(%d) failed after Removes", v)
+			}
+		})
+	}
+}
+
+// Or with an empty receiver must COPY, not alias. Otherwise a later in-place
+// mutation of the result corrupts the source, which is typically an index bucket.
+func TestSliceSet_Or_MustNotAliasOther(t *testing.T) {
+	empty := NewSliceSet[uint32]()
+	src := NewSliceSetFrom[uint32](10, 20, 30)
+
+	empty.Or(src)
+	assert.Equal(t, []uint32{10, 20, 30}, empty.ToSlice())
+
+	// mutate the result in every way that writes into the backing array
+	empty.UnSet(20)
+	assert.Equal(t, []uint32{10, 30}, empty.ToSlice())
+
+	// src must be untouched
+	assert.Equal(t, []uint32{10, 20, 30}, src.ToSlice(), "Or aliased the source slice")
+}
+
+func TestSliceSet_Or_MustNotAliasOther_AndInPlace(t *testing.T) {
+	empty := NewSliceSet[uint32]()
+	src := NewSliceSetFrom[uint32](0, 1, 2, 15, 29)
+
+	empty.Or(src)
+	// And compacts survivors to the left, which is what writes into the array
+	empty.And(NewSliceSetFrom[uint32](15))
+
+	assert.Equal(t, []uint32{15}, empty.ToSlice())
+	assert.Equal(t, []uint32{0, 1, 2, 15, 29}, src.ToSlice(), "And corrupted the aliased source")
+}

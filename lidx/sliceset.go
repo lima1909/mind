@@ -191,7 +191,7 @@ func (s *SliceSet[U]) Or(other *SliceSet[U]) {
 		return
 	}
 	if la == 0 {
-		s.data = other.data
+		s.data = append(s.data[:0], other.data...)
 		return
 	}
 
@@ -304,23 +304,24 @@ func (s *SliceSet[U]) AndNot(other *SliceSet[U]) {
 	s.data = sa[:writeIdx]
 }
 
-// Removes iterate over the complete SliceStet and call the check function,
-// If check returns true, the Value will be UnSet
+// Removes iterate over the complete SliceStet and call the remove function,
+// If remove returns true, the Value will be UnSet
 //
-// collect first, then remove to avoid slice-shift
-// corruption when UnSet shifts the backing array during Values iteration.
-func (s *SliceSet[U]) Removes(check func(U) bool) {
-	var toRemove []U
+// Single in-place compaction pass: O(n) and allocation free. Writing the kept
+// values forward as we go is safe even though we read and write the same slice,
+// because the write index never runs ahead of the read index.
+func (s *SliceSet[U]) Removes(remove func(U) bool) {
+	keep := 0
 
 	for _, v := range s.data {
-		if check(v) {
-			toRemove = append(toRemove, v)
+		if remove(v) {
+			continue
 		}
+		s.data[keep] = v
+		keep++
 	}
 
-	for _, id := range toRemove {
-		s.UnSet(id)
-	}
+	s.data = s.data[:keep]
 }
 
 func (s *SliceSet[U]) ToSlice() []U         { return s.data }

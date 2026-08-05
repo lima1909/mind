@@ -1,6 +1,7 @@
 package mind
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/lima1909/mind/errr"
@@ -347,4 +348,60 @@ func TestIDList_QueryUpdateError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "changing the id from:")
 	assert.Equal(t, 0, count)
+}
+
+func TestIDList_QueryCheckOrder(t *testing.T) {
+	newList := func() *IDList[car, string] {
+		l := NewIDList((*car).Name)
+		assert.NoError(t, l.CreateIndex("age", index.NewSortedIndex((*car).Age)))
+		assert.NoError(t, l.CreateIndex("isnew", index.NewMapIndex((*car).IsNew)))
+
+		// two age buckets; the isNew hit sits in the MIDDLE of the age=1 bucket,
+		// so an in-place And/AndNot has to compact survivors to the left.
+		for i := range 30 {
+			l.Insert(car{name: fmt.Sprintf("lo-%d", i), age: 1, isNew: i == 15})
+		}
+		for i := range 30 {
+			l.Insert(car{name: fmt.Sprintf("hi-%d", i), age: 9, isNew: i == 15})
+		}
+
+		return l
+	}
+
+	names := func(t *testing.T, l *IDList[car, string], q string) []string {
+		t.Helper()
+
+		cars, err := l.QueryStr(q).Values()
+		assert.NoError(t, err)
+		out := make([]string, 0, len(cars))
+		for _, c := range cars {
+			out = append(out, c.name)
+		}
+
+		return out
+	}
+
+	queries := []string{
+		`age < 2 and isnew = true`,
+		`isnew = true and age < 2`,
+		`age < 2 and isnew != true`,
+		`age < 2 or isnew = true`,
+		`age < 2 and not isnew = true`,
+	}
+
+	for _, q := range queries {
+		t.Run(q, func(t *testing.T) {
+			l := newList()
+
+			ageBefore := names(t, l, `age < 2`)
+			newBefore := names(t, l, `isnew = true`)
+
+			// the query under test is read-only
+			_, err := l.QueryStr(q).Count()
+			assert.NoError(t, err)
+
+			assert.Equal(t, ageBefore, names(t, l, `age < 2`), "age index was mutated by a read-only query")
+			assert.Equal(t, newBefore, names(t, l, `isnew = true`), "isnew index was mutated by a read-only query")
+		})
+	}
 }

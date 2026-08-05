@@ -362,7 +362,8 @@ func (b *BitSet[U]) Or(other *BitSet[U]) {
 		return
 	}
 	if bl == 0 {
-		b.data = other.data
+		b.data = append(b.data[:0], od...)
+		b.count = other.count
 		return
 	}
 
@@ -471,14 +472,14 @@ func (b *BitSet[U]) Shrink() {
 	}
 }
 
-// Removes iterate over the complete BitSet and call the check function,
-// for every value, if check returns true, the Bit are UnSet
-func (b *BitSet[U]) Removes(check func(U) bool) {
+// Removes iterate over the complete BitSet and call the remove function,
+// for every value, if remove returns true, the Bit are UnSet
+func (b *BitSet[U]) Removes(remove func(U) bool) {
 	for i, w := range b.data {
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
 			val := (i << 6) + t
-			if check(U(val)) {
+			if remove(U(val)) {
 				b.UnSet(U(val))
 			}
 			w &= (w - 1)
