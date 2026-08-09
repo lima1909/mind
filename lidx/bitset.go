@@ -148,18 +148,24 @@ func (b *BitSet[U]) ValueOnIndex(idx uint32) (uint32, bool) {
 // Values iterate over the complete BitSet and call the yield function, for every value
 func (b *BitSet[U]) Values(yield func(U) bool) {
 	for i, w := range b.data {
+		if w == 0 {
+			continue
+		}
+
+		base := U(i) << 6
+
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
-			val := (i << 6) + t
-			if !yield(U(val)) {
+			if !yield(base | U(t)) {
 				return
 			}
-			w &= (w - 1)
+
+			w &= w - 1
 		}
 	}
 }
 
-func (b *BitSet[U]) ValuesSkipN(skipN int, visit func(v U) bool) {
+func (b *BitSet[U]) ValuesSkipN(skipN int, yield func(v U) bool) {
 	if len(b.data) == 0 {
 		return
 	}
@@ -190,7 +196,7 @@ func (b *BitSet[U]) ValuesSkipN(skipN int, visit func(v U) bool) {
 		for w != 0 {
 			t := bits.TrailingZeros64(w)
 			val := U(i<<6) + U(t)
-			if !visit(val) {
+			if !yield(val) {
 				return
 			}
 			w &= w - 1
@@ -202,7 +208,7 @@ func (b *BitSet[U]) ValuesSkipN(skipN int, visit func(v U) bool) {
 			for w2 != 0 {
 				t := bits.TrailingZeros64(w2)
 				val := U(j<<6) + U(t)
-				if !visit(val) {
+				if !yield(val) {
 					return
 				}
 				w2 &= w2 - 1
@@ -210,6 +216,39 @@ func (b *BitSet[U]) ValuesSkipN(skipN int, visit func(v U) bool) {
 		}
 
 		return // all bits from `skipN` onward have been visited
+	}
+}
+
+func (b *BitSet[U]) ValuesBatch(yield func([]U) bool) {
+	const batchSize = 256
+	buffer := make([]U, batchSize)
+	pos := 0
+
+	for i, w := range b.data {
+		if w == 0 {
+			continue
+		}
+
+		base := i << 6
+		for w != 0 {
+			t := bits.TrailingZeros64(w)
+			buffer[pos] = U(base + t)
+			pos++
+
+			// If buffer is full, yield the whole batch
+			if pos == batchSize {
+				if !yield(buffer) {
+					return
+				}
+				pos = 0
+			}
+			w &= (w - 1)
+		}
+	}
+
+	// Yield the final partial batch
+	if pos > 0 {
+		yield(buffer[:pos])
 	}
 }
 
@@ -344,7 +383,7 @@ func (b *BitSet[U]) And(other *BitSet[U]) {
 
 	// BCE: Bounds Check Elimination
 	a := b.data
-	o := other.data[:l]
+	o := other.data[:len(a)]
 
 	for i := range l {
 		a[i] &= o[i]
@@ -352,42 +391,38 @@ func (b *BitSet[U]) And(other *BitSet[U]) {
 	b.count = -1 // invalidate cached count
 }
 
-// Or is the logical OR of two BitSet
+// Or is the logical OR of two BitSet (Union)
 func (b *BitSet[U]) Or(other *BitSet[U]) {
-	od := other.data
-	ol := len(od)
-	bl := len(b.data)
-
-	if ol == 0 {
+	if len(other.data) == 0 {
 		return
 	}
-	if bl == 0 {
-		b.data = append(b.data[:0], od...)
+
+	if len(b.data) == 0 {
+		b.data = append(b.data[:0], other.data...)
 		b.count = other.count
 		return
 	}
 
+	bl := len(b.data)
+	ol := len(other.data)
 	overlap := min(bl, ol)
 
-	// Ensure b.data has enough length for the result
-	if bl < ol {
-		if cap(b.data) >= ol {
-			b.data = b.data[:ol]
-		} else {
-			b.grow(ol - 1)
-		}
-		// Copy non-overlapping tail: 0 | x = x
-		copy(b.data[overlap:ol], od[overlap:ol])
-	}
+	// Slicing here helps the compiler eliminate bounds checks inside the loop
+	dst := b.data[:overlap]
+	src := other.data[:overlap]
 
 	// OR the overlapping words
-	dst := b.data[:overlap]
-	src := od[:overlap]
-
-	for i := range overlap {
+	for i := range dst {
 		dst[i] |= src[i]
 	}
-	b.count = -1 // invalidate cached count
+
+	// If 'other' is longer, simply append the remaining tail.
+	// This replaces the complex capacity checks, b.grow(), and copy().
+	if ol > bl {
+		b.data = append(b.data, other.data[bl:]...)
+	}
+
+	b.count = -1 // Invalidate cached count
 }
 
 func (b *BitSet[U]) flipTheBit(val U) {
@@ -432,22 +467,19 @@ func (b *BitSet[U]) Xor(other *BitSet[U]) {
 //
 // Example: [1, 2, 110, 2345] AndNot [2, 110] => [1, 2345]
 func (b *BitSet[U]) AndNot(other *BitSet[U]) {
-	if len(other.data) == 0 || len(b.data) == 0 {
+	l := min(len(b.data), len(other.data))
+	if l == 0 {
 		return
 	}
 
-	bd := b.data
-	od := other.data
-	l := min(len(bd), len(od))
+	bd := b.data[:l]
+	od := other.data[:l]
 
-	// eliminates checks inside the loop.
-	_ = bd[l-1]
-	_ = od[l-1]
-
-	for i := range l {
-		bd[i] &^= od[i]
+	for i, v := range od {
+		bd[i] &^= v
 	}
-	b.count = -1 // invalidate cached count
+
+	b.count = -1
 }
 
 // Shrink trims the bitset to ensure that len(b.data) always points to the last truly useful word.
@@ -487,35 +519,6 @@ func (b *BitSet[U]) Removes(remove func(U) bool) {
 	}
 }
 
-func (b *BitSet[U]) ValuesBatch(yield func([]U) bool) {
-	const batchSize = 256
-	buffer := make([]U, batchSize)
-	pos := 0
-
-	for i, w := range b.data {
-		base := i << 6
-		for w != 0 {
-			t := bits.TrailingZeros64(w)
-			buffer[pos] = U(base + t)
-			pos++
-
-			// If buffer is full, yield the whole batch
-			if pos == batchSize {
-				if !yield(buffer) {
-					return
-				}
-				pos = 0
-			}
-			w &= (w - 1)
-		}
-	}
-
-	// Yield the final partial batch
-	if pos > 0 {
-		yield(buffer[:pos])
-	}
-}
-
 // ToSlice create a new slice which contains all saved values
 func (b *BitSet[U]) ToSlice() []U {
 	res := make([]U, 0, b.Count())
@@ -524,4 +527,78 @@ func (b *BitSet[U]) ToSlice() []U {
 		return true
 	})
 	return res
+}
+
+func (b *BitSet[U]) Ands(others ...*BitSet[U]) {
+	if len(others) == 0 || len(b.data) == 0 {
+		return
+	}
+
+	minLen := len(b.data)
+	for _, o := range others {
+		if len(o.data) < minLen {
+			minLen = len(o.data)
+		}
+	}
+
+	if minLen < len(b.data) {
+		clear(b.data[minLen:])
+		b.data = b.data[:minLen]
+	}
+
+	if len(b.data) == 0 {
+		b.count = 0
+		return
+	}
+
+	for _, o := range others {
+		src := o.data[:len(b.data)]
+		dst := b.data
+
+		for i, v := range src {
+			dst[i] &= v
+		}
+	}
+
+	b.count = -1 // invalidiere den Count-Cache
+}
+
+func (b *BitSet[U]) Ors(others ...*BitSet[U]) {
+	if len(others) == 0 {
+		return
+	}
+
+	maxLen := len(b.data)
+	for _, o := range others {
+		if len(o.data) > maxLen {
+			maxLen = len(o.data)
+		}
+	}
+
+	if maxLen > len(b.data) {
+		oldLen := len(b.data)
+		if maxLen > cap(b.data) {
+			newData := make([]uint64, maxLen)
+			copy(newData, b.data)
+			b.data = newData
+		} else {
+			b.data = b.data[:maxLen]
+			clear(b.data[oldLen:])
+		}
+	}
+
+	for _, o := range others {
+		if len(o.data) == 0 {
+			continue
+		}
+
+		src := o.data
+		a := b.data[:len(src)]
+
+		for i, v := range src {
+			a[i] |= v
+		}
+	}
+
+	b.count = -1 // invalidiere den Count-Cache
 }

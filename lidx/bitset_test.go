@@ -310,6 +310,73 @@ func TestBitSet_ValuesSkipN(t *testing.T) {
 	}
 }
 
+func TestBitSet_ValuesBatch(t *testing.T) {
+	t.Run("0", func(t *testing.T) {
+		ss := NewBitSet[uint32]()
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("250", func(t *testing.T) {
+		ss := NewBitSet[uint32]()
+		for i := range 250 {
+			ss.Set(uint32(i))
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 250, count)
+	})
+
+	t.Run("500", func(t *testing.T) {
+		ss := NewBitSet[uint32]()
+		for i := range 500 {
+			ss.Set(uint32(i))
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 500, count)
+	})
+
+	t.Run("1501", func(t *testing.T) {
+		ss := NewBitSet[uint32]()
+		for i := range 1501 {
+			ss.Set(uint32(i))
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 1501, count)
+	})
+
+	t.Run("1600 every second", func(t *testing.T) {
+		ss := NewBitSet[uint32]()
+		for i := range 1600 {
+			if i%2 == 0 {
+				ss.Set(uint32(i))
+			}
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 800, count)
+	})
+
+}
+
 func TestBitSet_ValueOnIndex(t *testing.T) {
 
 	bs := NewBitSetFrom[uint32](1, 2, 8, 42, 1028, 100_000)

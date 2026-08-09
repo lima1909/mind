@@ -71,13 +71,33 @@ func (s *SliceSet[U]) Values(yield func(U) bool) {
 	}
 }
 
-func (s *SliceSet[U]) ValuesSkipN(skipN int, visit func(v U) bool) {
+func (s *SliceSet[U]) ValuesSkipN(skipN int, yield func(v U) bool) {
 	for i := skipN; i < len(s.data); i++ {
 		val := s.data[i]
-		if !visit(val) {
+		if !yield(val) {
 			break
 		}
 	}
+}
+
+func (s *SliceSet[U]) ValuesBatch(yield func([]U) bool) {
+	if len(s.data) == 0 {
+		return
+	}
+
+	const batchSize = 256
+	l := len(s.data)
+
+	batch := l / batchSize
+	rest := l % batchSize
+
+	for i := range batch {
+		if !yield(s.data[i*batchSize : i*batchSize+batchSize]) {
+			return
+		}
+	}
+
+	yield(s.data[len(s.data)-rest:])
 }
 
 // Contains check, is the value saved in the Set
@@ -152,8 +172,8 @@ func (s *SliceSet[U]) Copy() *SliceSet[U] {
 
 // And computes the logical And, (intersection) of two sorted Set.
 func (s *SliceSet[U]) And(other *SliceSet[U]) {
-	la, lo := len(s.data), len(other.data)
-	if la == 0 || lo == 0 {
+	if len(s.data) == 0 || len(other.data) == 0 {
+		clear(s.data) // Wichtig: Zombie-Werte nullen!
 		s.data = s.data[:0]
 		return
 	}
@@ -162,16 +182,17 @@ func (s *SliceSet[U]) And(other *SliceSet[U]) {
 		return
 	}
 
-	sa, so := s.data, other.data
+	sa := s.data
+	so := other.data
 	i, j, writeIdx := 0, 0, 0
 
-	for i < la && j < lo {
+	for i < len(sa) && j < len(so) {
 		av := sa[i]
 		ov := so[j]
 
 		if av < ov {
 			i++
-		} else if ov < av {
+		} else if av > ov {
 			j++
 		} else {
 			sa[writeIdx] = av
@@ -181,46 +202,49 @@ func (s *SliceSet[U]) And(other *SliceSet[U]) {
 		}
 	}
 
+	clear(sa[writeIdx:])
 	s.data = sa[:writeIdx]
 }
 
 // Or computes the logical OR (union) of two  sorted Set.
 func (s *SliceSet[U]) Or(other *SliceSet[U]) {
-	la, lo := len(s.data), len(other.data)
-	if lo == 0 {
+	if len(other.data) == 0 {
 		return
 	}
-	if la == 0 {
+	if len(s.data) == 0 {
 		s.data = append(s.data[:0], other.data...)
 		return
 	}
 
-	sa, so := s.data, other.data
-	i, j := 0, 0
-	res := make([]U, 0, la+lo)
+	sa := s.data
+	so := other.data
 
-	for i < la && j < lo {
+	res := make([]U, len(sa)+len(so))
+	i, j, k := 0, 0, 0
+
+	for i < len(sa) && j < len(so) {
 		av, ov := sa[i], so[j]
 		if av < ov {
-			res = append(res, av)
+			res[k] = av
 			i++
-		} else if ov < av {
-			res = append(res, ov)
+		} else if av > ov {
+			res[k] = ov
 			j++
 		} else {
-			res = append(res, av)
+			res[k] = av
 			i++
 			j++
 		}
+		k++
 	}
 
-	if i < la {
-		res = append(res, sa[i:]...)
-	} else if j < lo {
-		res = append(res, so[j:]...)
+	if i < len(sa) {
+		k += copy(res[k:], sa[i:])
+	} else if j < len(so) {
+		k += copy(res[k:], so[j:])
 	}
 
-	s.data = res
+	s.data = res[:k]
 }
 
 // Xor computes the logical XOR  of two  sorted Set.
@@ -268,22 +292,19 @@ func (s *SliceSet[U]) Xor(other *SliceSet[U]) {
 //
 // Example: [1, 2, 110, 2345] AndNot [2, 110] => [1, 2345]
 func (s *SliceSet[U]) AndNot(other *SliceSet[U]) {
-	la, lo := len(s.data), len(other.data)
-	if la == 0 || lo == 0 {
+	if len(s.data) == 0 || len(other.data) == 0 {
 		return
 	}
 
-	sa, so := s.data, other.data
+	sa := s.data
+	so := other.data
 	i, j, writeIdx := 0, 0, 0
 
-	for i < la && j < lo {
+	for i < len(sa) && j < len(so) {
 		av, ov := sa[i], so[j]
 
 		if av < ov {
-			// av is not in other, so keep it.
-			if writeIdx != i {
-				sa[writeIdx] = av
-			}
+			sa[writeIdx] = av
 			writeIdx++
 			i++
 		} else if av > ov {
@@ -294,13 +315,11 @@ func (s *SliceSet[U]) AndNot(other *SliceSet[U]) {
 		}
 	}
 
-	if i < la {
-		if writeIdx != i {
-			copy(sa[writeIdx:], sa[i:])
-		}
-		writeIdx += (la - i)
+	if i < len(sa) {
+		writeIdx += copy(sa[writeIdx:], sa[i:])
 	}
 
+	clear(sa[writeIdx:])
 	s.data = sa[:writeIdx]
 }
 
@@ -326,3 +345,88 @@ func (s *SliceSet[U]) Removes(remove func(U) bool) {
 
 func (s *SliceSet[U]) ToSlice() []U         { return s.data }
 func (s *SliceSet[U]) ToBitSet() *BitSet[U] { return NewBitSetFrom(s.data...) }
+
+func (s *SliceSet[U]) Ands(others ...*SliceSet[U]) {
+	originalSlice := s.data
+	if len(originalSlice) == 0 || len(others) == 0 {
+		return
+	}
+
+	for _, o := range others {
+		if len(o.data) == 0 {
+			clear(originalSlice)
+			s.data = s.data[:0]
+			return
+		}
+	}
+
+	for _, o := range others {
+		sa := s.data
+		so := o.data
+
+		if len(sa) == 0 {
+			break
+		}
+
+		if &sa[0] == &so[0] {
+			continue
+		}
+
+		i, j, writeIdx := 0, 0, 0
+
+		for i < len(sa) && j < len(so) {
+			av, ov := sa[i], so[j]
+
+			if av < ov {
+				i++
+			} else if av > ov {
+				j++
+			} else {
+				sa[writeIdx] = av
+				writeIdx++
+				i++
+				j++
+			}
+		}
+
+		s.data = sa[:writeIdx]
+	}
+
+	if len(s.data) < len(originalSlice) {
+		clear(originalSlice[len(s.data):])
+	}
+}
+
+func (s *SliceSet[U]) Ors(others ...*SliceSet[U]) {
+	if len(others) == 0 {
+		return
+	}
+
+	totalLen := len(s.data)
+	for _, o := range others {
+		totalLen += len(o.data)
+	}
+
+	if totalLen == len(s.data) {
+		return
+	}
+
+	if cap(s.data) >= totalLen {
+	} else {
+		newData := make([]U, len(s.data), totalLen)
+		copy(newData, s.data)
+		s.data = newData
+	}
+
+	for _, o := range others {
+		s.data = append(s.data, o.data...)
+	}
+
+	slices.Sort(s.data)
+
+	res := slices.Compact(s.data)
+
+	clear(s.data[len(res):])
+
+	s.data = res
+}

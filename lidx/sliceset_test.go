@@ -238,3 +238,132 @@ func TestSliceSet_Or_MustNotAliasOther_AndInPlace(t *testing.T) {
 	assert.Equal(t, []uint32{15}, empty.ToSlice())
 	assert.Equal(t, []uint32{0, 1, 2, 15, 29}, src.ToSlice(), "And corrupted the aliased source")
 }
+
+func TestSliceSet_ValuesBatch(t *testing.T) {
+	t.Run("0", func(t *testing.T) {
+		ss := NewSliceSet[uint32]()
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 0, count)
+	})
+
+	t.Run("250", func(t *testing.T) {
+		ss := NewSliceSet[uint32]()
+		for i := range 250 {
+			ss.Set(uint32(i))
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 250, count)
+	})
+
+	t.Run("500", func(t *testing.T) {
+		ss := NewSliceSet[uint32]()
+		for i := range 500 {
+			ss.Set(uint32(i))
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 500, count)
+	})
+
+	t.Run("1501", func(t *testing.T) {
+		ss := NewSliceSet[uint32]()
+		for i := range 1501 {
+			ss.Set(uint32(i))
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 1501, count)
+	})
+
+	t.Run("1600 every second", func(t *testing.T) {
+		ss := NewSliceSet[uint32]()
+		for i := range 1600 {
+			if i%2 == 0 {
+				ss.Set(uint32(i))
+			}
+		}
+		count := 0
+		ss.ValuesBatch(func(v []uint32) bool {
+			count += len(v)
+			return true
+		})
+		assert.Equal(t, 800, count)
+	})
+
+}
+
+func BenchmarkSliceSet_And(b *testing.B) {
+	bs1 := NewSliceSet[uint32]()
+	for i := 1; i <= count; i++ {
+		if i%3 == 0 {
+			bs1.Set(uint32(i))
+		}
+	}
+	bs2 := NewSliceSet[uint32]()
+	for i := 1; i <= count; i++ {
+		if i%6 == 0 {
+			bs2.Set(uint32(i))
+		}
+	}
+	b.ResetTimer()
+
+	for b.Loop() {
+		r := bs2.Copy()
+		r.And(bs1)
+		assert.Equal(b, 500_000, r.Count())
+	}
+}
+
+func BenchmarkSliceSet_Or(b *testing.B) {
+	bs1 := NewSliceSet[uint32]()
+	for i := 1; i <= count; i++ {
+		if i%3 == 0 {
+			bs1.Set(uint32(i))
+		}
+	}
+	bs2 := NewSliceSet[uint32]()
+	for i := 1; i <= count; i++ {
+		if i%6 == 0 {
+			bs2.Set(uint32(i))
+		}
+	}
+	b.ResetTimer()
+
+	for b.Loop() {
+		r := bs2.Copy()
+		r.Or(bs1)
+		assert.Equal(b, count/3, r.Count())
+	}
+}
+
+func BenchmarkSLiceSet_ValuesBatchIter(b *testing.B) {
+	bs := NewSliceSet[uint32]()
+	for i := 1; i <= count; i++ {
+		bs.Set(uint32(i))
+	}
+	b.ResetTimer()
+
+	for b.Loop() {
+		c := 0
+		bs.ValuesBatch(func(v []uint32) bool {
+			c += len(v)
+			return true
+		})
+		assert.Equal(b, count, c)
+
+	}
+}
