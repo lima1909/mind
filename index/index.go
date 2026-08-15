@@ -14,13 +14,15 @@ import (
 type Index[OBJ any] interface {
 	// Set insert or update the value of the given OBJ and the associated list index
 	Set(*OBJ, uint32)
-	// BulkSet inserts a bulk of given OBJ and the associated list index
-	BulkSet(iter.Seq2[int, *OBJ])
 	// UnSet remove the list index of the given OBJ
 	UnSet(*OBJ, uint32)
 	// HasChanged check for an old and an new Item OBJ value
 	HasChanged(oldItem, newItem *OBJ) bool
 	// Filter is quering the Index
+
+	// BulkSet inserts a bulk of given OBJ and the associated list index
+	BulkSet(iter.Seq2[int, *OBJ])
+
 	query.Filter
 }
 

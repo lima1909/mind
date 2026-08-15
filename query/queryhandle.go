@@ -16,7 +16,8 @@ func NoOptimizer() Opion                  { return func(o *queryOptions) { o.wit
 func WithTracer(t *Tracer) Opion          { return func(o *queryOptions) { o.withTracer = t } }
 
 type HandleFNs[T any] struct {
-	Query      func(Query, func(*lidx.RawIDs32, bool)) error
+	ReadQuery  func(Query, func(*lidx.RawIDs32)) error
+	WriteQuery func(Query, func(*lidx.RawIDs32)) error
 	GetItem    func(int) (T, bool)
 	RemoveItem func(int) bool
 	UpdateItem func(index int, update func(*T)) error
@@ -59,7 +60,7 @@ func (h QHandle[T]) Count() (int, error) {
 		return count, h.err
 	}
 
-	return count, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
+	return count, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
 		count = rids.Count()
 	})
 }
@@ -70,7 +71,7 @@ func (h QHandle[T]) Values() ([]T, error) {
 		return result, h.err
 	}
 
-	return result, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
+	return result, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
 		result = make([]T, 0, rids.Count())
 
 		rids.Values(func(idx uint32) bool {
@@ -88,12 +89,7 @@ func (h QHandle[T]) Remove() (int, error) {
 	}
 
 	count := 0
-	return count, h.fns.Query(h.query, func(rids *lidx.RawIDs32, canMutate bool) {
-
-		if !canMutate {
-			rids = rids.Copy()
-		}
-
+	return count, h.fns.WriteQuery(h.query, func(rids *lidx.RawIDs32) {
 		rids.Values(func(idx uint32) bool {
 			if h.fns.RemoveItem(int(idx)) {
 				count++
@@ -110,12 +106,7 @@ func (h QHandle[T]) Update(update func(*T)) (int, error) {
 
 	count := 0
 	var errr error
-	err := h.fns.Query(h.query, func(rids *lidx.RawIDs32, canMutate bool) {
-
-		if !canMutate {
-			rids = rids.Copy()
-		}
-
+	err := h.fns.WriteQuery(h.query, func(rids *lidx.RawIDs32) {
 		rids.Values(func(idx uint32) bool {
 
 			errr = h.fns.UpdateItem(int(idx), update)
@@ -144,7 +135,7 @@ func (h QHandle[T]) Paginate(offset, limit uint32) ([]T, PageInfo, error) {
 		return result, pi, h.err
 	}
 
-	return result, pi, h.fns.Query(h.query, func(rids *lidx.RawIDs32, _ bool) {
+	return result, pi, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
 		total := uint32(rids.Count())
 		pi = Paginate{offset, limit}.computePageInfo(total)
 		result = make([]T, 0, rids.Count())

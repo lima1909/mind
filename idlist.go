@@ -288,7 +288,8 @@ func (l *IDList[T, ID]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T
 // -----------------------------------------
 func (l *IDList[T, ID]) hfns() query.HandleFNs[T] {
 	return query.HandleFNs[T]{
-		Query:      l.execQuery,
+		ReadQuery:  l.readQuery,
+		WriteQuery: l.writeQuery,
 		GetItem:    l.list.Get,
 		RemoveItem: l.remove,
 		UpdateItem: l.update,
@@ -303,16 +304,32 @@ func (l *IDList[T, ID]) filterByName(fieldName string) (query.Filter, error) {
 	return l.indexMap.FilterByName(fieldName)
 }
 
-func (l *IDList[T, ID]) execQuery(query query.Query, exec func(*lidx.RawIDs32, bool)) error {
-	l.lock.Lock()
-	defer l.lock.Unlock()
+func (l *IDList[T, ID]) readQuery(q query.Query, exec func(*lidx.RawIDs32)) error {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
 
-	rids, canMutate, err := query(l.filterByName, l.indexMap.allIDs)
+	rids, _, err := q(l.filterByName, l.indexMap.allIDs)
 	if err != nil {
 		return err
 	}
 
-	exec(rids, canMutate)
+	exec(rids)
+	return nil
+}
 
+func (l *IDList[T, ID]) writeQuery(q query.Query, exec func(*lidx.RawIDs32)) error {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	rids, canMutate, err := q(l.filterByName, l.indexMap.allIDs)
+	if err != nil {
+		return err
+	}
+
+	if !canMutate {
+		rids = rids.Copy()
+	}
+
+	exec(rids)
 	return nil
 }

@@ -489,14 +489,15 @@ func TestList_QueryRemove(t *testing.T) {
 	assert.Equal(t, 0, l.Insert("Müller"))
 	assert.Equal(t, 1, l.Insert("Mueller"))
 	assert.Equal(t, 2, l.Insert("Schmidt"))
+	assert.Equal(t, 3, l.Insert("Müller"))
 
-	assert.Equal(t, 3, l.Len())
+	assert.Equal(t, 4, l.Len())
 
 	qh := l.QueryStr("name sounds 'Müller'")
 
 	count, err := qh.Remove()
 	assert.NoError(t, err)
-	assert.Equal(t, 2, count)
+	assert.Equal(t, 3, count)
 	assert.Equal(t, 1, l.Len())
 	l.Values(func(i int, s string) bool {
 		switch i {

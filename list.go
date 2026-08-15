@@ -194,14 +194,28 @@ func (l *List[T]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T] {
 // ------------------------------------------
 func (l *List[T]) hfns() query.HandleFNs[T] {
 	return query.HandleFNs[T]{
-		Query:      l.execQuery,
+		ReadQuery:  l.readQuery,
+		WriteQuery: l.writeQuery,
 		GetItem:    l.list.Get,
 		RemoveItem: l.remove,
 		UpdateItem: l.update,
 	}
 }
 
-func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, bool)) error {
+func (l *List[T]) readQuery(query query.Query, exec func(*lidx.RawIDs32)) error {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+
+	rids, _, err := query(l.indexMap.FilterByName, l.indexMap.allIDs)
+	if err != nil {
+		return err
+	}
+
+	exec(rids)
+	return nil
+}
+
+func (l *List[T]) writeQuery(query query.Query, exec func(*lidx.RawIDs32)) error {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -210,6 +224,10 @@ func (l *List[T]) execQuery(query query.Query, exec func(*lidx.RawIDs32, bool)) 
 		return err
 	}
 
-	exec(rids, canMutate)
+	if !canMutate {
+		rids = rids.Copy()
+	}
+
+	exec(rids)
 	return nil
 }
