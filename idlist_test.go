@@ -168,47 +168,84 @@ func TestList_Pagination(t *testing.T) {
 	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
 	il.Insert(car{name: "Dacia", age: 22})
 
-	result, pi, err := il.Query(query.All()).Paginate(0, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, query.PageInfo{Offset: 0, Limit: 1, Count: 1, Total: 3}, pi)
-	assert.Equal(t, []car{{name: "Opel", age: 22}}, result)
+	qh := il.Query(query.All())
 
-	result, pi, _ = il.Query(query.All()).Paginate(1, 2)
-	assert.Equal(t, query.PageInfo{Offset: 1, Limit: 2, Count: 2, Total: 3}, pi)
-	assert.Equal(t, []car{
-		{name: "Mercedes", age: 5, isNew: true},
-		{name: "Dacia", age: 22},
-	}, result)
+	t.Run("Paginate: 0 to 1", func(t *testing.T) {
+		result := make([]car, 0, 1)
+		pi, err := qh.Paginate(0, &result)
+		assert.NoError(t, err)
+		assert.Equal(t, query.PageInfo{Offset: 0, Limit: 1, Count: 1, Total: 3}, pi)
+		assert.Equal(t, []car{{name: "Opel", age: 22}}, result)
+	})
 
-	// offset = len(il), get the last one
-	result, pi, _ = il.Query(query.All()).Paginate(2, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, query.PageInfo{Offset: 2, Limit: 1, Count: 1, Total: 3}, pi)
-	assert.Equal(t, []car{{name: "Dacia", age: 22}}, result)
+	t.Run("Paginate: 1 to 2", func(t *testing.T) {
+		result := make([]car, 0, 2)
+		pi, _ := qh.Paginate(1, &result)
+		assert.Equal(t, query.PageInfo{Offset: 1, Limit: 2, Count: 2, Total: 3}, pi)
+		assert.Equal(t, []car{
+			{name: "Mercedes", age: 5, isNew: true},
+			{name: "Dacia", age: 22},
+		}, result)
+	})
 
-	// offset = len(il) is on the end
-	result, pi, _ = il.Query(query.All()).Paginate(2, 2)
-	assert.Equal(t, query.PageInfo{Offset: 2, Limit: 2, Count: 1, Total: 3}, pi)
-	assert.Equal(t, []car{{name: "Dacia", age: 22}}, result)
+	t.Run("Paginate: offset = len(il), get the last one, 2 to 1", func(t *testing.T) {
+		result := make([]car, 0, 1)
+		pi, err := qh.Paginate(2, &result)
+		assert.NoError(t, err)
+		assert.Equal(t, query.PageInfo{Offset: 2, Limit: 1, Count: 1, Total: 3}, pi)
+		assert.Equal(t, []car{{name: "Dacia", age: 22}}, result)
+	})
 
-	// limit > Total
-	result, pi, _ = il.Query(query.All()).Paginate(1, 5)
-	assert.Equal(t, query.PageInfo{Offset: 1, Limit: 5, Count: 2, Total: 3}, pi)
-	assert.Equal(t, []car{
-		{name: "Mercedes", age: 5, isNew: true},
-		{name: "Dacia", age: 22},
-	}, result)
+	t.Run("Paginate: offset = len(il) is on the end, 2 to 2", func(t *testing.T) {
+		result := make([]car, 0, 2)
+		pi, _ := qh.Paginate(2, &result)
+		assert.Equal(t, query.PageInfo{Offset: 2, Limit: 2, Count: 1, Total: 3}, pi)
+		assert.Equal(t, []car{{name: "Dacia", age: 22}}, result)
+	})
 
-	// count = 0
-	// offset > Total
-	result, pi, _ = il.Query(query.All()).Paginate(5, 1)
-	assert.Equal(t, query.PageInfo{Offset: 5, Limit: 1, Count: 0, Total: 3}, pi)
-	assert.Equal(t, []car{}, result)
+	t.Run("Paginate: limit > Total, 1 to 5", func(t *testing.T) {
+		result := make([]car, 0, 5)
+		pi, _ := qh.Paginate(1, &result)
+		assert.Equal(t, query.PageInfo{Offset: 1, Limit: 5, Count: 2, Total: 3}, pi)
+		assert.Equal(t, []car{
+			{name: "Mercedes", age: 5, isNew: true},
+			{name: "Dacia", age: 22},
+		}, result)
+	})
 
-	// offset+limit > Total
-	result, pi, _ = il.Query(query.All()).Paginate(3, 1)
-	assert.Equal(t, query.PageInfo{Offset: 3, Limit: 1, Count: 0, Total: 3}, pi)
-	assert.Equal(t, []car{}, result)
+	t.Run("Paginate: offset > Total,count = 0, 5 to 1", func(t *testing.T) {
+		result := make([]car, 0, 1)
+		pi, _ := qh.Paginate(5, &result)
+		assert.Equal(t, query.PageInfo{Offset: 5, Limit: 1, Count: 0, Total: 3}, pi)
+		assert.Equal(t, []car{}, result)
+	})
+
+	t.Run("Paginate: offset+limit > Total, 3 to 1", func(t *testing.T) {
+		result := make([]car, 0, 1)
+		pi, _ := qh.Paginate(3, &result)
+		assert.Equal(t, query.PageInfo{Offset: 3, Limit: 1, Count: 0, Total: 3}, pi)
+		assert.Equal(t, []car{}, result)
+	})
+
+	t.Run("Paginate: limit = 0", func(t *testing.T) {
+		result := make([]car, 0)
+		pi, _ := qh.Paginate(1, &result)
+		assert.Equal(t, query.PageInfo{Offset: 1, Limit: 0, Count: 0, Total: 3}, pi)
+		assert.Equal(t, []car{}, result)
+	})
+
+	t.Run("Paginate-error: NIL result", func(t *testing.T) {
+		pi, err := qh.Paginate(3, nil)
+		assert.Error(t, err)
+		assert.Equal(t, query.PageInfo{}, pi)
+	})
+
+	t.Run("Paginate-error: result len != 0", func(t *testing.T) {
+		result := make([]car, 1)
+		pi, err := qh.Paginate(3, &result)
+		assert.Error(t, err)
+		assert.Equal(t, query.PageInfo{}, pi)
+	})
 }
 
 func TestList_QueryStr(t *testing.T) {

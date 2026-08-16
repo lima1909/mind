@@ -1,6 +1,8 @@
 package query
 
 import (
+	"fmt"
+
 	"github.com/lima1909/mind/lidx"
 )
 
@@ -126,26 +128,42 @@ func (h QHandle[T]) Update(update func(*T)) (int, error) {
 	return count, err
 }
 
-// Paginate the result values of the Query, but in Pagination
-func (h QHandle[T]) Paginate(offset, limit uint32) ([]T, PageInfo, error) {
-	var result []T
+// Paginate the result values of the Query into the given result slice pointer.
+// The result slice pointer must have the lenth = 0 and the capacity is equals the limit.
+// e.g.: ` result := make([]T, 0, 100)` returns the values of T with an Linit of 100
+func (h QHandle[T]) Paginate(offset uint32, result *[]T) (PageInfo, error) {
 	var pi PageInfo
 
 	if h.err != nil {
-		return result, pi, h.err
+		return pi, h.err
 	}
 
-	return result, pi, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
+	if result == nil {
+		return pi, fmt.Errorf("NIL result slices are not allowed")
+	}
+	if len(*result) != 0 {
+		return pi, fmt.Errorf("the length of the given result must be 0, got: %v", len(*result))
+	}
+
+	return pi, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
 		total := uint32(rids.Count())
+		limit := uint32(cap(*result))
+
+		// early exit, if limit = 0
+		if limit == 0 {
+			pi.Offset = offset
+			pi.Total = total
+			return
+		}
+
 		pi = Paginate{offset, limit}.computePageInfo(total)
-		result = make([]T, 0, rids.Count())
 
 		rids.ValuesSkipN(int(pi.Offset), func(idx uint32) bool {
 			item, _ := h.fns.GetItem(int(idx))
-			result = append(result, item)
+			*result = append(*result, item)
 
 			// run only until reach the limit
-			return uint32(len(result)) < pi.Limit
+			return uint32(len(*result)) < pi.Limit
 		})
 	})
 }

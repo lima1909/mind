@@ -379,3 +379,85 @@ func BenchmarkFuzzy_Phonetic_Index(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkValues_Pagination(b *testing.B) {
+	type person struct {
+		Name string
+		Age  uint8
+	}
+
+	ds := 3_000_000
+	n := 0
+	names := strings.Split(names_txt, "\n")
+
+	start := time.Now()
+	fl := NewFreeListWithCapacity[person](ds)
+
+	for i := 1; i <= ds; i++ {
+		if n%300 == 0 {
+			n = 0
+		}
+		n++
+
+		fl.Insert(person{
+			Name: names[n],
+			Age:  uint8(i % 100),
+		})
+	}
+
+	il := NewList[person]()
+	err := il.CreateIndex("name", index.NewStringIndex(index.FromName[person, string]("Name")))
+	require.NoError(b, err)
+
+	err = il.InitialBulkInsert(fl)
+	require.NoError(b, err)
+
+	fmt.Printf("- Count: %d, Time: %s\n", il.Len(), time.Since(start))
+
+	values := make([]person, 0, 10_000)
+
+	b.ResetTimer()
+
+	bmarks := []struct {
+		name  string
+		bmark func() int
+		count int
+	}{
+		{
+			name: "Values",
+			bmark: func() int {
+				result := il.QueryStr(
+					`name = "App" or name = "Ade" or name = "Adam"`,
+				)
+				values, err := result.Values()
+				require.NoError(b, err)
+				return len(values)
+			},
+			count: 10_000,
+		},
+		{
+			name: "Paginate",
+			bmark: func() int {
+				result := il.QueryStr(
+					`name = "App" or name = "Ade" or name = "Adam"`,
+				)
+				values = values[0:0]
+				_, err := result.Paginate(0, &values)
+				require.NoError(b, err)
+				return len(values)
+			},
+			count: 10_000,
+		},
+	}
+
+	for _, bench := range bmarks {
+		b.Run(bench.name, func(b *testing.B) {
+			for b.Loop() {
+				count := bench.bmark()
+				if count != bench.count {
+					b.Fatalf("%s: expected count %d, got %d", bench.name, bench.count, count)
+				}
+			}
+		})
+	}
+}
