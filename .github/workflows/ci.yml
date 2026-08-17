@@ -7,19 +7,19 @@ on:
     branches: [ main ]
 
 env:
-  GOLANG_VERSION: 1.25
+  GOLANG_VERSION: "1.25"
 
 jobs:
   test:
     name: Test, Lint and Dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '$GOLANG_VERSION'
+          go-version: ${{ env.GO_VERSION }}
           check-latest: true
 
       - name: Dependencies 
@@ -45,6 +45,6 @@ jobs:
       - name: Run govulncheck
         uses: golang/govulncheck-action@v1
         with:
-           go-version-input: $GOLANG_VERSION 
+           go-version-input: ${{ env.GO_VERSION }}
            go-package: ./...
 
