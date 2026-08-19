@@ -18,11 +18,12 @@ func NoOptimizer() Opion                  { return func(o *queryOptions) { o.wit
 func WithTracer(t *Tracer) Opion          { return func(o *queryOptions) { o.withTracer = t } }
 
 type HandleFNs[T any] struct {
-	ReadQuery  func(Query, func(*lidx.RawIDs32)) error
-	WriteQuery func(Query, func(*lidx.RawIDs32)) error
-	GetItem    func(int) (T, bool)
-	RemoveItem func(int) bool
-	UpdateItem func(index int, update func(*T)) error
+	ReadQuery    func(Query, func(*lidx.RawIDs32)) error
+	WriteQuery   func(Query, func(*lidx.RawIDs32)) error
+	GetItem      func(int) (T, bool)
+	GetManyItems func([]uint32) []T
+	RemoveItem   func(int) bool
+	UpdateItem   func(index int, update func(*T)) error
 }
 
 type QHandle[T any] struct {
@@ -74,14 +75,7 @@ func (h QHandle[T]) Values() ([]T, error) {
 	}
 
 	return result, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
-		result = make([]T, 0, rids.Count())
-
-		rids.Values(func(idx uint32) bool {
-			item, _ := h.fns.GetItem(int(idx))
-			result = append(result, item)
-
-			return true
-		})
+		result = h.fns.GetManyItems(rids.ToSlice())
 	})
 }
 

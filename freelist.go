@@ -112,6 +112,15 @@ func (l *FreeList[T]) Get(index int) (T, bool) {
 	return slot.value, true
 }
 
+// getMany ignores bound checks, all idxs MUST exist
+func (l *FreeList[T]) getMany(idxs []uint32) []T {
+	result := make([]T, 0, len(idxs))
+	for _, idx := range idxs {
+		result = append(result, l.slots[idx].value)
+	}
+	return result
+}
+
 // Len returns the count of the occupied slots
 func (l *FreeList[T]) Len() int { return l.len }
 

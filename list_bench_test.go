@@ -394,7 +394,7 @@ func BenchmarkValues_Pagination(b *testing.B) {
 	fl := NewFreeListWithCapacity[person](ds)
 
 	for i := 1; i <= ds; i++ {
-		if n%300 == 0 {
+		if n%5678 == 0 {
 			n = 0
 		}
 		n++
@@ -414,7 +414,8 @@ func BenchmarkValues_Pagination(b *testing.B) {
 
 	fmt.Printf("- Count: %d, Time: %s\n", il.Len(), time.Since(start))
 
-	values := make([]person, 0, 10_000)
+	values_l := make([]person, 0, 5281)
+	values_s := make([]person, 0, 529)
 
 	b.ResetTimer()
 
@@ -424,38 +425,59 @@ func BenchmarkValues_Pagination(b *testing.B) {
 		count int
 	}{
 		{
-			name: "Values",
+			name: "Values__S",
+			bmark: func() int {
+				result := il.QueryStr(`name = "Ama"`)
+				values, err := result.Values()
+				require.NoError(b, err)
+				return len(values)
+			},
+			count: 529,
+		},
+		{
+			name: "Paginate_S",
+			bmark: func() int {
+				result := il.QueryStr(`name = "Ama"`)
+				values_s = values_s[0:0]
+				_, err := result.Paginate(0, &values_s)
+				require.NoError(b, err)
+				return len(values_s)
+			},
+			count: 529,
+		},
+		{
+			name: "Values__L",
 			bmark: func() int {
 				result := il.QueryStr(
-					`name = "App" or name = "Ade" or name = "Adam"`,
+					`name IN( "Marcel","Luda", "Adam", "Liz", "Lola", "Liza", "Lim", "Lina", "Liam", "Lida")`,
 				)
 				values, err := result.Values()
 				require.NoError(b, err)
 				return len(values)
 			},
-			count: 10_000,
+			count: 5281,
 		},
 		{
-			name: "Paginate",
+			name: "Paginate_L",
 			bmark: func() int {
 				result := il.QueryStr(
-					`name = "App" or name = "Ade" or name = "Adam"`,
+					`name IN( "Marcel","Luda", "Adam", "Liz", "Lola", "Liza", "Lim", "Lina", "Liam", "Lida")`,
 				)
-				values = values[0:0]
-				_, err := result.Paginate(0, &values)
+				values_l = values_l[0:0]
+				_, err := result.Paginate(0, &values_l)
 				require.NoError(b, err)
-				return len(values)
+				return len(values_l)
 			},
-			count: 10_000,
+			count: 5281,
 		},
 	}
 
 	for _, bench := range bmarks {
 		b.Run(bench.name, func(b *testing.B) {
 			for b.Loop() {
-				count := bench.bmark()
-				if count != bench.count {
-					b.Fatalf("%s: expected count %d, got %d", bench.name, bench.count, count)
+				c := bench.bmark()
+				if c != bench.count {
+					b.Fatalf("%s: expected count %d, got %d", bench.name, bench.count, c)
 				}
 			}
 		})
