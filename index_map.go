@@ -24,13 +24,6 @@ func NewIndexMap[OBJ any]() IndexMap[OBJ] {
 	}
 }
 
-func NewIndexMapWithRawIDs[OBJ any](allIDs *lidx.RawIDs32) IndexMap[OBJ] {
-	return IndexMap[OBJ]{
-		index:  make(map[string]index.Index[OBJ]),
-		allIDs: allIDs,
-	}
-}
-
 // FilterByName finds the Filter by a given field-name
 func (i IndexMap[OBJ]) FilterByName(fieldName string) (query.Filter, error) {
 	if idx, found := i.index[fieldName]; found {

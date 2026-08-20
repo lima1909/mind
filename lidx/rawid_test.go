@@ -313,3 +313,65 @@ func TestRawID_WithCapacity(t *testing.T) {
 	assert.Equal(t, 1, s.Count())
 	assert.True(t, s.Contains(42))
 }
+
+func denseRawIDs(n int) *RawIDs[uint32] {
+	values := make([]uint32, 0, n)
+	for i := range n {
+		values = append(values, uint32(i))
+	}
+	return NewRawIDsFrom(values...)
+}
+
+func TestRawIDs_Xor_BitSetWithSparseSlice(t *testing.T) {
+	dense := denseRawIDs(100) // 0..99
+	assert.True(t, dense.IsBitSet(), "expected a BitSet representation")
+
+	sparse := NewRawIDsFrom[uint32](50, 100_000)
+	assert.True(t, sparse.IsSlice(), "expected a SliceSet representation")
+
+	dense.Xor(sparse) // not panic
+
+	want := make([]uint32, 0, 100)
+	for i := range uint32(100) {
+		if i != 50 {
+			want = append(want, i)
+		}
+	}
+	want = append(want, 100_000)
+
+	assert.Equal(t, want, dense.ToSlice())
+	assert.Equal(t, 100, dense.Count(), "99 kept values + the newly flipped 100_000")
+}
+
+func TestRawIDs_Xor_SparseSliceWithBitSet(t *testing.T) {
+	sparse := NewRawIDsFrom[uint32](5, 100_000)
+	assert.True(t, sparse.IsSlice())
+
+	dense := denseRawIDs(100)
+	assert.True(t, dense.IsBitSet())
+
+	sparse.Xor(dense) // not panic
+
+	want := make([]uint32, 0, 100)
+	for i := range uint32(100) {
+		if i != 5 {
+			want = append(want, i)
+		}
+	}
+	want = append(want, 100_000)
+
+	assert.Equal(t, want, sparse.ToSlice())
+	assert.Equal(t, 100, sparse.Count(), "99 kept values + the newly flipped 100_000")
+}
+
+func TestRawIDs_Xor_BitSetWithSliceKeepsCount(t *testing.T) {
+	dense := denseRawIDs(100)
+	assert.Equal(t, 100, dense.Count()) // primes the count cache
+
+	dense.Xor(NewRawIDsFrom[uint32](50, 60)) // both bits are set, so both get cleared
+
+	assert.Equal(t, 98, dense.Count(), "Count() out of sync after Xor")
+	assert.Equal(t, 98, len(dense.ToSlice()))
+	assert.False(t, dense.Contains(50))
+	assert.False(t, dense.Contains(60))
+}

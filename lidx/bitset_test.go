@@ -7,6 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// structBytes is the size of the BitSet struct itself:
+// 24 bytes slice header (ptr + len + cap) + 8 bytes for the count field.
+const structBytes = 24 + 8
+
+// how many bytes is using
+func usedBytes(data []uint64) int { return structBytes + (len(data) * 8) }
+
 func TestBitSet_Base(t *testing.T) {
 	b := NewBitSet[uint8]()
 	assert.False(t, b.Contains(0))
@@ -34,7 +41,7 @@ func TestBitSet_Base(t *testing.T) {
 	b.UnSet(42)
 	assert.Equal(t, 1, b.Max())
 
-	_ = b.usedBytes()
+	_ = usedBytes(b.data)
 }
 
 func TestBitSet_ToBig(t *testing.T) {
@@ -555,4 +562,131 @@ func TestBitSet_Or_MustNotAliasOther(t *testing.T) {
 	// src must be untouched
 	assert.Equal(t, []uint32{1, 5, 100}, src.ToSlice(), "Or aliased the source data")
 	assert.Equal(t, 3, src.Count())
+}
+
+// Xor into an empty receiver must yield a copy of other (0 XOR v = v).
+func TestBitSet_Xor_EmptyReceiver(t *testing.T) {
+	empty := NewBitSet[uint32]()
+	src := NewBitSetFrom[uint32](1, 5, 300)
+
+	empty.Xor(src)
+
+	assert.Equal(t, []uint32{1, 5, 300}, empty.ToSlice(), "Xor dropped the result")
+	assert.Equal(t, 3, empty.Count())
+	assert.False(t, empty.IsEmpty())
+
+	// src must be untouched
+	assert.Equal(t, []uint32{1, 5, 300}, src.ToSlice(), "Xor aliased the source data")
+
+	// same for a receiver that only got cleared
+	cleared := NewBitSetFrom[uint32](7, 8, 9)
+	cleared.Clear()
+	cleared.Xor(src)
+	assert.Equal(t, []uint32{1, 5, 300}, cleared.ToSlice())
+	assert.Equal(t, 3, cleared.Count())
+
+	// an empty other leaves the receiver alone
+	b := NewBitSetFrom[uint32](1, 300)
+	b.Xor(NewBitSet[uint32]())
+	assert.Equal(t, []uint32{1, 300}, b.ToSlice())
+	assert.Equal(t, 2, b.Count())
+}
+
+func TestBitSet_FlipTheBit_Grows(t *testing.T) {
+	b := NewBitSetFrom[uint32](1, 2)
+	assert.Equal(t, 1, b.Len())
+
+	b.flipTheBit(5000)
+
+	assert.Equal(t, []uint32{1, 2, 5000}, b.ToSlice())
+	assert.Equal(t, 3, b.Count())
+	assert.Equal(t, 5000, b.Max())
+
+	// flipping it back clears it again
+	b.flipTheBit(5000)
+	assert.Equal(t, []uint32{1, 2}, b.ToSlice())
+	assert.Equal(t, 2, b.Count())
+}
+
+func TestBitSet_FlipTheBit_KeepsCountInSync(t *testing.T) {
+	b := NewBitSetFrom[uint32](1, 2, 130)
+	assert.Equal(t, 3, b.Count()) // primes the cache
+
+	b.flipTheBit(3) // 0 -> 1
+	assert.Equal(t, 4, b.Count(), "count cache not updated on set")
+	assert.Equal(t, len(b.ToSlice()), b.Count())
+
+	b.flipTheBit(2) // 1 -> 0
+	assert.Equal(t, 3, b.Count(), "count cache not updated on clear")
+	assert.Equal(t, len(b.ToSlice()), b.Count())
+
+	// and it stays correct if the cache was dirty before
+	b.count = -1
+	b.flipTheBit(200)
+	assert.Equal(t, 4, b.Count())
+	assert.Equal(t, len(b.ToSlice()), b.Count())
+}
+
+// And/AndNot/Ands can only clear bits, so they trim the zero tail themselves.
+func TestBitSet_And_ShrinksTail(t *testing.T) {
+	long := NewBitSetFrom[uint32](1, 5000)
+	short := NewBitSetFrom[uint32](1)
+	assert.Equal(t, 79, long.Len())
+
+	result := long.Copy()
+	result.And(short)
+
+	assert.Equal(t, []uint32{1}, result.ToSlice())
+	assert.Equal(t, 1, result.Len(), "And did not trim the zero tail")
+	assert.Equal(t, 0, result.MaxIndex())
+	assert.Equal(t, 1, result.Max())
+
+	// empty result: len 0 and a valid count, so IsEmpty needs no scan
+	empty := long.Copy()
+	empty.And(NewBitSetFrom[uint32](42))
+	assert.Equal(t, 0, empty.Len())
+	assert.Equal(t, 0, empty.count, "count must be known (0), not dirty (-1)")
+	assert.True(t, empty.IsEmpty())
+	assert.Equal(t, -1, empty.MaxIndex())
+}
+
+func TestBitSet_AndNot_ShrinksTail(t *testing.T) {
+	b := NewBitSetFrom[uint32](1, 5000)
+	assert.Equal(t, 79, b.Len())
+
+	b.AndNot(NewBitSetFrom[uint32](5000))
+
+	assert.Equal(t, []uint32{1}, b.ToSlice())
+	assert.Equal(t, 1, b.Len(), "AndNot did not trim the zero tail")
+	assert.Equal(t, 1, b.Count())
+
+	// remove everything
+	b.AndNot(NewBitSetFrom[uint32](1))
+	assert.Equal(t, 0, b.Len())
+	assert.Equal(t, 0, b.count, "count must be known (0), not dirty (-1)")
+	assert.True(t, b.IsEmpty())
+}
+
+func TestBitSet_Ands_ShrinksTail(t *testing.T) {
+	b := NewBitSetFrom[uint32](1, 2, 5000)
+
+	b.Ands(
+		NewBitSetFrom[uint32](1, 2, 5000),
+		NewBitSetFrom[uint32](2, 5000),
+		NewBitSetFrom[uint32](2, 3, 5000),
+	)
+
+	assert.Equal(t, []uint32{2, 5000}, b.ToSlice())
+	assert.Equal(t, 79, b.Len(), "must keep the words that still hold bits")
+
+	// 5000 and 5001 share word 78, so all sets stay 79 words long and the
+	// minLen truncation alone cannot drop the tail: only Shrink can.
+	b.Ands(
+		NewBitSetFrom[uint32](2, 5001),
+		NewBitSetFrom[uint32](2, 3, 5001),
+	)
+
+	assert.Equal(t, []uint32{2}, b.ToSlice())
+	assert.Equal(t, 1, b.Len(), "Ands did not trim the zero tail")
+	assert.Equal(t, 1, b.Count())
 }

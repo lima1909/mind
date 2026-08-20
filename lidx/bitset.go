@@ -81,18 +81,22 @@ func (b *BitSet[U]) Set(value U) {
 // UnSet removes the key from the BitSet. Clear the bit value to 0.
 func (b *BitSet[U]) UnSet(value U) bool {
 	index := int(value) >> 6
-	if index < len(b.data) {
-		bit := uint64(1) << (value & 63)
-		old := b.data[index]
-		b.data[index] = old &^ bit
-		// if the bit was set, decrement count
-		if old&bit != 0 && b.count >= 0 {
-			b.count--
-		}
-		return true
+	if index >= len(b.data) {
+		return false
 	}
 
-	return false
+	bit := uint64(1) << (value & 63)
+	old := b.data[index]
+	if old&bit == 0 {
+		return false // the bit was not set, nothing to remove
+	}
+
+	b.data[index] = old &^ bit
+	if b.count >= 0 {
+		b.count--
+	}
+
+	return true
 }
 
 // Contains check, is the value saved in the BitSet
@@ -350,9 +354,6 @@ func (b *BitSet[U]) IsEmpty() bool {
 // Len returns the len of the bit slice
 func (b *BitSet[U]) Len() int { return len(b.data) }
 
-// how many bytes is using
-func (b *BitSet[U]) usedBytes() int { return 24 + (len(b.data) * 8) }
-
 // Clear removes all bits
 func (b *BitSet[U]) Clear() {
 	b.data = b.data[:0]
@@ -398,7 +399,9 @@ func (b *BitSet[U]) And(other *BitSet[U]) {
 	for i := range l {
 		a[i] &= o[i]
 	}
+
 	b.count = -1 // invalidate cached count
+	b.Shrink()
 }
 
 // Or is the logical OR of two BitSet (Union)
@@ -436,10 +439,24 @@ func (b *BitSet[U]) Or(other *BitSet[U]) {
 }
 
 func (b *BitSet[U]) flipTheBit(val U) {
-	word, bit := val/64, val%64
+	index := int(val) >> 6
+	if index >= len(b.data) {
+		b.grow(index)
+	}
+
 	// If the bit is 0, (1<<bit) sets it.
 	// If the bit is 1, (1<<bit) clears it.
-	b.data[word] ^= (1 << bit)
+	bit := uint64(1) << (val & 63)
+	b.data[index] ^= bit
+
+	// flipping always changes the cardinality by exactly one, keep the cache in sync
+	if b.count >= 0 {
+		if b.data[index]&bit != 0 {
+			b.count++ // bit was 0, is now 1
+		} else {
+			b.count-- // bit was 1, is now 0
+		}
+	}
 }
 
 // XOr is the logical XOR of two BitSet
@@ -447,28 +464,29 @@ func (b *BitSet[U]) Xor(other *BitSet[U]) {
 	bl := len(b.data)
 	ol := len(other.data)
 
-	overlap := min(bl, ol)
-	if overlap == 0 {
+	if ol == 0 {
 		return
 	}
 
 	// If 'other' is longer, we simply append its tail to 'b'.
 	// Why? Because: 0 (current tail of b) XOR Value (tail of other) = Value.
+	// This must happen even when 'b' is empty, otherwise the whole result is lost.
 	if ol > bl {
 		b.data = append(b.data, other.data[bl:]...)
 	}
 
 	// if 'b' is longer, its tail remains untouched.
 	// value (tail of b) XOR 0 (implicit tail of other) = Value.
-	bd := b.data
-	od := other.data
+	if overlap := min(bl, ol); overlap > 0 {
+		// eliminate bounds checks
+		bd := b.data[:overlap]
+		od := other.data[:overlap]
 
-	_ = bd[overlap-1]
-	_ = od[overlap-1]
-
-	for i := range overlap {
-		bd[i] ^= od[i]
+		for i, v := range od {
+			bd[i] ^= v
+		}
 	}
+
 	b.count = -1 // invalidate cached count
 }
 
@@ -490,15 +508,16 @@ func (b *BitSet[U]) AndNot(other *BitSet[U]) {
 	}
 
 	b.count = -1
+	b.Shrink()
 }
 
 // Shrink trims the bitset to ensure that len(b.data) always points to the last truly useful word.
 //
-// Operation    Can Grow?    Can Shrink?
-// OR            Yes         No
-// XOR           Yes         Yes
-// AND           No          Yes
-// AND NOT       No          Yes
+// Operation    Can Grow?    Can Shrink?    Shrinks itself?
+// OR            Yes         No             -
+// XOR           Yes         Yes            No, call Shrink if it matters
+// AND           No          Yes            Yes
+// AND NOT       No          Yes            Yes
 func (b *BitSet[U]) Shrink() {
 	bd := b.data
 
@@ -570,7 +589,8 @@ func (b *BitSet[U]) Ands(others ...*BitSet[U]) {
 		}
 	}
 
-	b.count = -1 // invalidiere den Count-Cache
+	b.count = -1 // invalidate cached count
+	b.Shrink()
 }
 
 func (b *BitSet[U]) Ors(others ...*BitSet[U]) {
@@ -610,5 +630,5 @@ func (b *BitSet[U]) Ors(others ...*BitSet[U]) {
 		}
 	}
 
-	b.count = -1 // invalidiere den Count-Cache
+	b.count = -1 // invalidate cached count
 }
