@@ -71,13 +71,15 @@ func (s *SliceSet[U]) Values(yield func(U) bool) {
 	}
 }
 
-func (s *SliceSet[U]) ValuesSkipN(skipN int, yield func(v U) bool) {
-	for i := skipN; i < len(s.data); i++ {
-		val := s.data[i]
-		if !yield(val) {
-			break
-		}
+func (s *SliceSet[U]) ValuesSkipN(n, limit int) []U {
+	total := len(s.data)
+
+	if n >= total || n < 0 || total == 0 || limit <= 0 {
+		return nil
 	}
+
+	size := min(limit, total-n) + n
+	return s.data[n:size]
 }
 
 func (s *SliceSet[U]) ValuesBatch(yield func([]U) bool) {

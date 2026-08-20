@@ -350,7 +350,7 @@ func BenchmarkSliceSet_Or(b *testing.B) {
 	}
 }
 
-func BenchmarkSLiceSet_ValuesBatchIter(b *testing.B) {
+func BenchmarkSliceSet_ValuesBatchIter(b *testing.B) {
 	bs := NewSliceSet[uint32]()
 	for i := 1; i <= count; i++ {
 		bs.Set(uint32(i))
@@ -365,5 +365,80 @@ func BenchmarkSLiceSet_ValuesBatchIter(b *testing.B) {
 		})
 		assert.Equal(b, count, c)
 
+	}
+}
+
+func TestSliceSet_ValuesSkipN(t *testing.T) {
+
+	tests := []struct {
+		name     string
+		ss       *SliceSet[uint32]
+		fromIdx  int
+		length   int
+		expected []uint32
+	}{
+		{
+			name:     "Middle of set",
+			ss:       NewSliceSetFrom[uint32](1, 2, 8, 42),
+			fromIdx:  1,
+			length:   2,
+			expected: []uint32{2, 8},
+		},
+		{
+			name:     "Last value",
+			ss:       NewSliceSetFrom[uint32](0, 1, 2),
+			fromIdx:  2,
+			length:   1,
+			expected: []uint32{2},
+		},
+		{
+			name:     "Single set range (Exact match)",
+			ss:       NewSliceSetFrom[uint32](10, 20, 30),
+			fromIdx:  1,
+			length:   1,
+			expected: []uint32{20},
+		},
+		{
+			name:     "Spanning Word Boundaries",
+			ss:       NewSliceSetFrom[uint32](0, 63, 64, 65, 130),
+			fromIdx:  0,
+			length:   3,
+			expected: []uint32{0, 63, 64},
+		},
+		{
+			name:     "From > To (Invalid range)",
+			ss:       NewSliceSetFrom[uint32](1, 2, 3),
+			fromIdx:  10,
+			length:   5,
+			expected: nil,
+		},
+		{
+			name:     "Full Set Range",
+			ss:       NewSliceSetFrom[uint32](5, 10),
+			fromIdx:  0,
+			length:   100,
+			expected: []uint32{5, 10},
+		},
+		{
+			name:     "Boundary: set at 0",
+			ss:       NewSliceSetFrom[uint32](0, 1, 2),
+			fromIdx:  0,
+			length:   1,
+			expected: []uint32{0},
+		},
+		{
+			name:     "Middle of big set",
+			ss:       NewSliceSetFrom[uint32](1_000_000, 1_200_000, 1_200_001, 1_300_000),
+			fromIdx:  1,
+			length:   2,
+			expected: []uint32{1_200_000, 1_200_001},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := tt.ss.ValuesSkipN(tt.fromIdx, tt.length)
+			assert.Equal(t, tt.expected, results)
+		})
 	}
 }

@@ -165,58 +165,68 @@ func (b *BitSet[U]) Values(yield func(U) bool) {
 	}
 }
 
-func (b *BitSet[U]) ValuesSkipN(skipN int, yield func(v U) bool) {
-	if len(b.data) == 0 {
-		return
+func (b *BitSet[U]) ValuesSkipN(n, limit int) []U {
+	if len(b.data) == 0 || limit <= 0 {
+		return nil
 	}
 
+	total := b.Count()
+	if n >= total {
+		return nil
+	}
+
+	size := min(limit, total-n)
+	result := make([]U, 0, size)
 	idx := 0
+
 	for i, w := range b.data {
 		if w == 0 {
 			continue
 		}
 
-		// Count how many set bits are in this word
 		c := bits.OnesCount64(w)
 
-		// If all bits in this word come before the target rank, skip the whole word instantly
-		if idx+c <= skipN {
+		if idx+c <= n {
 			idx += c
 			continue
 		}
 
-		// We don't need the bit positions here, just clear the lowest set bit and count.
-		for w != 0 && idx < skipN {
-			w &= w - 1 // clear lowest set bit
+		for w != 0 && idx < n {
+			w &= w - 1
 			idx++
 		}
 
-		// Visit all remaining set bits in this word
-		// `idx` is now >= skipN (or w is 0). No more `idx` checks needed for this word.
 		for w != 0 {
+			if len(result) == limit {
+				return result
+			}
 			t := bits.TrailingZeros64(w)
 			val := U(i<<6) + U(t)
-			if !yield(val) {
-				return
-			}
+			result = append(result, val)
 			w &= w - 1
 		}
 
-		// Since we've reached the starting rank, we can directly iterate over the rest.
 		for j := i + 1; j < len(b.data); j++ {
+			if len(result) == limit {
+				return result
+			}
+
 			w2 := b.data[j]
 			for w2 != 0 {
+				if len(result) == limit {
+					return result
+				}
 				t := bits.TrailingZeros64(w2)
 				val := U(j<<6) + U(t)
-				if !yield(val) {
-					return
-				}
+				result = append(result, val)
 				w2 &= w2 - 1
 			}
 		}
 
-		return // all bits from `skipN` onward have been visited
+		return result
 	}
+
+	return result
 }
 
 func (b *BitSet[U]) ValuesBatch(yield func([]U) bool) {

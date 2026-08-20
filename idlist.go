@@ -290,7 +290,6 @@ func (l *IDList[T, ID]) hfns() query.HandleFNs[T] {
 	return query.HandleFNs[T]{
 		ReadQuery:    l.readQuery,
 		WriteQuery:   l.writeQuery,
-		GetItem:      l.list.Get,
 		GetManyItems: l.list.getMany,
 		RemoveItem:   l.remove,
 		UpdateItem:   l.update,

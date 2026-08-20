@@ -298,13 +298,7 @@ func TestBitSet_ValuesSkipN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			var results []uint32
-			tt.bs.ValuesSkipN(tt.fromIdx, func(val uint32) bool {
-				results = append(results, val)
-				return len(results) != tt.length
-			})
-
+			results := tt.bs.ValuesSkipN(tt.fromIdx, tt.length)
 			assert.Equal(t, tt.expected, results)
 		})
 	}

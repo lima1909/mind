@@ -20,8 +20,7 @@ func WithTracer(t *Tracer) Opion          { return func(o *queryOptions) { o.wit
 type HandleFNs[T any] struct {
 	ReadQuery    func(Query, func(*lidx.RawIDs32)) error
 	WriteQuery   func(Query, func(*lidx.RawIDs32)) error
-	GetItem      func(int) (T, bool)
-	GetManyItems func([]uint32) []T
+	GetManyItems func([]uint32, *[]T)
 	RemoveItem   func(int) bool
 	UpdateItem   func(index int, update func(*T)) error
 }
@@ -75,7 +74,9 @@ func (h QHandle[T]) Values() ([]T, error) {
 	}
 
 	return result, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
-		result = h.fns.GetManyItems(rids.ToSlice())
+		s := rids.ToSlice()
+		result = make([]T, 0, len(s))
+		h.fns.GetManyItems(s, &result)
 	})
 }
 
@@ -152,13 +153,8 @@ func (h QHandle[T]) Paginate(offset uint32, result *[]T) (PageInfo, error) {
 
 		pi = Paginate{offset, limit}.computePageInfo(total)
 
-		rids.ValuesSkipN(int(pi.Offset), func(idx uint32) bool {
-			item, _ := h.fns.GetItem(int(idx))
-			*result = append(*result, item)
-
-			// run only until reach the limit
-			return uint32(len(*result)) < pi.Limit
-		})
+		idxs := rids.ValuesSkipN(int(pi.Offset), int(pi.Limit))
+		h.fns.GetManyItems(idxs, result)
 	})
 }
 

@@ -125,12 +125,11 @@ func (s *RawIDs[U]) Values(yield func(U) bool) {
 }
 
 // ValuesSkipN iterates over set by starting from 'skipN' until the end or yield returns false.
-func (s *RawIDs[U]) ValuesSkipN(fromIdx int, yield func(v U) bool) {
+func (s *RawIDs[U]) ValuesSkipN(n, limit int) []U {
 	if s.IsSlice() {
-		s.slice.ValuesSkipN(fromIdx, yield)
-		return
+		return s.slice.ValuesSkipN(n, limit)
 	}
-	s.bits.ValuesSkipN(fromIdx, yield)
+	return s.bits.ValuesSkipN(n, limit)
 }
 
 // Contains checks if the value exists in the set.

@@ -414,8 +414,9 @@ func BenchmarkValues_Pagination(b *testing.B) {
 
 	fmt.Printf("- Count: %d, Time: %s\n", il.Len(), time.Since(start))
 
-	values_l := make([]person, 0, 5281)
 	values_s := make([]person, 0, 529)
+	values_m := make([]person, 0, 5281)
+	values_l := make([]person, 0, ds)
 
 	b.ResetTimer()
 
@@ -445,8 +446,9 @@ func BenchmarkValues_Pagination(b *testing.B) {
 			},
 			count: 529,
 		},
+
 		{
-			name: "Values__L",
+			name: "Values__M",
 			bmark: func() int {
 				result := il.QueryStr(
 					`name IN( "Marcel","Luda", "Adam", "Liz", "Lola", "Liza", "Lim", "Lina", "Liam", "Lida")`,
@@ -458,17 +460,39 @@ func BenchmarkValues_Pagination(b *testing.B) {
 			count: 5281,
 		},
 		{
-			name: "Paginate_L",
+			name: "Paginate_M",
 			bmark: func() int {
 				result := il.QueryStr(
 					`name IN( "Marcel","Luda", "Adam", "Liz", "Lola", "Liza", "Lim", "Lina", "Liam", "Lida")`,
 				)
+				values_m = values_m[0:0]
+				_, err := result.Paginate(0, &values_m)
+				require.NoError(b, err)
+				return len(values_m)
+			},
+			count: 5281,
+		},
+
+		{
+			name: "Values__L",
+			bmark: func() int {
+				result := il.Query(query.All())
+				values, err := result.Values()
+				require.NoError(b, err)
+				return len(values)
+			},
+			count: ds,
+		},
+		{
+			name: "Paginate_L",
+			bmark: func() int {
+				result := il.Query(query.All())
 				values_l = values_l[0:0]
 				_, err := result.Paginate(0, &values_l)
 				require.NoError(b, err)
 				return len(values_l)
 			},
-			count: 5281,
+			count: ds,
 		},
 	}
 
