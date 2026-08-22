@@ -368,7 +368,7 @@ func BenchmarkSliceSet_ValuesBatchIter(b *testing.B) {
 	}
 }
 
-func TestSliceSet_ValuesSkipN(t *testing.T) {
+func TestSliceSet_ValuesBetween(t *testing.T) {
 
 	tests := []struct {
 		name     string
@@ -437,7 +437,7 @@ func TestSliceSet_ValuesSkipN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := tt.ss.ValuesSkipN(tt.fromIdx, tt.length)
+			results := tt.ss.ValuesBetween(tt.fromIdx, tt.length)
 			assert.Equal(t, tt.expected, results)
 		})
 	}

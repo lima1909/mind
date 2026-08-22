@@ -48,7 +48,6 @@ func NewBitSetFrom[U UInt](values ...U) *BitSet[U] {
 	return b
 }
 
-//go:inline
 func (b *BitSet[U]) grow(targetIndex int) {
 	needed := targetIndex + 1 - len(b.data)
 	if needed > 0 {
@@ -169,8 +168,8 @@ func (b *BitSet[U]) Values(yield func(U) bool) {
 	}
 }
 
-func (b *BitSet[U]) ValuesSkipN(n, limit int) []U {
-	if len(b.data) == 0 || limit <= 0 {
+func (b *BitSet[U]) ValuesBetween(n, m int) []U {
+	if len(b.data) == 0 || m <= 0 {
 		return nil
 	}
 
@@ -179,7 +178,7 @@ func (b *BitSet[U]) ValuesSkipN(n, limit int) []U {
 		return nil
 	}
 
-	size := min(limit, total-n)
+	size := min(m, total-n)
 	result := make([]U, 0, size)
 	idx := 0
 
@@ -201,7 +200,7 @@ func (b *BitSet[U]) ValuesSkipN(n, limit int) []U {
 		}
 
 		for w != 0 {
-			if len(result) == limit {
+			if len(result) == m {
 				return result
 			}
 			t := bits.TrailingZeros64(w)
@@ -211,13 +210,13 @@ func (b *BitSet[U]) ValuesSkipN(n, limit int) []U {
 		}
 
 		for j := i + 1; j < len(b.data); j++ {
-			if len(result) == limit {
+			if len(result) == m {
 				return result
 			}
 
 			w2 := b.data[j]
 			for w2 != 0 {
-				if len(result) == limit {
+				if len(result) == m {
 					return result
 				}
 				t := bits.TrailingZeros64(w2)

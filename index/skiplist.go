@@ -36,8 +36,6 @@ type SkipList[K cmp.Ordered, V any] struct {
 }
 
 // randomLevel generates a random height (level)
-//
-//go:inline
 func (sl *SkipList[K, V]) randomLevel() byte {
 	lvl := byte(1)
 	for lvl < maxLevel && sl.rnd.Float64() < population {

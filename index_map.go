@@ -43,6 +43,11 @@ func (i IndexMap[OBJ]) AddIndex(fieldName string, index index.Index[OBJ]) error 
 	return nil
 }
 
+// RemoveIndex removes the Index with the given field-name, if it exist
+func (i IndexMap[OBJ]) RemoveIndex(fieldName string) {
+	delete(i.index, fieldName)
+}
+
 // Insert to all known indexes synchron the new value (including ID-index)
 func (i IndexMap[OBJ]) Insert(obj *OBJ, idx int) {
 	uidx := uint32(idx)
@@ -88,8 +93,8 @@ func (i IndexMap[OBJ]) Update(oldObj, newObj *OBJ, idx int) {
 	}
 }
 
-// Delete remove all known indexes synchron the new value (including ID-index)
-func (i IndexMap[OBJ]) Delete(obj *OBJ, idx int) {
+// Remove all known indexes synchron the new value (including ID-index)
+func (i IndexMap[OBJ]) Remove(obj *OBJ, idx int) {
 	uidx := uint32(idx)
 
 	i.allIDs.UnSet(uidx)

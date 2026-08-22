@@ -553,6 +553,4 @@ func (ti *TrigramIndex[OBJ]) MatchMany(op query.FilterOp, values ...any) (*lidx.
 func (ti *TrigramIndex[OBJ]) Len() int { return ti.len }
 
 // pack converts 3 bytes into a single uint32 to save memory and speed up lookups
-//
-//go:inline
 func pack(a, b, c byte) uint32 { return uint32(a)<<16 | uint32(b)<<8 | uint32(c) }

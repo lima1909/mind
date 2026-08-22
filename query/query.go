@@ -17,8 +17,6 @@ type FilterByName = func(string) (Filter, error)
 func All() Expr { return TrueExpr{} }
 
 // all returns always an allIDs
-//
-//go:inline
 func matchAll() Query {
 	return func(_ FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		return allIDs, false, nil
@@ -26,8 +24,6 @@ func matchAll() Query {
 }
 
 // empty returns always an empty RawIDs, the opposite of all
-//
-//go:inline
 func matchEmpty() Query {
 	return func(_ FilterByName, _ *lidx.RawIDs32) (*lidx.RawIDs32, bool, error) {
 		return lidx.NewRawIDs[uint32](), true, nil
@@ -35,8 +31,6 @@ func matchEmpty() Query {
 }
 
 // matchEqual matched Equal with given value
-//
-//go:inline
 func matchEqual(fieldName string, value any) Query {
 	return func(l FilterByName, _ *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
@@ -50,8 +44,6 @@ func matchEqual(fieldName string, value any) Query {
 }
 
 // matchOne matched ONE given value
-//
-//go:inline
 func matchOne(fieldName string, op FilterOp, value any) Query {
 	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
@@ -64,8 +56,6 @@ func matchOne(fieldName string, op FilterOp, value any) Query {
 }
 
 // matchMany matched MANY given value
-//
-//go:inline
 func matchMany(fieldName string, op FilterOp, values ...any) Query {
 	return func(l FilterByName, _ *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
@@ -112,7 +102,6 @@ func FuzzyDist(fieldName string, val string, dist int64) Expr {
 // IsNil is a Query which checks for a given type the nil value
 // func IsNil[V any](fieldName string) Query { return isNil[V](fieldName) }
 
-//go:inline
 // func isNil[V any](fieldName string) Query {
 // 	return func(l FilterByName, _ *RawIDs32) (_ *RawIDs32, canMutate bool, _ error) {
 // 		filter, err := l(fieldName)
@@ -138,7 +127,6 @@ func Between(fieldName string, vals ...any) Expr {
 // NotEq is a shorcut for Not(Eq(...)) and means for example age != 42
 func NotEq(fieldName string, val any) Expr { return TermExpr{fieldName, FOpNeq, val} }
 
-//go:inline
 func matchNotEq(fieldName string, val any) Query {
 	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		filter, err := l(fieldName)
@@ -166,8 +154,6 @@ func matchNotEq(fieldName string, val any) Query {
 func Not(expr Expr) Expr { return NotExpr{expr} }
 
 // Not Not(Query)
-//
-//go:inline
 func matchNot(q Query) Query {
 	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		// can Mutate is not relevant, because allIDs are copied
@@ -186,7 +172,6 @@ func matchNot(q Query) Query {
 // And combines 2 or more queries with an logical And
 func And(left Expr, right Expr) Expr { return AndExpr{left, right} }
 
-//go:inline
 func matchAnd(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		left, canMutate, err := a(l, allIDs)
@@ -216,7 +201,6 @@ func matchAnd(a Query, b Query) Query {
 // Or combines 2 or more queries with an logical Or
 func Or(left Expr, right Expr) Expr { return OrExpr{left, right} }
 
-//go:inline
 func matchOr(a Query, b Query) Query {
 	return func(l FilterByName, allIDs *lidx.RawIDs32) (_ *lidx.RawIDs32, canMutate bool, _ error) {
 		left, canMutate, err := a(l, allIDs)
@@ -251,7 +235,6 @@ func matchOr(a Query, b Query) Query {
 // example: status = 'active' AND type != 'guest'
 func AndNot(left Expr, right Expr) Expr { return AndNotExpr{left, right} }
 
-//go:inline
 func matchAndNot(base Query, sub Query) Query {
 	return func(l FilterByName, allIDs *lidx.RawIDs32) (*lidx.RawIDs32, bool, error) {
 		// base result (e.g., the 'active')

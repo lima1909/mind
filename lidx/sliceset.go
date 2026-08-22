@@ -71,14 +71,14 @@ func (s *SliceSet[U]) Values(yield func(U) bool) {
 	}
 }
 
-func (s *SliceSet[U]) ValuesSkipN(n, limit int) []U {
+func (s *SliceSet[U]) ValuesBetween(n, m int) []U {
 	total := len(s.data)
 
-	if n >= total || n < 0 || total == 0 || limit <= 0 {
+	if n >= total || n < 0 || total == 0 || m <= 0 {
 		return nil
 	}
 
-	size := min(limit, total-n) + n
+	size := min(m, total-n) + n
 	return s.data[n:size]
 }
 

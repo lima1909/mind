@@ -20,9 +20,9 @@ func WithTracer(t *Tracer) Opion          { return func(o *queryOptions) { o.wit
 type HandleFNs[T any] struct {
 	ReadQuery    func(Query, func(*lidx.RawIDs32)) error
 	WriteQuery   func(Query, func(*lidx.RawIDs32)) error
-	GetManyItems func([]uint32, *[]T)
 	RemoveItem   func(int) bool
 	UpdateItem   func(index int, update func(*T)) error
+	GetManyItems func([]uint32, *[]T)
 }
 
 type QHandle[T any] struct {
@@ -153,7 +153,7 @@ func (h QHandle[T]) Paginate(offset uint32, result *[]T) (PageInfo, error) {
 
 		pi = Paginate{offset, limit}.computePageInfo(total)
 
-		idxs := rids.ValuesSkipN(int(pi.Offset), int(pi.Limit))
+		idxs := rids.ValuesBetween(int(pi.Offset), int(pi.Limit))
 		h.fns.GetManyItems(idxs, result)
 	})
 }

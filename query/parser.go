@@ -18,7 +18,6 @@ type parser struct {
 	cur   Token
 }
 
-//go:inline
 func (p *parser) next() { p.cur = p.lex.NextToken() }
 
 func (p *parser) parse() (Expr, error) {
@@ -305,7 +304,6 @@ func parseBool(s string) bool {
 	return false
 }
 
-//go:inline
 func parseUint(s string) uint64 {
 	var n uint64
 	if len(s) == 0 {

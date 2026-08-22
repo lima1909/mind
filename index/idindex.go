@@ -105,7 +105,6 @@ func NewIDSliceIndex[OBJ any, ID SliceID](fieldGetFn FromField[OBJ, ID]) *idSlic
 	}
 }
 
-//go:inline
 func (si *idSliceIndex[OBJ, ID]) toIndex(id ID) int { return int(id) - int(si.offset) }
 
 func (si *idSliceIndex[OBJ, ID]) Set(obj *OBJ, lidx uint32) {

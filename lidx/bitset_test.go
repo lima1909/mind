@@ -236,7 +236,7 @@ func TestBitSet_ValuesIter(t *testing.T) {
 	assert.Equal(t, []uint8{0, 1, 2, 142}, values)
 }
 
-func TestBitSet_ValuesSkipN(t *testing.T) {
+func TestBitSet_ValuesBetween(t *testing.T) {
 
 	tests := []struct {
 		name     string
@@ -305,7 +305,7 @@ func TestBitSet_ValuesSkipN(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := tt.bs.ValuesSkipN(tt.fromIdx, tt.length)
+			results := tt.bs.ValuesBetween(tt.fromIdx, tt.length)
 			assert.Equal(t, tt.expected, results)
 		})
 	}

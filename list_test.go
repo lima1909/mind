@@ -162,7 +162,7 @@ func removeByIdxNoLock(l *List[car], index int) (removed bool) {
 	}
 
 	removed = l.list.Remove(index)
-	l.indexMap.Delete(&item, index)
+	l.indexMap.Remove(&item, index)
 
 	return removed
 }
