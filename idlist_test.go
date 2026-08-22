@@ -442,3 +442,36 @@ func TestIDList_QueryCheckOrder(t *testing.T) {
 		})
 	}
 }
+
+func TestIDList_Values(t *testing.T) {
+	l := NewIDList((*car).Name)
+	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
+	assert.NoError(t, err)
+
+	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
+	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
+	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
+	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 27}))
+
+	assert.Equal(t, 4, l.Len())
+
+	h := l.QueryStr("age = 22")
+
+	count, err := h.Count()
+	assert.NoError(t, err)
+	assert.Equal(t, 2, count)
+
+	values, err := h.ValuesWithFilter(func(c *car) bool {
+		return c.name == "Opel"
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []car{{name: "Opel", age: 22}}, values)
+
+	// error check
+	h = l.QueryStr("age = ")
+	values, err = h.ValuesWithFilter(func(c *car) bool {
+		return c.name == "Opel"
+	})
+	assert.Error(t, err)
+	assert.Nil(t, values)
+}

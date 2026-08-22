@@ -1,10 +1,6 @@
 package mind
 
-import (
-	"iter"
-
-	"github.com/lima1909/mind/lidx"
-)
+import "iter"
 
 // Slot holds the data or the pointer to the next free space
 type slot[T any] struct {
@@ -112,13 +108,6 @@ func (l *FreeList[T]) Get(index int) (T, bool) {
 	return slot.value, true
 }
 
-// getMany ignores bound checks, all idxs MUST exist
-func (l *FreeList[T]) getMany(idxs []uint32, result *[]T) {
-	for _, idx := range idxs {
-		*result = append(*result, l.slots[idx].value)
-	}
-}
-
 // Len returns the count of the occupied slots
 func (l *FreeList[T]) Len() int { return l.len }
 
@@ -131,6 +120,23 @@ func (l *FreeList[T]) Iter() iter.Seq2[int, *T] {
 					return
 				}
 			}
+		}
+	}
+}
+
+// getMany ignores bound checks, all idxs MUST exist
+func (l *FreeList[T]) getMany(idxs []uint32, result *[]T) {
+	for _, idx := range idxs {
+		*result = append(*result, l.slots[idx].value)
+	}
+}
+
+// getMany ignores bound checks, all idxs MUST exist
+func (l *FreeList[T]) filter(idxs []uint32, result *[]T, predicate func(*T) bool) {
+	for _, idx := range idxs {
+		item := l.slots[idx].value
+		if predicate(&item) {
+			*result = append(*result, item)
 		}
 	}
 }
@@ -174,34 +180,4 @@ func (l *FreeList[T]) CompactLinear(onMove func(oldIndex, newIndex int)) {
 
 	l.slots = slots[:keep]
 	l.freeHead = -1
-}
-
-func (l *FreeList[T]) filter(predicat func(item *T) bool, yield func(idx int) bool) {
-	for i, item := range l.slots {
-		if item.occupied {
-			it := &l.slots[i]
-			val := &it.value
-
-			if predicat(val) && !yield(i) {
-				return
-			}
-		}
-	}
-}
-
-func (l *FreeList[T]) filterBS(predicat func(item *T) bool) *lidx.RawIDs32 {
-	bs := lidx.NewRawIDs[uint32]()
-
-	for i, item := range l.slots {
-		if item.occupied {
-			it := &l.slots[i]
-			val := &it.value
-
-			if predicat(val) {
-				bs.Set(uint32(i))
-			}
-		}
-	}
-
-	return bs
 }

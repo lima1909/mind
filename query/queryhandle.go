@@ -23,6 +23,7 @@ type HandleFNs[T any] struct {
 	RemoveItem   func(int) bool
 	UpdateItem   func(index int, update func(*T)) error
 	GetManyItems func([]uint32, *[]T)
+	Filter       func(idxs []uint32, result *[]T, predicate func(*T) bool)
 }
 
 type QHandle[T any] struct {
@@ -77,6 +78,19 @@ func (h QHandle[T]) Values() ([]T, error) {
 		s := rids.ToSlice()
 		result = make([]T, 0, len(s))
 		h.fns.GetManyItems(s, &result)
+	})
+}
+
+func (h QHandle[T]) ValuesWithFilter(precicate func(*T) bool) ([]T, error) {
+	var result []T
+	if h.err != nil {
+		return result, h.err
+	}
+
+	return result, h.fns.ReadQuery(h.query, func(rids *lidx.RawIDs32) {
+		s := rids.ToSlice()
+		result = make([]T, 0, len(s))
+		h.fns.Filter(s, &result, precicate)
 	})
 }
 
