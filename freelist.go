@@ -131,7 +131,7 @@ func (l *FreeList[T]) getMany(idxs []uint32, result *[]T) {
 	}
 }
 
-// getMany ignores bound checks, all idxs MUST exist
+// filter ignores bound checks, all idxs MUST exist
 func (l *FreeList[T]) filter(idxs []uint32, result *[]T, predicate func(*T) bool) {
 	for _, idx := range idxs {
 		item := l.slots[idx].value

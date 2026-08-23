@@ -53,7 +53,6 @@ func TestFreeList_Update(t *testing.T) {
 	assert.Equal(t, 2, l.Len())
 	_, ok = l.Update(1, "z")
 	assert.False(t, ok)
-
 }
 
 func TestFreeList_CompactUnstable(t *testing.T) {
@@ -157,6 +156,21 @@ func TestFreeList_Iter(t *testing.T) {
 	}
 }
 
+func TestFreeList_GetMany(t *testing.T) {
+	l := NewFreeList[string]()
+	assert.Equal(t, 0, l.Insert("a"))
+	assert.Equal(t, 1, l.Insert("b"))
+	assert.Equal(t, 2, l.Insert("c"))
+	assert.Equal(t, 3, l.Insert("a"))
+	assert.Equal(t, 4, l.Insert("b"))
+	assert.Equal(t, 5, l.Insert("c"))
+
+	result := make([]string, 0, 3)
+	l.getMany([]uint32{0, 3}, &result)
+	assert.Equal(t, []string{"a", "a"}, result)
+	assert.Equal(t, 2, len(result))
+}
+
 func TestFreeList_Filter(t *testing.T) {
 	l := NewFreeList[string]()
 	assert.Equal(t, 0, l.Insert("a"))
@@ -170,6 +184,6 @@ func TestFreeList_Filter(t *testing.T) {
 	l.filter([]uint32{0, 1, 3, 4}, &result, func(s *string) bool {
 		return *s == "a"
 	})
-
 	assert.Equal(t, []string{"a", "a"}, result)
+	assert.Equal(t, 2, len(result))
 }

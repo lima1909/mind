@@ -56,9 +56,9 @@ func NewSlotMap[T any]() *SlotMap[T] {
 	}
 }
 
-// Add an Item to the end of the List or use a free slot, to add this item.
+// Insert an Item to the end of the List or use a free slot, to add this item.
 // If the Item is insert on a free slot, the index is reused, but the generation will be increments by one.
-func (s *SlotMap[T]) Add(value T) Handle {
+func (s *SlotMap[T]) Insert(value T) Handle {
 	var idx uint32
 
 	// no free slots, append to the end
@@ -82,6 +82,19 @@ func (s *SlotMap[T]) Add(value T) Handle {
 
 	s.len++
 	return Handle{index: idx, generation: s.slots[idx].generation}
+}
+
+// Update replaced the Item on the given Handle, with the given Item. Return the old Item and true.
+// If the given Handle has no Item, then will the return the zero Value of T and false.
+// Handle-Index must be >=0 and < len(slots), otherwise return Update zero value and false and do nothing.
+func (s *SlotMap[T]) Update(h Handle, newItem T) (T, bool) {
+	if oldItem, found := s.Get(h); found {
+		s.slots[h.index].value = newItem
+		return oldItem, true
+	}
+
+	var null T
+	return null, false
 }
 
 // Remove mark the Item on the given index as deleted.
@@ -144,6 +157,23 @@ func (s *SlotMap[T]) Iter() iter.Seq2[Handle, T] {
 					return
 				}
 			}
+		}
+	}
+}
+
+// getMany ignores bound checks, all idxs MUST exist
+func (s *SlotMap[T]) getMany(idxs []uint32, result *[]T) {
+	for _, idx := range idxs {
+		*result = append(*result, s.slots[idx].value)
+	}
+}
+
+// filter ignores bound checks, all idxs MUST exist
+func (s *SlotMap[T]) filter(idxs []uint32, result *[]T, predicate func(*T) bool) {
+	for _, idx := range idxs {
+		item := s.slots[idx].value
+		if predicate(&item) {
+			*result = append(*result, item)
 		}
 	}
 }
