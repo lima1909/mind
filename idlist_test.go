@@ -10,10 +10,30 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestIDList_Insert(t *testing.T) {
+	il := NewIDList((*car).Name)
+	err := il.CreateIndex("age", index.NewMapIndex((*car).Age))
+	assert.NoError(t, err)
+
+	lidx, err := il.Insert(car{name: "Opel", age: 22})
+	assert.NoError(t, err)
+	assert.Equal(t, 0, lidx)
+
+	lidx, err = il.Insert(car{name: "Opel", age: 22})
+	assert.ErrorIs(t, err, errr.IdAlreadyExistsError[string]{ID: "Opel"})
+	assert.Equal(t, -1, lidx)
+
+	lidx, err = il.Insert(car{name: "Mercedes", age: 5, isNew: true})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, lidx)
+
+	assert.Equal(t, 2, il.Len())
+}
+
 func TestIDList_RemoveIndexWithId(t *testing.T) {
 	il := NewIDList((*car).Name)
 	assert.NotNil(t, il.idIndex)
-	il.Insert(car{name: "Opel", age: 22})
+	_, _ = il.Insert(car{name: "Opel", age: 22})
 	assert.Equal(t, 1, il.Len())
 
 	opel, err := il.Get("Opel")
@@ -29,9 +49,9 @@ func TestIDList_Replace(t *testing.T) {
 	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
 
-	il.Insert(car{name: "Opel", age: 22})
-	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
-	il.Insert(car{name: "Dacia", age: 22})
+	_, _ = il.Insert(car{name: "Opel", age: 22})
+	_, _ = il.Insert(car{name: "Mercedes", age: 5, isNew: true})
+	_, _ = il.Insert(car{name: "Dacia", age: 22})
 
 	old, err := il.Replace(car{name: "Dacia", age: 25})
 	assert.NoError(t, err)
@@ -56,10 +76,10 @@ func TestIDList_Update(t *testing.T) {
 	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
-	l.Insert(car{name: "Opel", age: 22})
-	l.Insert(car{name: "Mercedes", age: 5})
-	l.Insert(car{name: "Dacia", age: 22})
-	l.Insert(car{name: "Audi", age: 5})
+	_, _ = l.Insert(car{name: "Opel", age: 22})
+	_, _ = l.Insert(car{name: "Mercedes", age: 5})
+	_, _ = l.Insert(car{name: "Dacia", age: 22})
+	_, _ = l.Insert(car{name: "Audi", age: 5})
 
 	// ID (Name) changed from "Opel" to "VW", what is not allowed
 	err = l.Update("Opel", func(c *car) { c.name = "VW"; c.age = 3; c.color = "blue" })
@@ -101,9 +121,9 @@ func TestIDList_WithID(t *testing.T) {
 	err := il.CreateIndex("isnew", index.NewMapIndex((*car).IsNew))
 	assert.NoError(t, err)
 
-	il.Insert(car{name: "Opel", age: 22})
-	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
-	il.Insert(car{name: "Dacia", age: 42})
+	_, _ = il.Insert(car{name: "Opel", age: 22})
+	_, _ = il.Insert(car{name: "Mercedes", age: 5, isNew: true})
+	_, _ = il.Insert(car{name: "Dacia", age: 42})
 
 	dacia, err := il.Get("Dacia")
 	assert.NoError(t, err)
@@ -136,9 +156,9 @@ func TestIDList_NoID_QueryIDs(t *testing.T) {
 func TestList_QueryIDs(t *testing.T) {
 	il := NewIDList((*car).Name)
 
-	il.Insert(car{name: "Opel", age: 22})
-	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
-	il.Insert(car{name: "Dacia", age: 22})
+	_, _ = il.Insert(car{name: "Opel", age: 22})
+	_, _ = il.Insert(car{name: "Mercedes", age: 5, isNew: true})
+	_, _ = il.Insert(car{name: "Dacia", age: 22})
 
 	result, err := il.Query(query.ID("Opel")).Values()
 	assert.NoError(t, err)
@@ -164,9 +184,9 @@ func TestList_QueryIDs(t *testing.T) {
 func TestList_Pagination(t *testing.T) {
 	il := NewIDList((*car).Name)
 
-	il.Insert(car{name: "Opel", age: 22})
-	il.Insert(car{name: "Mercedes", age: 5, isNew: true})
-	il.Insert(car{name: "Dacia", age: 22})
+	_, _ = il.Insert(car{name: "Opel", age: 22})
+	_, _ = il.Insert(car{name: "Mercedes", age: 5, isNew: true})
+	_, _ = il.Insert(car{name: "Dacia", age: 22})
 
 	qh := il.Query(query.All())
 
@@ -257,16 +277,15 @@ func TestList_QueryStr(t *testing.T) {
 	err = il.CreateIndex("age", index.NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
-	il.Insert(car{name: "Opel", age: 22})
-	il.Insert(car{name: "Mercedes", age: 5})
-	il.Insert(car{name: "Dacia", age: 22})
-	il.Insert(car{name: "Opel", age: 5})
+	_, _ = il.Insert(car{name: "Opel", age: 22})
+	_, _ = il.Insert(car{name: "Mercedes", age: 5})
+	_, _ = il.Insert(car{name: "Dacia", age: 22})
+	_, _ = il.Insert(car{name: "VW", age: 5})
 
 	result, err := il.QueryStr(`name = "Opel"`).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
-		{name: "Opel", age: 5},
 	}, result)
 
 	result, err = il.QueryStr(`age = 22`).Values()
@@ -281,7 +300,6 @@ func TestList_QueryStr(t *testing.T) {
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
 		{name: "Dacia", age: 22},
-		{name: "Opel", age: 5},
 	}, result)
 
 	result, err = il.QueryStr(`name = "Opel" or name = "Dacia" or age > 20`).Values()
@@ -289,7 +307,6 @@ func TestList_QueryStr(t *testing.T) {
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
 		{name: "Dacia", age: 22},
-		{name: "Opel", age: 5},
 	}, result)
 
 	result, err = il.QueryStr(`name IN("Opel", "Dacia") or age > 20`).Values()
@@ -297,7 +314,6 @@ func TestList_QueryStr(t *testing.T) {
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
 		{name: "Dacia", age: 22},
-		{name: "Opel", age: 5},
 	}, result)
 
 	// same test for MapIndex
@@ -306,7 +322,6 @@ func TestList_QueryStr(t *testing.T) {
 	assert.Equal(t, []car{
 		{name: "Opel", age: 22},
 		{name: "Dacia", age: 22},
-		{name: "Opel", age: 5},
 	}, result)
 }
 
@@ -315,10 +330,14 @@ func TestIDList_QueryRemove(t *testing.T) {
 	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
-	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
-	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
-	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
-	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 22}))
+	lidx, _ := l.Insert(car{name: "Opel", age: 22})
+	assert.Equal(t, 0, lidx)
+	lidx, _ = l.Insert(car{name: "Mercedes", age: 5})
+	assert.Equal(t, 1, lidx)
+	lidx, _ = l.Insert(car{name: "Dacia", age: 22})
+	assert.Equal(t, 2, lidx)
+	lidx, _ = l.Insert(car{name: "Audi", age: 22})
+	assert.Equal(t, 3, lidx)
 
 	assert.Equal(t, 4, l.Len())
 
@@ -346,10 +365,14 @@ func TestIDList_QueryUpdate(t *testing.T) {
 	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
-	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
-	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
-	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
-	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 22}))
+	lidx, _ := l.Insert(car{name: "Opel", age: 22})
+	assert.Equal(t, 0, lidx)
+	lidx, _ = l.Insert(car{name: "Mercedes", age: 5})
+	assert.Equal(t, 1, lidx)
+	lidx, _ = l.Insert(car{name: "Dacia", age: 22})
+	assert.Equal(t, 2, lidx)
+	lidx, _ = l.Insert(car{name: "Audi", age: 22})
+	assert.Equal(t, 3, lidx)
 
 	assert.Equal(t, 4, l.Len())
 
@@ -371,10 +394,14 @@ func TestIDList_QueryUpdateError(t *testing.T) {
 	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
-	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
-	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
-	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
-	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 22}))
+	lidx, _ := l.Insert(car{name: "Opel", age: 22})
+	assert.Equal(t, 0, lidx)
+	lidx, _ = l.Insert(car{name: "Mercedes", age: 5})
+	assert.Equal(t, 1, lidx)
+	lidx, _ = l.Insert(car{name: "Dacia", age: 22})
+	assert.Equal(t, 2, lidx)
+	lidx, _ = l.Insert(car{name: "Audi", age: 22})
+	assert.Equal(t, 3, lidx)
 
 	assert.Equal(t, 4, l.Len())
 
@@ -396,10 +423,10 @@ func TestIDList_QueryCheckOrder(t *testing.T) {
 		// two age buckets; the isNew hit sits in the MIDDLE of the age=1 bucket,
 		// so an in-place And/AndNot has to compact survivors to the left.
 		for i := range 30 {
-			l.Insert(car{name: fmt.Sprintf("lo-%d", i), age: 1, isNew: i == 15})
+			_, _ = l.Insert(car{name: fmt.Sprintf("lo-%d", i), age: 1, isNew: i == 15})
 		}
 		for i := range 30 {
-			l.Insert(car{name: fmt.Sprintf("hi-%d", i), age: 9, isNew: i == 15})
+			_, _ = l.Insert(car{name: fmt.Sprintf("hi-%d", i), age: 9, isNew: i == 15})
 		}
 
 		return l
@@ -448,10 +475,14 @@ func TestIDList_Values(t *testing.T) {
 	err := l.CreateIndex("age", index.NewSortedIndex((*car).Age))
 	assert.NoError(t, err)
 
-	assert.Equal(t, 0, l.Insert(car{name: "Opel", age: 22}))
-	assert.Equal(t, 1, l.Insert(car{name: "Mercedes", age: 5}))
-	assert.Equal(t, 2, l.Insert(car{name: "Dacia", age: 22}))
-	assert.Equal(t, 3, l.Insert(car{name: "Audi", age: 27}))
+	lidx, _ := l.Insert(car{name: "Opel", age: 22})
+	assert.Equal(t, 0, lidx)
+	lidx, _ = l.Insert(car{name: "Mercedes", age: 5})
+	assert.Equal(t, 1, lidx)
+	lidx, _ = l.Insert(car{name: "Dacia", age: 22})
+	assert.Equal(t, 2, lidx)
+	lidx, _ = l.Insert(car{name: "Audi", age: 27})
+	assert.Equal(t, 3, lidx)
 
 	assert.Equal(t, 4, l.Len())
 

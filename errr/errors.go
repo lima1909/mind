@@ -34,12 +34,6 @@ func (e ValueNotFoundError) Error() string {
 	return fmt.Sprintf("index value not found: %v", e.Value)
 }
 
-type NoIdIndexDefinedError struct{}
-
-func (e NoIdIndexDefinedError) Error() string {
-	return fmt.Sprintln("no ID index defined")
-}
-
 type InvalidArgsLenError struct {
 	Defined string
 	Got     int
@@ -48,3 +42,12 @@ type InvalidArgsLenError struct {
 func (e InvalidArgsLenError) Error() string {
 	return fmt.Sprintf("expected: %s values, got: %d", e.Defined, e.Got)
 }
+
+type NoIdIndexDefinedError struct{}
+
+func (e NoIdIndexDefinedError) Error() string { return fmt.Sprintln("no ID index defined") }
+
+// IdAlreadyExistsError ID already exists
+type IdAlreadyExistsError[T any] struct{ ID T }
+
+func (e IdAlreadyExistsError[T]) Error() string { return fmt.Sprintf("ID: %v already exist", e.ID) }

@@ -77,6 +77,25 @@ func (l *IDList[T, ID]) Contains(id ID) bool {
 	return found
 }
 
+// Insert add the given Item to the list and returns the list-index of this Item,
+// which stays valid, until the Item is removed.
+// An error orcurred, if the id already exist.
+func (l *IDList[T, ID]) Insert(item T) (int, error) {
+	id := l.idIndex.GetID(&item)
+
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	if _, found := l.idIndex.GetIndex(id); found {
+		return -1, errr.IdAlreadyExistsError[ID]{ID: id}
+	}
+
+	lidx := l.list.Insert(item)
+	l.indexMap.Insert(&item, lidx)
+
+	return lidx, nil
+}
+
 // Remove an item by the given ID.
 // Returns true, if the ID exist, the list-index of the removed Item and an error, if occurred.
 // errors: ID not found
@@ -106,18 +125,7 @@ func (l *IDList[T, ID]) Replace(item T) (T, error) {
 		return zero, errr.ValueNotFoundError{Value: id}
 	}
 
-	// overwrite the data in the main list
-	oldItem, ok := l.list.Update(int(lidx), item)
-	if !ok {
-		var zero T
-		return zero, errr.ValueNotFoundError{Value: id}
-	}
-
-	// update all indexes: re-index
-	// the ID-Index is one of them, but the ID has not changed, so it stays untouched
-	l.indexMap.Update(&oldItem, &item, int(lidx))
-
-	return oldItem, nil
+	return l.replaceAt(int(lidx), item)
 }
 
 // Update find the item by the given id and give the item to the update function,

@@ -17,8 +17,13 @@ func TestFreeList_Base(t *testing.T) {
 	assert.True(t, found)
 	assert.Equal(t, "b", val)
 
-	assert.False(t, l.Remove(100))
-	assert.True(t, l.Remove(1))
+	item, removed := l.Remove(100)
+	assert.False(t, removed)
+	assert.Equal(t, "", item)
+
+	item, removed = l.Remove(1)
+	assert.True(t, removed)
+	assert.Equal(t, "b", item)
 
 	val, found = l.Get(1)
 	assert.False(t, found)
@@ -49,10 +54,41 @@ func TestFreeList_Update(t *testing.T) {
 	assert.False(t, ok)
 
 	// index not found
-	assert.True(t, l.Remove(1))
+
+	item, removed := l.Remove(1)
+	assert.True(t, removed)
+	assert.Equal(t, "z", item)
 	assert.Equal(t, 2, l.Len())
 	_, ok = l.Update(1, "z")
 	assert.False(t, ok)
+}
+
+func TestFreeList_Remove(t *testing.T) {
+	l := NewFreeList[string]()
+	assert.Equal(t, 0, l.Insert("a"))
+	assert.Equal(t, 1, l.Insert("b"))
+	assert.Equal(t, 2, l.Insert("c"))
+	assert.Equal(t, 3, l.Len())
+
+	item, removed := l.Remove(100)
+	assert.False(t, removed)
+	assert.Equal(t, "", item)
+
+	item, removed = l.Remove(1)
+	assert.True(t, removed)
+	assert.Equal(t, "b", item)
+	assert.Equal(t, 2, l.Len())
+
+	// remove index 1 AGAIN
+	item, removed = l.Remove(1)
+	assert.False(t, removed)
+	assert.Equal(t, "", item)
+	assert.Equal(t, 2, l.Len())
+
+	item, removed = l.Remove(-1)
+	assert.False(t, removed)
+	assert.Equal(t, "", item)
+	assert.Equal(t, 2, l.Len())
 }
 
 func TestFreeList_CompactUnstable(t *testing.T) {
@@ -143,7 +179,9 @@ func TestFreeList_Iter(t *testing.T) {
 	}
 
 	// remove one item in the middle
-	assert.True(t, l.Remove(1))
+	item, removed := l.Remove(1)
+	assert.True(t, removed)
+	assert.Equal(t, "b", item)
 	for idx, item := range l.Iter() {
 		switch idx {
 		case 0:
@@ -186,4 +224,41 @@ func TestFreeList_Filter(t *testing.T) {
 	})
 	assert.Equal(t, []string{"a", "a"}, result)
 	assert.Equal(t, 2, len(result))
+}
+
+func TestFreeList_Clear(t *testing.T) {
+	fl := NewFreeListWithCapacity[string](10)
+
+	idx0 := fl.Insert("Alfa")
+	idx1 := fl.Insert("Bravo")
+	idx2 := fl.Insert("Charlie")
+
+	fl.Remove(idx1)
+
+	oldCap := cap(fl.slots)
+
+	fl.Clear()
+
+	assert.Equal(t, 0, fl.len)
+	assert.Equal(t, fl.freeHead, int32(freeListEnd))
+	assert.Equal(t, 0, len(fl.slots))
+	assert.Equal(t, cap(fl.slots), oldCap)
+
+	_, ok := fl.Get(idx0)
+	assert.False(t, ok)
+	_, ok = fl.Get(idx2)
+	assert.False(t, ok)
+
+	newIdx0 := fl.Insert("Delta")
+	newIdx1 := fl.Insert("Echo")
+
+	assert.Equal(t, fl.Len(), 2)
+
+	val, ok := fl.Get(newIdx0)
+	assert.True(t, ok)
+	assert.Equal(t, val, "Delta")
+
+	val, ok = fl.Get(newIdx1)
+	assert.True(t, ok)
+	assert.Equal(t, val, "Echo")
 }

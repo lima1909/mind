@@ -23,14 +23,16 @@ func (l *List[T]) Get(lidx int) (T, bool) {
 	return l.list.Get(lidx)
 }
 
-// Update gives the Item of the given list-index to the update function, so the caller can
-// update the fields he wants, and keeps all indexes in sync.
-// Returns false, if the list-index is unknown or the Item was removed.
-func (l *List[T]) Update(lidx int, update func(*T)) bool {
+// Insert add the given Item to the list and returns the list-index of this Item,
+// which stays valid, until the Item is removed.
+func (l *List[T]) Insert(item T) int {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
-	return l.updateAt(lidx, update) == nil
+	lidx := l.list.Insert(item)
+	l.indexMap.Insert(&item, lidx)
+
+	return lidx
 }
 
 // Remove the Item of the given list-index.
@@ -40,4 +42,14 @@ func (l *List[T]) Remove(lidx int) bool {
 	defer l.lock.Unlock()
 
 	return l.removeAt(lidx)
+}
+
+// Update gives the Item of the given list-index to the update function, so the caller can
+// update the fields he wants, and keeps all indexes in sync.
+// Returns false, if the list-index is unknown or the Item was removed.
+func (l *List[T]) Update(lidx int, update func(*T)) bool {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+
+	return l.updateAt(lidx, update) == nil
 }

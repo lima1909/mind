@@ -29,11 +29,11 @@ func TestList_Base(t *testing.T) {
 	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
 	assert.NoError(t, err)
 
-	c, found := il.list.Get(1)
+	c, found := il.Get(1)
 	assert.True(t, found)
 	assert.Equal(t, car{name: "Opel", age: 22}, c)
 
-	_, found = il.list.Get(99)
+	_, found = il.Get(99)
 	assert.False(t, found)
 
 	qr := il.Query(query.Eq("name", "Opel"))
@@ -156,12 +156,12 @@ func TestList_QueryResult(t *testing.T) {
 }
 
 func removeByIdxNoLock(l *List[car], index int) (removed bool) {
-	item, found := l.list.Get(index)
+	item, found := l.Get(index)
 	if !found {
 		return found
 	}
 
-	removed = l.list.Remove(index)
+	removed = l.Remove(index)
 	l.indexMap.Remove(&item, index)
 
 	return removed

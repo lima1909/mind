@@ -164,10 +164,10 @@ func main() {
 	_ = l.CreateIndex("name", index.NewMapIndex((*Car).Name))
 	_ = l.CreateIndex("age", index.NewSortedIndex((*Car).Age))
 
-	l.Insert(Car{id: 1, name: "Dacia", age: 2})
-	l.Insert(Car{id: 2, name: "Opel", age: 12})
-	l.Insert(Car{id: 3, name: "Mercedes", age: 5})
-	l.Insert(Car{id: 4, name: "Dacia", age: 22})
+	_, _ = l.Insert(Car{id: 1, name: "Dacia", age: 2})
+	_, _ = l.Insert(Car{id: 2, name: "Opel", age: 12})
+	_, _ = l.Insert(Car{id: 3, name: "Mercedes", age: 5})
+	_, _ = l.Insert(Car{id: 4, name: "Dacia", age: 22})
 
 	// ignore error
 	mercedes, _ := l.Get(3)

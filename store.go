@@ -91,24 +91,12 @@ func (s *store[T]) InitialBulkInsert(values FreeList[T]) error {
 	return nil
 }
 
-// Insert add the given Item to the list and returns the list-index of this Item,
-// which stays valid, until the Item is removed.
-func (s *store[T]) Insert(item T) int {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	lidx := s.list.Insert(item)
-	s.indexMap.Insert(&item, lidx)
-
-	return lidx
-}
-
 // Len the Items, which in this list exist
 func (s *store[T]) Len() int {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	return s.list.Len()
+	return s.list.len
 }
 
 // Values iterate over the complete List and call the yield function, for every item
@@ -117,13 +105,7 @@ func (s *store[T]) Values(yield func(int, T) bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	for i := range s.list.slots {
-		if slot := &s.list.slots[i]; slot.occupied {
-			if !yield(i, slot.value) {
-				return
-			}
-		}
-	}
+	s.list.Values(yield)
 }
 
 // ToValues extract all Items
@@ -131,15 +113,7 @@ func (s *store[T]) ToValues() []T {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
-	result := make([]T, 0, s.list.Len())
-
-	for _, item := range s.list.slots {
-		if item.occupied {
-			result = append(result, item.value)
-		}
-	}
-
-	return result
+	return s.list.ToValues()
 }
 
 // updateAt gives the Item on the given slot position to the update function and keeps
@@ -173,10 +147,28 @@ func (s *store[T]) updateAt(pos int, update func(*T)) error {
 func (s *store[T]) removeAt(pos int) bool {
 	if item, found := s.list.Get(pos); found {
 		s.indexMap.Remove(&item, pos)
-		return s.list.Remove(pos)
+		_, removed := s.list.Remove(pos)
+		return removed
 	}
 
 	return false
+}
+
+// replaceAt replaced the the old-item on pos with the given item.
+// returns the old-item or an error, if not item was found for the given pos
+func (s *store[T]) replaceAt(pos int, item T) (T, error) {
+	// overwrite the data in the main list
+	oldItem, ok := s.list.Update(pos, item)
+	if !ok {
+		var zero T
+		return zero, errr.ValueNotFoundError{Value: pos}
+	}
+
+	// update all indexes: re-index
+	// the ID-Index is one of them, but the ID has not changed, so it stays untouched
+	s.indexMap.Update(&oldItem, &item, pos)
+
+	return oldItem, nil
 }
 
 // QueryStr execute the given Query-string.

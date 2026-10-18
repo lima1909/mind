@@ -23,7 +23,7 @@ func buildRaceList(t *testing.T, n int) *IDList[car, string] {
 	}
 
 	for i := range n {
-		l.Insert(car{
+		_, _ = l.Insert(car{
 			name:  fmt.Sprintf("car-%d", i),
 			age:   uint8(i % 100),
 			isNew: i%2 == 0,
@@ -107,7 +107,7 @@ func TestIDList_Race_ParallelQueryRemove(t *testing.T) {
 			case <-stop:
 				return
 			default:
-				l.Insert(car{
+				_, _ = l.Insert(car{
 					name:  fmt.Sprintf("car-%d", i),
 					age:   uint8(i % 100),
 					isNew: i%2 == 0,
@@ -176,7 +176,7 @@ func TestIDList_Race_MixedQHandleAndDirect(t *testing.T) {
 		},
 		// direct, fully-locked insert
 		func(id, i int) {
-			l.Insert(car{name: fmt.Sprintf("new-%d-%d", id, i), age: uint8(i % 100)})
+			_, _ = l.Insert(car{name: fmt.Sprintf("new-%d-%d", id, i), age: uint8(i % 100)})
 		},
 		// direct, fully-locked update by id
 		func(id, i int) {
