@@ -3,8 +3,8 @@ package mind
 import "iter"
 
 const (
-	freeListEnd = -1
-	occupied    = -2
+	freeListEnd = -1 // -1 means "No free slots, append new ones"
+	occupied    = -2 // already used
 )
 
 // Slot holds the data or the index to the next free space
@@ -24,7 +24,7 @@ type FreeList[T any] struct {
 func NewFreeList[T any]() FreeList[T] {
 	return FreeList[T]{
 		slots:    make([]slot[T], 0),
-		freeHead: freeListEnd, // -1 means "No free slots, append new ones"
+		freeHead: freeListEnd,
 	}
 }
 
@@ -49,6 +49,7 @@ func (l *FreeList[T]) Insert(item T) int {
 		return idx
 	}
 
+	// !!! reusing the list index
 	idx := l.freeHead
 	l.freeHead = l.slots[idx].nextFree
 	l.slots[idx] = slot[T]{
@@ -82,13 +83,16 @@ func (l *FreeList[T]) Remove(index int) (T, bool) {
 		return zero, false
 	}
 
+	// save old value, so we can return it
 	result := l.slots[index].value
 
-	// clear the value to prevent memory leaks
-	l.slots[index].value = zero
+	l.slots[index] = slot[T]{
+		// clear the value to prevent memory leaks
+		value: zero,
+		// make this slot point to the current head
+		nextFree: l.freeHead,
+	}
 
-	// make this slot point to the current head
-	l.slots[index].nextFree = l.freeHead
 	// make this slot the new head
 	l.freeHead = int32(index)
 
@@ -157,14 +161,14 @@ func (l *FreeList[T]) Clear() {
 }
 
 // WARNING: GetMany ignores bound checks, all idxs MUST exist
-func (l *FreeList[T]) getMany(idxs []uint32, result *[]T) {
+func (l *FreeList[T]) getManyUnChecked(idxs []uint32, result *[]T) {
 	for _, idx := range idxs {
 		*result = append(*result, l.slots[idx].value)
 	}
 }
 
 // WARNING: Filter ignores bound checks, all idxs MUST exist
-func (l *FreeList[T]) filter(idxs []uint32, result *[]T, predicate func(*T) bool) {
+func (l *FreeList[T]) filterUnChecked(idxs []uint32, result *[]T, predicate func(*T) bool) {
 	for _, idx := range idxs {
 		item := &l.slots[idx].value
 		if predicate(item) {

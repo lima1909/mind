@@ -189,8 +189,8 @@ func (s *store[T]) hfns() query.HandleFNs[T] {
 		WriteQuery:   s.writeQuery,
 		RemoveItem:   s.removeAt,
 		UpdateItem:   s.updateAt,
-		GetManyItems: s.list.getMany,
-		Filter:       s.list.filter,
+		GetManyItems: s.list.getManyUnChecked,
+		Filter:       s.list.filterUnChecked,
 	}
 }
 
