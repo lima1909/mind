@@ -204,7 +204,7 @@ func TestFreeList_GetMany(t *testing.T) {
 	assert.Equal(t, 5, l.Insert("c"))
 
 	result := make([]string, 0, 3)
-	l.getManyUnChecked([]uint32{0, 3}, &result)
+	l.GetManyUnChecked([]uint32{0, 3}, &result)
 	assert.Equal(t, []string{"a", "a"}, result)
 	assert.Equal(t, 2, len(result))
 }
@@ -219,7 +219,7 @@ func TestFreeList_Filter(t *testing.T) {
 	assert.Equal(t, 5, l.Insert("c"))
 
 	result := make([]string, 0, 3)
-	l.filterUnChecked([]uint32{0, 1, 3, 4}, &result, func(s *string) bool {
+	l.FilterUnChecked([]uint32{0, 1, 3, 4}, &result, func(s *string) bool {
 		return *s == "a"
 	})
 	assert.Equal(t, []string{"a", "a"}, result)

@@ -1,6 +1,8 @@
 package mind
 
-import "iter"
+import (
+	"iter"
+)
 
 const (
 	freeListEnd = -1 // -1 means "No free slots, append new ones"
@@ -160,15 +162,15 @@ func (l *FreeList[T]) Clear() {
 	l.len = 0
 }
 
-// WARNING: GetMany ignores bound checks, all idxs MUST exist
-func (l *FreeList[T]) getManyUnChecked(idxs []uint32, result *[]T) {
+// WARNING: GetManyUnChecked ignores bound checks, all idxs MUST exist
+func (l *FreeList[T]) GetManyUnChecked(idxs []uint32, result *[]T) {
 	for _, idx := range idxs {
 		*result = append(*result, l.slots[idx].value)
 	}
 }
 
-// WARNING: Filter ignores bound checks, all idxs MUST exist
-func (l *FreeList[T]) filterUnChecked(idxs []uint32, result *[]T, predicate func(*T) bool) {
+// WARNING: FilterUnChecked ignores bound checks, all idxs MUST exist
+func (l *FreeList[T]) FilterUnChecked(idxs []uint32, result *[]T, predicate func(*T) bool) {
 	for _, idx := range idxs {
 		item := &l.slots[idx].value
 		if predicate(item) {

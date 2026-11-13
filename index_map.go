@@ -25,7 +25,7 @@ func NewIndexMap[OBJ any]() IndexMap[OBJ] {
 }
 
 // FilterByName finds the Filter by a given field-name
-func (i IndexMap[OBJ]) FilterByName(fieldName string) (query.Filter, error) {
+func (i *IndexMap[OBJ]) FilterByName(fieldName string) (query.Filter, error) {
 	if idx, found := i.index[fieldName]; found {
 		return idx, nil
 	}
@@ -34,7 +34,11 @@ func (i IndexMap[OBJ]) FilterByName(fieldName string) (query.Filter, error) {
 }
 
 // Insert to all known indexes synchron the new value (including ID-index)
-func (i IndexMap[OBJ]) AddIndex(fieldName string, index index.Index[OBJ]) error {
+func (i *IndexMap[OBJ]) AddIndex(fieldName string, index index.Index[OBJ]) error {
+	if err := query.IsValidName(fieldName); err != nil {
+		return err
+	}
+
 	if _, exist := i.index[fieldName]; exist {
 		return fmt.Errorf("field-name: %s already exists", fieldName)
 	}
@@ -44,12 +48,12 @@ func (i IndexMap[OBJ]) AddIndex(fieldName string, index index.Index[OBJ]) error 
 }
 
 // RemoveIndex removes the Index with the given field-name, if it exist
-func (i IndexMap[OBJ]) RemoveIndex(fieldName string) {
+func (i *IndexMap[OBJ]) RemoveIndex(fieldName string) {
 	delete(i.index, fieldName)
 }
 
 // Insert to all known indexes synchron the new value (including ID-index)
-func (i IndexMap[OBJ]) Insert(obj *OBJ, idx int) {
+func (i *IndexMap[OBJ]) Insert(obj *OBJ, idx int) {
 	uidx := uint32(idx)
 	i.allIDs.Set(uidx)
 
@@ -59,7 +63,7 @@ func (i IndexMap[OBJ]) Insert(obj *OBJ, idx int) {
 }
 
 // bulkInsert creates a go routine for every creating Index
-func (i IndexMap[OBJ]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
+func (i *IndexMap[OBJ]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
 	var wg sync.WaitGroup
 
 	wg.Go(func() {
@@ -78,7 +82,7 @@ func (i IndexMap[OBJ]) bulkInsert(objs iter.Seq2[int, *OBJ]) {
 }
 
 // Update Update all known indexes synchron the new value (including ID-index)
-func (i IndexMap[OBJ]) Update(oldObj, newObj *OBJ, idx int) {
+func (i *IndexMap[OBJ]) Update(oldObj, newObj *OBJ, idx int) {
 	uidx := uint32(idx)
 
 	i.allIDs.UnSet(uidx)
@@ -94,7 +98,7 @@ func (i IndexMap[OBJ]) Update(oldObj, newObj *OBJ, idx int) {
 }
 
 // Remove all known indexes synchron the new value (including ID-index)
-func (i IndexMap[OBJ]) Remove(obj *OBJ, idx int) {
+func (i *IndexMap[OBJ]) Remove(obj *OBJ, idx int) {
 	uidx := uint32(idx)
 
 	i.allIDs.UnSet(uidx)

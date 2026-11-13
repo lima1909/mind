@@ -423,11 +423,11 @@ func TestList_Update(t *testing.T) {
 	l.Insert(car{name: "Dacia", age: 22})
 	l.Insert(car{name: "Opel", age: 5})
 
-	updated := l.Update(0, func(c *car) { c.name = "VW"; c.age = 3; c.color = "blue" })
-	assert.True(t, updated)
+	err = l.Update(0, func(c *car) { c.name = "VW"; c.age = 3; c.color = "blue" })
+	assert.NoError(t, err)
 
-	updated = l.Update(100, func(c *car) { c.name = "VW" })
-	assert.False(t, updated)
+	err = l.Update(100, func(c *car) { c.name = "VW" })
+	assert.Error(t, err)
 
 	vw, found := l.Get(0)
 	assert.True(t, found)

@@ -44,31 +44,44 @@ func TestIDList_RemoveIndexWithId(t *testing.T) {
 func TestIDList_Replace(t *testing.T) {
 	il := NewIDList((*car).Name)
 
-	err := il.CreateIndex("isnew", index.NewMapIndex((*car).IsNew))
-	assert.NoError(t, err)
-	err = il.CreateIndex("age", index.NewMapIndex((*car).Age))
-	assert.NoError(t, err)
+	assert.NoError(t, il.CreateIndex("isnew", index.NewMapIndex((*car).IsNew)))
+	assert.NoError(t, il.CreateIndex("age", index.NewMapIndex((*car).Age)))
 
 	_, _ = il.Insert(car{name: "Opel", age: 22})
 	_, _ = il.Insert(car{name: "Mercedes", age: 5, isNew: true})
 	_, _ = il.Insert(car{name: "Dacia", age: 22})
 
-	old, err := il.Replace(car{name: "Dacia", age: 25})
+	assert.Equal(t, 3, il.Len())
+
+	// check the age index before replace
+	result, err := il.Query(query.Eq("age", 22)).Values()
 	assert.NoError(t, err)
-	assert.Equal(t, car{name: "Dacia", age: 22}, old)
-	// check the ID index
+	assert.Equal(t, []car{
+		{name: "Opel", age: 22},
+		{name: "Dacia", age: 22},
+	}, result)
+
+	// Replace
+	err = il.Update("Dacia", func(c *car) {
+		*c = car{name: "Dacia", age: 25}
+	})
+	assert.NoError(t, err)
+
+	// check the ID index after replace
 	dacia, err := il.Get("Dacia")
 	assert.NoError(t, err)
 	assert.Equal(t, car{name: "Dacia", age: 25}, dacia)
 
-	// check the age index
-	result, err := il.Query(query.Eq("age", uint8(25))).Values()
+	// check the age index after replace
+	result, err = il.Query(query.Eq("age", 25)).Values()
 	assert.NoError(t, err)
 	assert.Equal(t, []car{{name: "Dacia", age: 25}}, result)
 
-	old, err = il.Replace(car{name: "NotFound", age: 25})
+	// check invalid ID: NotFound
+	err = il.Update("NotFound", func(c *car) {
+		*c = car{name: "NotFound", age: 25}
+	})
 	assert.Error(t, err)
-	assert.Equal(t, car{}, old)
 }
 
 func TestIDList_Update(t *testing.T) {
