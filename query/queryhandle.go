@@ -36,7 +36,7 @@ func NewQHandleFromStr[T any](queryable Queryable[T], queryStr string, opts ...O
 		return QHandle[T]{query: query, queryable: queryable, err: err}
 	}
 
-	return NewQHandleFromExpr[T](queryable, ast, opts...)
+	return NewQHandleFromExpr(queryable, ast, opts...)
 }
 
 func NewQHandleFromExpr[T any](queryable Queryable[T], query Expr, opts ...Opion) QHandle[T] {

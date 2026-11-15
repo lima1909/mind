@@ -9,9 +9,9 @@ import (
 	"github.com/lima1909/mind/query"
 )
 
-// IDList is a fast in-memory store, which is extended by Indices for fast finding Items.
+// IDList is a fast in-memory collection, which is extended by Indices for fast finding Items.
 //
-// WARNING: The IDList ist NOT thread safe!
+// WARNING: The IDList is NOT thread safe!
 //
 // WARNING: If T is a pointer type, modifying the items returned by Get() or Query()
 // will corrupt the database indexes. Always use Update() or Replace() to modify data.
@@ -65,26 +65,6 @@ func (l *IDList[T, ID]) RemoveIndex(fieldName string) {
 // The List MUST be empty!
 func (l *IDList[T, ID]) InitialBulkInsert(values FreeList[T]) error {
 	return l.list.InitialBulkInsert(values)
-}
-
-// Get returns an item by the given ID.
-// errors: ID not found
-func (l *IDList[T, ID]) Get(id ID) (T, error) {
-	lidx, found := l.idIndex.GetIndex(id)
-	if !found {
-		var null T
-		return null, errr.ValueNotFoundError{Value: id}
-	}
-
-	// not found should be NOT possible
-	item, _ := l.list.list.Get(int(lidx))
-	return item, nil
-}
-
-// Contains check, is this ID found in the list.
-func (l *IDList[T, ID]) Contains(id ID) bool {
-	_, found := l.idIndex.GetIndex(id)
-	return found
 }
 
 // Insert add the given Item to the list and returns the list-index of this Item,
@@ -146,6 +126,26 @@ func (l *IDList[T, ID]) Remove(id ID) (bool, int, error) {
 	return l.list.Remove(int(lidx)), int(lidx), nil
 }
 
+// Get returns an item by the given ID.
+// errors: ID not found
+func (l *IDList[T, ID]) Get(id ID) (T, error) {
+	lidx, found := l.idIndex.GetIndex(id)
+	if !found {
+		var null T
+		return null, errr.ValueNotFoundError{Value: id}
+	}
+
+	// not found should be NOT possible
+	item, _ := l.list.list.Get(int(lidx))
+	return item, nil
+}
+
+// Contains check, is this ID found in the list.
+func (l *IDList[T, ID]) Contains(id ID) bool {
+	_, found := l.idIndex.GetIndex(id)
+	return found
+}
+
 // Len the Items, which in this list exist
 func (l *IDList[T, ID]) Len() int { return l.list.list.len }
 
@@ -155,12 +155,16 @@ func (l *IDList[T, ID]) ToValues() []T { return l.list.list.ToValues() }
 // Values iterate over the complete List and call the yield function, for every item
 func (l *IDList[T, ID]) Values(yield func(int, T) bool) { l.list.list.Values(yield) }
 
+func (l *IDList[T, ID]) Queryable() query.Queryable[T] {
+	return listQuery[T, *IDList[T, ID]]{&l.list, l}
+}
+
 // QueryStr execute the given Query-string.
 func (l *IDList[T, ID]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromStr(listQuery[T, *IDList[T, ID]]{&l.list, l}, queryStr, opts...)
+	return query.NewQHandleFromStr(l.Queryable(), queryStr, opts...)
 }
 
 // Query execute the given Query.
 func (l *IDList[T, ID]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromExpr(listQuery[T, *IDList[T, ID]]{&l.list, l}, q, opts...)
+	return query.NewQHandleFromExpr(l.Queryable(), q, opts...)
 }

@@ -8,9 +8,9 @@ import (
 	"github.com/lima1909/mind/query"
 )
 
-// List is a fast in-memory store, which is extended by Indices for fast finding Items.
+// List is a fast in-memory collection, which is extended by Indices for fast finding Items.
 //
-// WARNING: The List ist NOT thread safe!
+// WARNING: The List is NOT thread safe!
 //
 // WARNING: If T is a pointer type, modifying the items returned by Get() or Query()
 // will corrupt the database indexes. Always use Update() to modify data.
@@ -124,14 +124,16 @@ func (l *List[T]) Values(yield func(int, T) bool) { l.list.Values(yield) }
 // Len the Items, which in this list exist
 func (l *List[T]) Len() int { return l.list.len }
 
+func (l *List[T]) Queryable() query.Queryable[T] { return listQuery[T, *List[T]]{l, l} }
+
 // QueryStr execute the given Query-string.
 func (l *List[T]) QueryStr(queryStr string, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromStr[T](listQuery[T, *List[T]]{l, l}, queryStr, opts...)
+	return query.NewQHandleFromStr(l.Queryable(), queryStr, opts...)
 }
 
 // Query execute the given Query.
 func (l *List[T]) Query(q query.Expr, opts ...query.Opion) query.QHandle[T] {
-	return query.NewQHandleFromExpr[T](listQuery[T, *List[T]]{l, l}, q, opts...)
+	return query.NewQHandleFromExpr(l.Queryable(), q, opts...)
 }
 
 // implements the Queryable interface
