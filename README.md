@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/lima1909/mind/main/mind_logo.jpg" width="100" alt="Mind Logo">
+
 # Mind 
 
 **Fast, in-memory indexed collections for Go — filter your data like a database.**
