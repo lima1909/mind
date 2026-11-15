@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/lima1909/mind/main/mind_logo.jpg" width="100" alt="Mind Logo">
+<img src="https://raw.githubusercontent.com/lima1909/mind/main/mind_logo.png" width="100" alt="Mind Logo">
 
 # Mind 
 
